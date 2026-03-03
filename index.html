@@ -507,17 +507,13 @@
 
         /* === FORMULARIO INVENTARIO === */
         .inventario-form-panel {
-            max-width: 700px;
+            max-width: 480px;
         }
 
         .inv-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+            display: flex;
+            flex-direction: column;
             gap: 1.25rem;
-        }
-
-        .inv-field-full {
-            grid-column: 1 / -1;
         }
 
         .inv-field label {
@@ -602,11 +598,6 @@
             border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
-        @media (max-width: 600px) {
-            .inv-grid {
-                grid-template-columns: 1fr;
-            }
-        }
     </style>
 </head>
 
@@ -1026,7 +1017,7 @@
                                 <option value="Night (Noche)">Night (Noche)</option>
                             </select>
                         </div>
-                        <div class="inv-field inv-field-full">
+                        <div class="inv-field">
                             <label for="inv-escaneadora">Escaneadora</label>
                             <select id="inv-escaneadora" required>
                                 <option value="" disabled selected>Seleccionar...</option>
