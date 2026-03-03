@@ -461,6 +461,43 @@
             position: relative;
         }
 
+        /* Palets View */
+        .palets-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .palets-filters {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .palets-filters input,
+        .palets-filters select {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s ease;
+        }
+
+        .palets-filters input:focus,
+        .palets-filters select:focus {
+            border-color: var(--accent-primary);
+        }
+
+        .palets-count {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .content-grid {
@@ -479,11 +516,11 @@
             PaletTrack
         </div>
         <ul class="nav-list">
-            <li class="nav-item active">
+            <li class="nav-item active" onclick="switchView('dashboard')">
                 <i class="fa-solid fa-chart-pie"></i>
                 <span>Dashboard</span>
             </li>
-            <li class="nav-item">
+            <li class="nav-item" onclick="switchView('palets')">
                 <i class="fa-solid fa-pallet"></i>
                 <span>Palets</span>
             </li>
@@ -504,6 +541,8 @@
 
     <!-- Main Content -->
     <main class="main-content">
+        <!-- Vista Dashboard -->
+        <div id="view-dashboard">
         <!-- Header -->
         <header>
             <div class="page-title">
@@ -777,6 +816,53 @@
                     </div>
                 </div>
             </div>
+        </div><!-- /view-dashboard -->
+
+        <!-- Vista Palets -->
+        <div id="view-palets" style="display:none;">
+            <header>
+                <div class="page-title">
+                    <h1>Palets</h1>
+                    <p>Registro completo de todos los pallets</p>
+                </div>
+            </header>
+
+            <div class="palets-header" style="margin-top: 1rem;">
+                <div class="palets-filters">
+                    <input type="text" id="palets-search" placeholder="Buscar por ID..." style="width: 180px;">
+                    <select id="palets-turno-filter">
+                        <option value="Todos">Todos los turnos</option>
+                        <option value="Día">Turno Día</option>
+                        <option value="Noche">Turno Noche</option>
+                    </select>
+                </div>
+                <span class="palets-count" id="palets-count">0 resultados</span>
+            </div>
+
+            <div class="panel" style="margin-top: 1rem;">
+                <div style="overflow-x: auto; max-height: 70vh; overflow-y: auto;">
+                    <table>
+                        <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
+                            <tr id="palets-table-head">
+                                <th>Pallet ID</th>
+                                <th>Cantidad</th>
+                                <th>Destino</th>
+                                <th>Fecha</th>
+                                <th>Turno</th>
+                                <th>Condición</th>
+                            </tr>
+                        </thead>
+                        <tbody id="palets-table-body">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                    Cargando datos...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div><!-- /view-palets -->
+
     </main>
 
     <script>
@@ -1711,6 +1797,90 @@
             }
         }
 
+        // === NAVEGACIÓN ENTRE VISTAS ===
+        window.switchView = function (viewName) {
+            const views = ['dashboard', 'palets'];
+            views.forEach(v => {
+                const el = document.getElementById('view-' + v);
+                if (el) el.style.display = (v === viewName) ? '' : 'none';
+            });
+
+            // Actualizar clase active en sidebar
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                const span = item.querySelector('span');
+                if (!span) return;
+                const text = span.textContent.trim().toLowerCase();
+                if (text === viewName || (text === 'palets' && viewName === 'palets') || (text === 'dashboard' && viewName === 'dashboard')) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+
+            // Renderizar tabla de palets al entrar a esa vista
+            if (viewName === 'palets') {
+                renderPaletsTable();
+            }
+        };
+
+        // === RENDERIZADO DE TABLA COMPLETA DE PALETS ===
+        window.renderPaletsTable = function () {
+            const tbody = document.getElementById('palets-table-body');
+            const countEl = document.getElementById('palets-count');
+            if (!tbody) return;
+
+            const searchVal = (document.getElementById('palets-search')?.value || '').trim().toLowerCase();
+            const turnoVal = document.getElementById('palets-turno-filter')?.value || 'Todos';
+
+            let filtered = allSheetData.filter(row => {
+                // Filtro por búsqueda de ID
+                if (searchVal && !row.id.toLowerCase().includes(searchVal)) return false;
+
+                // Filtro por turno
+                if (turnoVal !== 'Todos') {
+                    let tKey = row.turno;
+                    if (tKey.includes("Noche") || tKey.toLowerCase().includes("night")) tKey = 'Noche';
+                    else if (tKey.includes("día") || tKey.toLowerCase().includes("day") || tKey.includes("Dia") || tKey.includes("dia")) tKey = 'Día';
+                    if (tKey !== turnoVal) return false;
+                }
+
+                return true;
+            });
+
+            // Mostrar los más recientes primero
+            const display = filtered.slice().reverse();
+
+            if (countEl) countEl.textContent = `${display.length} resultado${display.length !== 1 ? 's' : ''}`;
+
+            tbody.innerHTML = '';
+
+            if (display.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 2rem; color: var(--text-muted);">No se encontraron palets.</td></tr>`;
+                return;
+            }
+
+            display.forEach(row => {
+                const tr = document.createElement('tr');
+                let htmlCols = window.displayIndices.map((idx, arrIndex) => {
+                    let val = row.rowValues[idx] !== undefined ? row.rowValues[idx].toString() : '';
+                    if (arrIndex === 0 && val.length > 6) val = val.substring(0, 6);
+                    let displayVal = arrIndex === 0 ? `<strong>${val}</strong>` : val;
+                    return `<td style="text-align: center;">${displayVal}</td>`;
+                });
+                tr.innerHTML = htmlCols.join('');
+                tbody.appendChild(tr);
+            });
+
+            // Sincronizar headers dinámicos con la tabla de palets
+            if (window.displayIndices) {
+                const paletsHead = document.getElementById('palets-table-head');
+                if (paletsHead && document.querySelector('#view-dashboard table thead tr')) {
+                    paletsHead.innerHTML = document.querySelector('#view-dashboard table thead tr').innerHTML;
+                }
+            }
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
 
             // Inicializar el Gráfico de Anillos (Doughnut Chart) vacío
@@ -1866,6 +2036,12 @@
                     }
                 }
             });
+
+            // Event listeners para vista Palets
+            const paletsSearch = document.getElementById('palets-search');
+            const paletsTurno = document.getElementById('palets-turno-filter');
+            if (paletsSearch) paletsSearch.addEventListener('input', renderPaletsTable);
+            if (paletsTurno) paletsTurno.addEventListener('change', renderPaletsTable);
 
             // Cargar datos inicialmente
             fetchSheetData();
