@@ -1429,6 +1429,12 @@
                 renderDashboard([]);
                 window.syncMonthPills();
 
+                // Si la vista Palets está activa, refrescar su tabla con los datos nuevos
+                const paletsView = document.getElementById('view-palets');
+                if (paletsView && paletsView.style.display !== 'none') {
+                    window.renderPaletsTable();
+                }
+
             } catch (error) {
                 console.error('Error procesando datos del Spreadsheet', error);
                 document.getElementById('table-body').innerHTML = `
@@ -1830,6 +1836,12 @@
             const tbody = document.getElementById('palets-table-body');
             const countEl = document.getElementById('palets-count');
             if (!tbody) return;
+
+            // Guard: si los datos aún no cargan del spreadsheet
+            if (!window.displayIndices || allSheetData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 2rem; color: var(--text-muted);">Cargando datos del SpreadSheet...</td></tr>`;
+                return;
+            }
 
             const searchVal = (document.getElementById('palets-search')?.value || '').trim().toLowerCase();
             const turnoVal = document.getElementById('palets-turno-filter')?.value || 'Todos';
