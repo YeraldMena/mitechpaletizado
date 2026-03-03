@@ -996,7 +996,7 @@
             <header>
                 <div class="page-title">
                     <h1>Inventario</h1>
-                    <p>Registrar pallets al inventario (Google Forms)</p>
+                    <p>Registrar pallets al inventario</p>
                 </div>
             </header>
 
@@ -2035,7 +2035,9 @@
             }
         };
 
-        // === ENVÍO FORMULARIO INVENTARIO A GOOGLE FORMS ===
+        // === ENVÍO FORMULARIO INVENTARIO A GOOGLE SHEET (via Apps Script) ===
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbymzxEks80Gycy64dTYDs_BACk4ZR8olgyJwnpFEWhFNCrMP36RQRPvwRurHBxdtfV5SQ/exec';
+
         window.submitInventarioForm = function (e) {
             e.preventDefault();
 
@@ -2057,20 +2059,11 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
 
-            const formData = new URLSearchParams();
-            formData.append('entry.334897824', pallet);
-            formData.append('entry.2023184830', qty);
-            formData.append('entry.1071631503', condicion);
-            formData.append('entry.590212078', destino);
-            formData.append('entry.642544877', pedido);
-            formData.append('entry.5639610', turno);
-            formData.append('entry.289312179', escaneadora);
-
-            fetch('https://docs.google.com/forms/d/e/1FAIpQLSfAZhiPF_8mrsJxJfga9v3MFcYJsm3-LGuuiEUUHcC0f3jY6Q/formResponse', {
+            fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: formData.toString()
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pallet, qty, condicion, destino, pedido, turno, escaneadora })
             }).then(() => {
                 showInvStatus('Registro enviado correctamente.', 'success');
                 document.getElementById('inventario-form').reset();
