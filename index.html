@@ -504,6 +504,109 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* === FORMULARIO INVENTARIO === */
+        .inventario-form-panel {
+            max-width: 700px;
+        }
+
+        .inv-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.25rem;
+        }
+
+        .inv-field-full {
+            grid-column: 1 / -1;
+        }
+
+        .inv-field label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 0.4rem;
+        }
+
+        .inv-req {
+            color: #ef4444;
+        }
+
+        .inv-field input,
+        .inv-field select {
+            width: 100%;
+            padding: 0.65rem 0.85rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            color: var(--text-main);
+            font-size: 0.9rem;
+            transition: border-color 0.2s ease;
+        }
+
+        .inv-field input:focus,
+        .inv-field select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+        }
+
+        .inv-field input::placeholder {
+            color: #475569;
+        }
+
+        .inv-btn-submit {
+            margin-top: 1.5rem;
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--accent-primary);
+            color: #fff;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: background 0.2s ease;
+        }
+
+        .inv-btn-submit:hover {
+            background: #2563eb;
+        }
+
+        .inv-btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .inv-status {
+            margin-top: 1rem;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .inv-status.success {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--accent-success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .inv-status.error {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        @media (max-width: 600px) {
+            .inv-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 
@@ -528,7 +631,7 @@
                 <i class="fa-solid fa-truck-fast"></i>
                 <span>Envíos</span>
             </li>
-            <li class="nav-item">
+            <li class="nav-item" onclick="switchView('inventario')">
                 <i class="fa-solid fa-warehouse"></i>
                 <span>Inventario</span>
             </li>
@@ -863,6 +966,84 @@
                 </div>
             </div>
         </div><!-- /view-palets -->
+
+        <!-- Vista Inventario -->
+        <div id="view-inventario" style="display:none;">
+            <header>
+                <div class="page-title">
+                    <h1>Inventario</h1>
+                    <p>Registrar pallets al inventario (Google Forms)</p>
+                </div>
+            </header>
+
+            <div class="panel inventario-form-panel" style="margin-top: 1rem;">
+                <form id="inventario-form" onsubmit="submitInventarioForm(event)">
+                    <div class="inv-grid">
+                        <div class="inv-field">
+                            <label for="inv-pallet">Número de Pallet <span class="inv-req">*</span></label>
+                            <input type="text" id="inv-pallet" placeholder="Ej: PLT-001" required>
+                        </div>
+                        <div class="inv-field">
+                            <label for="inv-qty">Cantidad QTY <span class="inv-req">*</span></label>
+                            <input type="number" id="inv-qty" placeholder="Ej: 50" min="1" required>
+                        </div>
+                        <div class="inv-field">
+                            <label for="inv-condicion">Condición</label>
+                            <select id="inv-condicion" required>
+                                <option value="" disabled selected>Seleccionar...</option>
+                                <option value="GRA">GRA</option>
+                                <option value="GRB">GRB</option>
+                                <option value="GRC">GRC</option>
+                                <option value="ICB">ICB</option>
+                                <option value="ICC">ICC</option>
+                                <option value="ICD">ICD</option>
+                                <option value="ICX">ICX</option>
+                                <option value="BOX">BOX</option>
+                                <option value="DNP">DNP</option>
+                                <option value="DMT">DMT</option>
+                                <option value="DMA">DMA</option>
+                            </select>
+                        </div>
+                        <div class="inv-field">
+                            <label for="inv-destino">Destino</label>
+                            <select id="inv-destino" required>
+                                <option value="" disabled selected>Seleccionar...</option>
+                                <option value="TRG">TRG</option>
+                                <option value="HV (High Value) Televisiones">HV Televisiones</option>
+                                <option value="Almacén">Almacén</option>
+                                <option value="HV (High Value)">HV (High Value)</option>
+                            </select>
+                        </div>
+                        <div class="inv-field">
+                            <label for="inv-pedido">Pedido <span style="color:var(--text-muted);font-size:0.8rem;">(opcional)</span></label>
+                            <input type="text" id="inv-pedido" placeholder="Ej: PED-123">
+                        </div>
+                        <div class="inv-field">
+                            <label for="inv-turno">Turno</label>
+                            <select id="inv-turno" required>
+                                <option value="" disabled selected>Seleccionar...</option>
+                                <option value="Day (día)">Day (Día)</option>
+                                <option value="Night (Noche)">Night (Noche)</option>
+                            </select>
+                        </div>
+                        <div class="inv-field inv-field-full">
+                            <label for="inv-escaneadora">Escaneadora</label>
+                            <select id="inv-escaneadora" required>
+                                <option value="" disabled selected>Seleccionar...</option>
+                                <option value="Yusley Montes">Yusley Montes</option>
+                                <option value="Angélica Alemán">Angélica Alemán</option>
+                                <option value="Cecilia Pérez">Cecilia Pérez</option>
+                                <option value="Nathalie López">Nathalie López</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="inv-btn-submit" id="inv-submit-btn">
+                        <i class="fa-solid fa-paper-plane"></i> Enviar Registro
+                    </button>
+                    <div id="inv-status" class="inv-status" style="display:none;"></div>
+                </form>
+            </div>
+        </div><!-- /view-inventario -->
 
     </main>
 
@@ -1806,7 +1987,7 @@
 
         // === NAVEGACIÓN ENTRE VISTAS ===
         window.switchView = function (viewName) {
-            const views = ['dashboard', 'palets'];
+            const views = ['dashboard', 'palets', 'inventario'];
             views.forEach(v => {
                 const el = document.getElementById('view-' + v);
                 if (el) el.style.display = (v === viewName) ? '' : 'none';
@@ -1818,7 +1999,7 @@
                 const span = item.querySelector('span');
                 if (!span) return;
                 const text = span.textContent.trim().toLowerCase();
-                if (text === viewName || (text === 'palets' && viewName === 'palets') || (text === 'dashboard' && viewName === 'dashboard')) {
+                if (text === viewName) {
                     item.classList.add('active');
                 } else {
                     item.classList.remove('active');
@@ -1830,6 +2011,61 @@
                 renderPaletsTable();
             }
         };
+
+        // === ENVÍO FORMULARIO INVENTARIO A GOOGLE FORMS ===
+        window.submitInventarioForm = function (e) {
+            e.preventDefault();
+
+            const pallet = document.getElementById('inv-pallet').value.trim();
+            const qty = document.getElementById('inv-qty').value.trim();
+            const condicion = document.getElementById('inv-condicion').value;
+            const destino = document.getElementById('inv-destino').value;
+            const pedido = document.getElementById('inv-pedido').value.trim();
+            const turno = document.getElementById('inv-turno').value;
+            const escaneadora = document.getElementById('inv-escaneadora').value;
+
+            if (!pallet || !qty || !condicion || !destino || !turno || !escaneadora) {
+                showInvStatus('Completa todos los campos obligatorios.', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('inv-submit-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+
+            const formData = new URLSearchParams();
+            formData.append('entry.334897824', pallet);
+            formData.append('entry.2023184830', qty);
+            formData.append('entry.1071631503', condicion);
+            formData.append('entry.590212078', destino);
+            formData.append('entry.642544877', pedido);
+            formData.append('entry.5639610', turno);
+            formData.append('entry.289312179', escaneadora);
+
+            fetch('https://docs.google.com/forms/d/e/1FAIpQLSfAZhiPF_8mrsJxJfga9v3MFcYJsm3-LGuuiEUUHcC0f3jY6Q/formResponse', {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData.toString()
+            }).then(() => {
+                showInvStatus('Registro enviado correctamente.', 'success');
+                document.getElementById('inventario-form').reset();
+                if (typeof fetchSheetData === 'function') fetchSheetData();
+            }).catch(() => {
+                showInvStatus('Error al enviar. Intenta de nuevo.', 'error');
+            }).finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar Registro';
+            });
+        };
+
+        function showInvStatus(msg, type) {
+            const el = document.getElementById('inv-status');
+            el.textContent = msg;
+            el.className = 'inv-status ' + type;
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, 4000);
+        }
 
         // === RENDERIZADO DE TABLA COMPLETA DE PALETS ===
         window.renderPaletsTable = function () {
