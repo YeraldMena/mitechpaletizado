@@ -505,6 +505,54 @@
             }
         }
 
+        /* === MENÚ HAMBURGUESA MÓVIL === */
+        .mobile-menu-btn {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 20;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 0.6rem 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .mobile-menu-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            .sidebar {
+                transform: translateX(-100%);
+                z-index: 15;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .mobile-menu-overlay.open {
+                display: block;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding-top: 4rem;
+            }
+        }
+
         /* === FORMULARIO INVENTARIO === */
         .inventario-form-panel {
             max-width: 480px;
@@ -636,8 +684,14 @@
 
 <body>
 
+    <!-- Menú hamburguesa móvil -->
+    <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+        <i class="fa-solid fa-bars"></i>
+    </button>
+    <div class="mobile-menu-overlay" onclick="toggleMobileMenu()"></div>
+
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
         <div class="brand">
             <i class="fa-solid fa-boxes-stacked"></i>
             PaletTrack
@@ -651,15 +705,15 @@
                 <i class="fa-solid fa-pallet"></i>
                 <span>Palets</span>
             </li>
-            <li class="nav-item">
+            <li class="nav-item" onclick="switchView('envios')">
                 <i class="fa-solid fa-truck-fast"></i>
                 <span>Envíos</span>
             </li>
-            <li class="nav-item" onclick="switchView('inventario')">
-                <i class="fa-solid fa-warehouse"></i>
-                <span>Inventario</span>
+            <li class="nav-item" onclick="switchView('formulario')">
+                <i class="fa-solid fa-clipboard-list"></i>
+                <span>Formulario</span>
             </li>
-            <li class="nav-item" style="margin-top: auto;">
+            <li class="nav-item" onclick="switchView('configuracion')">
                 <i class="fa-solid fa-gear"></i>
                 <span>Configuración</span>
             </li>
@@ -992,10 +1046,10 @@
         </div><!-- /view-palets -->
 
         <!-- Vista Inventario -->
-        <div id="view-inventario" style="display:none;">
+        <div id="view-formulario" style="display:none;">
             <header>
                 <div class="page-title">
-                    <h1>Inventario</h1>
+                    <h1>Formulario</h1>
                     <p>Registrar pallets al inventario</p>
                 </div>
             </header>
@@ -1066,7 +1120,7 @@
                     <div id="inv-status" class="inv-status" style="display:none;"></div>
                 </form>
             </div>
-        </div><!-- /view-inventario -->
+        </div><!-- /view-formulario -->
 
     </main>
 
@@ -2008,9 +2062,18 @@
             }
         }
 
+        // === MENÚ MÓVIL ===
+        window.toggleMobileMenu = function () {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.querySelector('.mobile-menu-overlay').classList.toggle('open');
+        };
+
         // === NAVEGACIÓN ENTRE VISTAS ===
         window.switchView = function (viewName) {
-            const views = ['dashboard', 'palets', 'inventario'];
+            // Cerrar menú móvil al navegar
+            document.getElementById('sidebar').classList.remove('open');
+            document.querySelector('.mobile-menu-overlay').classList.remove('open');
+            const views = ['dashboard', 'palets', 'envios', 'formulario', 'configuracion'];
             views.forEach(v => {
                 const el = document.getElementById('view-' + v);
                 if (el) el.style.display = (v === viewName) ? '' : 'none';
