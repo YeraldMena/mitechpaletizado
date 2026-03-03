@@ -550,6 +550,39 @@
             color: #475569;
         }
 
+        .inv-checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .inv-chip {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .inv-chip input[type="checkbox"] {
+            display: none;
+        }
+
+        .inv-chip span {
+            padding: 0.45rem 0.85rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .inv-chip input:checked + span {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
         .inv-btn-submit {
             margin-top: 1.5rem;
             width: 100%;
@@ -979,21 +1012,20 @@
                             <input type="number" id="inv-qty" placeholder="Ej: 50" min="1" required>
                         </div>
                         <div class="inv-field">
-                            <label for="inv-condicion">Condición</label>
-                            <select id="inv-condicion" required>
-                                <option value="" disabled selected>Seleccionar...</option>
-                                <option value="GRA">GRA</option>
-                                <option value="GRB">GRB</option>
-                                <option value="GRC">GRC</option>
-                                <option value="ICB">ICB</option>
-                                <option value="ICC">ICC</option>
-                                <option value="ICD">ICD</option>
-                                <option value="ICX">ICX</option>
-                                <option value="BOX">BOX</option>
-                                <option value="DNP">DNP</option>
-                                <option value="DMT">DMT</option>
-                                <option value="DMA">DMA</option>
-                            </select>
+                            <label>Condición <span class="inv-req">*</span></label>
+                            <div class="inv-checkbox-group" id="inv-condicion-group">
+                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="GRA"><span>GRA</span></label>
+                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="GRB"><span>GRB</span></label>
+                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="GRC"><span>GRC</span></label>
+                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="ICB"><span>ICB</span></label>
+                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="ICC"><span>ICC</span></label>
+                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="ICD"><span>ICD</span></label>
+                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="ICX"><span>ICX</span></label>
+                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="BOX"><span>BOX</span></label>
+                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="DNP"><span>DNP</span></label>
+                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="DMT"><span>DMT</span></label>
+                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="DMA"><span>DMA</span></label>
+                            </div>
                         </div>
                         <div class="inv-field">
                             <label for="inv-destino">Destino</label>
@@ -2009,7 +2041,8 @@
 
             const pallet = document.getElementById('inv-pallet').value.trim();
             const qty = document.getElementById('inv-qty').value.trim();
-            const condicion = document.getElementById('inv-condicion').value;
+            const condicionChecks = document.querySelectorAll('input[name="inv-condicion"]:checked');
+            const condicion = Array.from(condicionChecks).map(c => c.value).join(', ');
             const destino = document.getElementById('inv-destino').value;
             const pedido = document.getElementById('inv-pedido').value.trim();
             const turno = document.getElementById('inv-turno').value;
