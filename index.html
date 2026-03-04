@@ -2488,7 +2488,10 @@
             const pedidos = new Set();
             ordenesData.forEach(r => { if (r.nombrePedido) pedidos.add(r.nombrePedido); });
             [...pedidos].sort().forEach(p => {
-                sel.innerHTML += `<option value="${p}">${p}</option>`;
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                sel.appendChild(opt);
             });
             // Restaurar valor previo si existía
             if (sel._savedVal) {
