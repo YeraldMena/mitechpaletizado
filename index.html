@@ -474,6 +474,7 @@
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            flex-wrap: wrap;
         }
 
         .palets-filters input,
@@ -1017,6 +1018,15 @@
                         <option value="Día">Turno Día</option>
                         <option value="Noche">Turno Noche</option>
                     </select>
+                    <select id="palets-destino-filter">
+                        <option value="Todos">Todos los destinos</option>
+                    </select>
+                    <select id="palets-condicion-filter">
+                        <option value="Todos">Todas las condiciones</option>
+                    </select>
+                    <select id="palets-operador-filter">
+                        <option value="Todos">Todos los operadores</option>
+                    </select>
                 </div>
                 <span class="palets-count" id="palets-count">0 resultados</span>
             </div>
@@ -1028,15 +1038,17 @@
                             <tr id="palets-table-head">
                                 <th>Pallet ID</th>
                                 <th>Cantidad</th>
+                                <th>Condición</th>
                                 <th>Destino</th>
                                 <th>Fecha</th>
                                 <th>Turno</th>
-                                <th>Condición</th>
+                                <th>Operador</th>
+                                <th>Pedido</th>
                             </tr>
                         </thead>
                         <tbody id="palets-table-body">
                             <tr>
-                                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">
                                     Cargando datos...</td>
                             </tr>
                         </tbody>
@@ -1615,10 +1627,12 @@
                         rowValues: rawValues,
                         id: (c[1] && c[1].v != null) ? c[1].v.toString().split('-')[0].trim() : 'Sin ID',
                         cantidad: rawValues[1] ? (parseFloat(rawValues[1].toString().replace(/,/g, '')) || 0) : 0,
+                        condicion: (c[3] && c[3].v != null) ? c[3].v.toString().trim() : '',
                         destinoOriginal: (c[4] && c[4].v != null) ? c[4].v.toString().trim() : '',
                         fecha: rawDate,
                         turno: (c[6] && c[6].v != null) ? c[6].v.toString() : 'N/A',
-                        observaciones: (c[8] && c[8].v != null) ? c[8].v.toString().trim() : ''
+                        operador: (c[7] && c[7].v != null) ? c[7].v.toString().trim() : '',
+                        pedido: (c[8] && c[8].v != null) ? c[8].v.toString().trim() : ''
                     });
                 });
 
@@ -1687,9 +1701,10 @@
                 renderDashboard([]);
                 window.syncMonthPills();
 
-                // Si la vista Palets está activa, refrescar su tabla con los datos nuevos
+                // Si la vista Palets está activa, refrescar filtros y tabla
                 const paletsView = document.getElementById('view-palets');
                 if (paletsView && paletsView.style.display !== 'none') {
+                    resetPaletsFilterOptions();
                     window.renderPaletsTable();
                 }
 
@@ -2154,13 +2169,19 @@
             if (!tbody) return;
 
             // Guard: si los datos aún no cargan del spreadsheet
-            if (!window.displayIndices || allSheetData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 2rem; color: var(--text-muted);">Cargando datos del SpreadSheet...</td></tr>`;
+            if (allSheetData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--text-muted);">Cargando datos del SpreadSheet...</td></tr>`;
                 return;
             }
 
+            // Poblar filtros dinámicos (destino, condición, operador) solo la primera vez
+            populatePaletsFilters();
+
             const searchVal = (document.getElementById('palets-search')?.value || '').trim().toLowerCase();
             const turnoVal = document.getElementById('palets-turno-filter')?.value || 'Todos';
+            const destinoVal = document.getElementById('palets-destino-filter')?.value || 'Todos';
+            const condicionVal = document.getElementById('palets-condicion-filter')?.value || 'Todos';
+            const operadorVal = document.getElementById('palets-operador-filter')?.value || 'Todos';
 
             let filtered = allSheetData.filter(row => {
                 // Filtro por búsqueda de ID
@@ -2174,6 +2195,15 @@
                     if (tKey !== turnoVal) return false;
                 }
 
+                // Filtro por destino
+                if (destinoVal !== 'Todos' && row.destinoOriginal !== destinoVal) return false;
+
+                // Filtro por condición (busca si contiene la condición seleccionada)
+                if (condicionVal !== 'Todos' && !row.condicion.includes(condicionVal)) return false;
+
+                // Filtro por operador
+                if (operadorVal !== 'Todos' && row.operador !== operadorVal) return false;
+
                 return true;
             });
 
@@ -2185,30 +2215,81 @@
             tbody.innerHTML = '';
 
             if (display.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding: 2rem; color: var(--text-muted);">No se encontraron palets.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--text-muted);">No se encontraron palets.</td></tr>`;
                 return;
             }
 
             display.forEach(row => {
                 const tr = document.createElement('tr');
-                let htmlCols = window.displayIndices.map((idx, arrIndex) => {
-                    let val = row.rowValues[idx] !== undefined ? row.rowValues[idx].toString() : '';
-                    if (arrIndex === 0 && val.length > 6) val = val.substring(0, 6);
-                    let displayVal = arrIndex === 0 ? `<strong>${val}</strong>` : val;
-                    return `<td style="text-align: center;">${displayVal}</td>`;
-                });
-                tr.innerHTML = htmlCols.join('');
+                const idShort = row.id.length > 6 ? row.id.substring(0, 6) : row.id;
+                tr.innerHTML = `
+                    <td style="text-align:center;"><strong>${idShort}</strong></td>
+                    <td style="text-align:center;">${row.cantidad}</td>
+                    <td style="text-align:center;">${row.condicion || '-'}</td>
+                    <td style="text-align:center;">${row.destinoOriginal || '-'}</td>
+                    <td style="text-align:center;">${row.fecha}</td>
+                    <td style="text-align:center;">${row.turno}</td>
+                    <td style="text-align:center;">${row.operador || '-'}</td>
+                    <td style="text-align:center;">${row.pedido || '-'}</td>
+                `;
                 tbody.appendChild(tr);
             });
-
-            // Sincronizar headers dinámicos con la tabla de palets
-            if (window.displayIndices) {
-                const paletsHead = document.getElementById('palets-table-head');
-                if (paletsHead && document.querySelector('#view-dashboard table thead tr')) {
-                    paletsHead.innerHTML = document.querySelector('#view-dashboard table thead tr').innerHTML;
-                }
-            }
         };
+
+        // Poblar los selects dinámicos de la vista Palets
+        function populatePaletsFilters() {
+            const destSelect = document.getElementById('palets-destino-filter');
+            const condSelect = document.getElementById('palets-condicion-filter');
+            const opSelect = document.getElementById('palets-operador-filter');
+
+            // Solo poblar si están vacíos (1 = solo el default "Todos")
+            if (destSelect.options.length > 1) return;
+
+            const destinos = new Set();
+            const condiciones = new Set();
+            const operadores = new Set();
+
+            allSheetData.forEach(row => {
+                if (row.destinoOriginal) destinos.add(row.destinoOriginal);
+                if (row.condicion) {
+                    row.condicion.split(',').forEach(c => {
+                        const trimmed = c.trim();
+                        if (trimmed) condiciones.add(trimmed);
+                    });
+                }
+                if (row.operador) operadores.add(row.operador);
+            });
+
+            [...destinos].sort().forEach(d => {
+                destSelect.innerHTML += `<option value="${d}">${d}</option>`;
+            });
+            [...condiciones].sort().forEach(c => {
+                condSelect.innerHTML += `<option value="${c}">${c}</option>`;
+            });
+            [...operadores].sort().forEach(o => {
+                opSelect.innerHTML += `<option value="${o}">${o}</option>`;
+            });
+
+            // Restaurar valores seleccionados si existían
+            [destSelect, condSelect, opSelect].forEach(sel => {
+                if (sel._savedVal) {
+                    sel.value = sel._savedVal;
+                    delete sel._savedVal;
+                }
+            });
+        }
+
+        // Resetear opciones de filtros dinámicos para repoblarlos con datos frescos
+        function resetPaletsFilterOptions() {
+            ['palets-destino-filter', 'palets-condicion-filter', 'palets-operador-filter'].forEach(id => {
+                const sel = document.getElementById(id);
+                if (sel) {
+                    const savedVal = sel.value;
+                    sel.innerHTML = sel.options[0] ? `<option value="Todos">${sel.options[0].text}</option>` : '<option value="Todos">Todos</option>';
+                    sel._savedVal = savedVal;
+                }
+            });
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
 
@@ -2369,8 +2450,14 @@
             // Event listeners para vista Palets
             const paletsSearch = document.getElementById('palets-search');
             const paletsTurno = document.getElementById('palets-turno-filter');
+            const paletsDestino = document.getElementById('palets-destino-filter');
+            const paletsCondicion = document.getElementById('palets-condicion-filter');
+            const paletsOperador = document.getElementById('palets-operador-filter');
             if (paletsSearch) paletsSearch.addEventListener('input', renderPaletsTable);
             if (paletsTurno) paletsTurno.addEventListener('change', renderPaletsTable);
+            if (paletsDestino) paletsDestino.addEventListener('change', renderPaletsTable);
+            if (paletsCondicion) paletsCondicion.addEventListener('change', renderPaletsTable);
+            if (paletsOperador) paletsOperador.addEventListener('change', renderPaletsTable);
 
             // Cargar datos inicialmente
             fetchSheetData();
