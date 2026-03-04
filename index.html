@@ -706,9 +706,9 @@
                 <i class="fa-solid fa-pallet"></i>
                 <span>Palets</span>
             </li>
-            <li class="nav-item" onclick="switchView('envios')">
-                <i class="fa-solid fa-truck-fast"></i>
-                <span>Envíos</span>
+            <li class="nav-item" onclick="switchView('ordenes')">
+                <i class="fa-solid fa-fire"></i>
+                <span>Órdenes</span>
             </li>
             <li class="nav-item" onclick="switchView('formulario')">
                 <i class="fa-solid fa-clipboard-list"></i>
@@ -1056,6 +1056,96 @@
                 </div>
             </div>
         </div><!-- /view-palets -->
+
+        <!-- Vista Órdenes Especiales -->
+        <div id="view-ordenes" style="display:none;">
+            <header>
+                <div class="page-title">
+                    <h1>Órdenes de Atención Especial</h1>
+                    <p>Registro completo de pallets con pedidos especiales</p>
+                </div>
+            </header>
+
+            <!-- KPIs de órdenes -->
+            <div class="stats-grid" id="ordenes-stats" style="margin-top: 1rem;">
+                <div class="stat-card">
+                    <div class="stat-info">
+                        <span>Total Órdenes</span>
+                        <h2 id="ordenes-stat-total">0</h2>
+                    </div>
+                    <div class="stat-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
+                        <i class="fa-solid fa-fire"></i>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-info">
+                        <span>Pallets Hoy</span>
+                        <h2 id="ordenes-stat-hoy">0</h2>
+                    </div>
+                    <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                        <i class="fa-solid fa-calendar-day"></i>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-info">
+                        <span>Unidades Totales</span>
+                        <h2 id="ordenes-stat-unidades">0</h2>
+                    </div>
+                    <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                        <i class="fa-solid fa-cubes"></i>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-info">
+                        <span>Pedidos Únicos</span>
+                        <h2 id="ordenes-stat-pedidos">0</h2>
+                    </div>
+                    <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                        <i class="fa-solid fa-clipboard-list"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="palets-header" style="margin-top: 1rem;">
+                <div class="palets-filters">
+                    <input type="text" id="ordenes-search" placeholder="Buscar por pedido o ID..." style="width: 200px;">
+                    <select id="ordenes-turno-filter">
+                        <option value="Todos">Todos los turnos</option>
+                        <option value="Día">Turno Día</option>
+                        <option value="Noche">Turno Noche</option>
+                    </select>
+                    <select id="ordenes-pedido-filter">
+                        <option value="Todos">Todos los pedidos</option>
+                    </select>
+                </div>
+                <span class="palets-count" id="ordenes-count">0 resultados</span>
+            </div>
+
+            <div class="panel" style="margin-top: 1rem;">
+                <div style="overflow-x: auto; max-height: 70vh; overflow-y: auto;">
+                    <table>
+                        <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
+                            <tr>
+                                <th style="text-align:center;">Pedido</th>
+                                <th style="text-align:center;">Pallet ID</th>
+                                <th style="text-align:center;">Cantidad</th>
+                                <th style="text-align:center;">Condición</th>
+                                <th style="text-align:center;">Destino</th>
+                                <th style="text-align:center;">Fecha</th>
+                                <th style="text-align:center;">Turno</th>
+                                <th style="text-align:center;">Operador</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ordenes-table-body">
+                            <tr>
+                                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                    Cargando datos...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div><!-- /view-ordenes -->
 
         <!-- Vista Inventario -->
         <div id="view-formulario" style="display:none;">
@@ -1708,6 +1798,19 @@
                     window.renderPaletsTable();
                 }
 
+                // Si la vista Órdenes está activa, refrescar tabla
+                const ordenesView = document.getElementById('view-ordenes');
+                if (ordenesView && ordenesView.style.display !== 'none') {
+                    // Reset filtro pedido para repoblar
+                    const opSel = document.getElementById('ordenes-pedido-filter');
+                    if (opSel) {
+                        const saved = opSel.value;
+                        opSel.innerHTML = '<option value="Todos">Todos los pedidos</option>';
+                        opSel._savedVal = saved;
+                    }
+                    window.renderOrdenesTable();
+                }
+
             } catch (error) {
                 console.error('Error procesando datos del Spreadsheet', error);
                 document.getElementById('table-body').innerHTML = `
@@ -1816,7 +1919,7 @@
                 }
 
                 let d = row.destinoOriginal || '';
-                let o = row.observaciones || '';
+                let o = row.pedido || '';
 
                 // Evaluamos tanto en Destino como en Observaciones
                 const isPedidoStr = /pedido/i.test(d) || /pedido/i.test(o);
@@ -2088,7 +2191,7 @@
             // Cerrar menú móvil al navegar
             document.getElementById('sidebar').classList.remove('open');
             document.querySelector('.mobile-menu-overlay').classList.remove('open');
-            const views = ['dashboard', 'palets', 'envios', 'formulario', 'configuracion'];
+            const views = ['dashboard', 'palets', 'ordenes', 'formulario', 'configuracion'];
             views.forEach(v => {
                 const el = document.getElementById('view-' + v);
                 if (el) el.style.display = (v === viewName) ? '' : 'none';
@@ -2099,7 +2202,7 @@
             navItems.forEach(item => {
                 const span = item.querySelector('span');
                 if (!span) return;
-                const text = span.textContent.trim().toLowerCase();
+                const text = span.textContent.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                 if (text === viewName) {
                     item.classList.add('active');
                 } else {
@@ -2110,6 +2213,10 @@
             // Renderizar tabla de palets al entrar a esa vista
             if (viewName === 'palets') {
                 renderPaletsTable();
+            }
+            // Renderizar tabla de órdenes especiales
+            if (viewName === 'ordenes') {
+                renderOrdenesTable();
             }
         };
 
@@ -2291,6 +2398,115 @@
             });
         }
 
+        // === RENDERIZADO DE TABLA ÓRDENES ESPECIALES ===
+        window.renderOrdenesTable = function () {
+            const tbody = document.getElementById('ordenes-table-body');
+            const countEl = document.getElementById('ordenes-count');
+            if (!tbody) return;
+
+            if (allSheetData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--text-muted);">Cargando datos del SpreadSheet...</td></tr>`;
+                return;
+            }
+
+            // Filtrar solo rows que son pedidos especiales (misma lógica del dashboard)
+            let ordenesData = [];
+            allSheetData.forEach(row => {
+                let d = row.destinoOriginal || '';
+                let o = row.pedido || '';
+
+                const isPedidoStr = /pedido/i.test(d) || /pedido/i.test(o);
+                const has8DigitsInfo = /\b\d{8}\b/.exec(d) || /\b\d{8}\b/.exec(o);
+                const has8Digits = has8DigitsInfo !== null;
+
+                if (isPedidoStr || has8Digits) {
+                    let nombrePedido = "Pedido Especial";
+                    if (has8DigitsInfo && has8DigitsInfo[0]) {
+                        nombrePedido = has8DigitsInfo[0];
+                    } else if (isPedidoStr) {
+                        nombrePedido = /pedido/i.test(d) ? d : o;
+                    }
+                    ordenesData.push({ ...row, nombrePedido });
+                }
+            });
+
+            // Poblar filtro de pedidos
+            populateOrdenesPedidoFilter(ordenesData);
+
+            const searchVal = (document.getElementById('ordenes-search')?.value || '').trim().toLowerCase();
+            const turnoVal = document.getElementById('ordenes-turno-filter')?.value || 'Todos';
+            const pedidoVal = document.getElementById('ordenes-pedido-filter')?.value || 'Todos';
+
+            let filtered = ordenesData.filter(row => {
+                if (searchVal && !row.nombrePedido.toLowerCase().includes(searchVal) && !row.id.toLowerCase().includes(searchVal)) return false;
+
+                if (turnoVal !== 'Todos') {
+                    let tKey = row.turno;
+                    if (tKey.includes("Noche") || tKey.toLowerCase().includes("night")) tKey = 'Noche';
+                    else if (tKey.includes("día") || tKey.toLowerCase().includes("day") || tKey.includes("Dia") || tKey.includes("dia")) tKey = 'Día';
+                    if (tKey !== turnoVal) return false;
+                }
+
+                if (pedidoVal !== 'Todos' && row.nombrePedido !== pedidoVal) return false;
+
+                return true;
+            });
+
+            // KPIs
+            const todayStr = new Date().toLocaleDateString('en-US');
+            const hoyRows = filtered.filter(r => r.fecha === todayStr);
+            const totalUnidades = filtered.reduce((sum, r) => sum + r.cantidad, 0);
+            const pedidosUnicos = new Set(filtered.map(r => r.nombrePedido));
+
+            document.getElementById('ordenes-stat-total').textContent = filtered.length.toLocaleString();
+            document.getElementById('ordenes-stat-hoy').textContent = hoyRows.length.toLocaleString();
+            document.getElementById('ordenes-stat-unidades').textContent = totalUnidades.toLocaleString('es-MX');
+            document.getElementById('ordenes-stat-pedidos').textContent = pedidosUnicos.size.toLocaleString();
+
+            // Más recientes primero
+            const display = filtered.slice().reverse();
+
+            if (countEl) countEl.textContent = `${display.length} resultado${display.length !== 1 ? 's' : ''}`;
+
+            tbody.innerHTML = '';
+
+            if (display.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--text-muted);">No se encontraron órdenes especiales.</td></tr>`;
+                return;
+            }
+
+            display.forEach(row => {
+                const tr = document.createElement('tr');
+                const idShort = row.id.length > 6 ? row.id.substring(0, 6) : row.id;
+                tr.innerHTML = `
+                    <td style="text-align:center;"><span style="background: rgba(239,68,68,0.15); color: #ef4444; padding: 2px 8px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;">${row.nombrePedido}</span></td>
+                    <td style="text-align:center;"><strong>${idShort}</strong></td>
+                    <td style="text-align:center;">${row.cantidad}</td>
+                    <td style="text-align:center;">${row.condicion || '-'}</td>
+                    <td style="text-align:center;">${row.destinoOriginal || '-'}</td>
+                    <td style="text-align:center;">${row.fecha}</td>
+                    <td style="text-align:center;">${row.turno}</td>
+                    <td style="text-align:center;">${row.operador || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        };
+
+        function populateOrdenesPedidoFilter(ordenesData) {
+            const sel = document.getElementById('ordenes-pedido-filter');
+            if (!sel || sel.options.length > 1) return;
+            const pedidos = new Set();
+            ordenesData.forEach(r => { if (r.nombrePedido) pedidos.add(r.nombrePedido); });
+            [...pedidos].sort().forEach(p => {
+                sel.innerHTML += `<option value="${p}">${p}</option>`;
+            });
+            // Restaurar valor previo si existía
+            if (sel._savedVal) {
+                sel.value = sel._savedVal;
+                delete sel._savedVal;
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
 
             // Inicializar el Gráfico de Anillos (Doughnut Chart) vacío
@@ -2458,6 +2674,14 @@
             if (paletsDestino) paletsDestino.addEventListener('change', renderPaletsTable);
             if (paletsCondicion) paletsCondicion.addEventListener('change', renderPaletsTable);
             if (paletsOperador) paletsOperador.addEventListener('change', renderPaletsTable);
+
+            // Event listeners para vista Órdenes Especiales
+            const ordenesSearch = document.getElementById('ordenes-search');
+            const ordenesTurno = document.getElementById('ordenes-turno-filter');
+            const ordenesPedido = document.getElementById('ordenes-pedido-filter');
+            if (ordenesSearch) ordenesSearch.addEventListener('input', renderOrdenesTable);
+            if (ordenesTurno) ordenesTurno.addEventListener('change', renderOrdenesTable);
+            if (ordenesPedido) ordenesPedido.addEventListener('change', renderOrdenesTable);
 
             // Cargar datos inicialmente
             fetchSheetData();
