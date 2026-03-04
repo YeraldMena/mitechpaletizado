@@ -1162,6 +1162,7 @@
                         <div class="inv-field">
                             <label for="inv-pallet">Número de Pallet <span class="inv-req">*</span></label>
                             <input type="text" id="inv-pallet" placeholder="Ej: PLT-001" required>
+                            <div id="inv-pallet-warn" style="display:none; margin-top: 6px; padding: 6px 10px; border-radius: 6px; font-size: 0.82rem; font-weight: 500; line-height: 1.3;"></div>
                         </div>
                         <div class="inv-field">
                             <label for="inv-qty">Cantidad QTY <span class="inv-req">*</span></label>
@@ -2272,6 +2273,50 @@
             setTimeout(() => { el.style.display = 'none'; }, 4000);
         }
 
+        // === VALIDACIÓN EN TIEMPO REAL DEL PALLET ID ===
+        function validatePalletInput() {
+            const input = document.getElementById('inv-pallet');
+            const warn = document.getElementById('inv-pallet-warn');
+            if (!input || !warn) return;
+
+            const val = input.value.trim();
+            const digits = val.replace(/\D/g, '');
+
+            // Reset
+            warn.style.display = 'none';
+            warn.innerHTML = '';
+            input.style.borderColor = '';
+
+            if (!val) return;
+
+            let warnings = [];
+
+            // Verificar menos de 6 dígitos
+            if (digits.length > 0 && digits.length < 6) {
+                warnings.push(`<i class="fa-solid fa-triangle-exclamation"></i> Estás ingresando menos de 6 dígitos (${digits.length}). Verifica el Pallet ID.`);
+            }
+
+            // Verificar duplicado contra datos existentes
+            if (val.length >= 3 && allSheetData.length > 0) {
+                const inputId = val.split('-')[0].trim();
+                const duplicados = allSheetData.filter(row => row.id === inputId);
+                if (duplicados.length > 0) {
+                    const last = duplicados[duplicados.length - 1];
+                    warnings.push(`<i class="fa-solid fa-copy"></i> Pallet duplicado — Este ID ya existe (${duplicados.length}x). Último registro: ${last.fecha}, ${last.turno}. Verifica la información.`);
+                }
+            }
+
+            if (warnings.length > 0) {
+                const isError = warnings.length > 1 || warnings[0].includes('duplicado');
+                warn.style.display = 'block';
+                warn.style.background = isError ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.12)';
+                warn.style.border = `1px solid ${isError ? 'rgba(239, 68, 68, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`;
+                warn.style.color = isError ? '#ef4444' : '#f59e0b';
+                warn.innerHTML = warnings.join('<br style="margin: 4px 0;">');
+                input.style.borderColor = isError ? '#ef4444' : '#f59e0b';
+            }
+        }
+
         // === RENDERIZADO DE TABLA COMPLETA DE PALETS ===
         window.renderPaletsTable = function () {
             const tbody = document.getElementById('palets-table-body');
@@ -2675,6 +2720,10 @@
             if (ordenesSearch) ordenesSearch.addEventListener('input', renderOrdenesTable);
             if (ordenesTurno) ordenesTurno.addEventListener('change', renderOrdenesTable);
             if (ordenesPedido) ordenesPedido.addEventListener('change', renderOrdenesTable);
+
+            // Validación en tiempo real del Pallet ID en formulario
+            const invPalletInput = document.getElementById('inv-pallet');
+            if (invPalletInput) invPalletInput.addEventListener('input', validatePalletInput);
 
             // Cargar datos inicialmente
             fetchSheetData();
