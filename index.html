@@ -1683,11 +1683,14 @@
                     }
                 }
 
-                // Generamos los Headers finales para TODAS las tablas
+                // Generamos los Headers finales solo para las tablas del Dashboard (Últimos Registros)
                 let HTMLHeaders = window.displayIndices.map(i => `<th style="text-align: center;">${colHeaders[i]}</th>`).join('');
-                document.querySelectorAll('table thead tr').forEach(tr => {
-                    tr.innerHTML = HTMLHeaders;
-                });
+                // Aplicar solo a la tabla que contiene #table-body (Últimos Registros del dashboard)
+                const dashboardTable = document.getElementById('table-body');
+                if (dashboardTable) {
+                    const headRow = dashboardTable.closest('table')?.querySelector('thead tr');
+                    if (headRow) headRow.innerHTML = HTMLHeaders;
+                }
 
                 // Mapear y procesar todos los datos iniciales
                 response.table.rows.forEach(r => {
