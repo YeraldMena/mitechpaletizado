@@ -71,6 +71,7 @@ Disponibles en `.claude/commands/`:
 | `/refactor-section` | Refactorizar una sección del index.html |
 | `/verify-forms` | Verificar que los formularios funcionen correctamente (estructura, validaciones, envío, flujo completo) |
 | `/pre-push` | Agente de deploy: verificar, commit, push y pull de forma segura |
+| `/changelog` | Generar/actualizar registro enumerado de commits con nombres descriptivos |
 
 ## MANDATORY: Git Operations Protocol
 

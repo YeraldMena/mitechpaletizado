@@ -80,8 +80,9 @@ Si TODO es PASS:
 1. Hacer `git add` de los archivos modificados (nombrarlos explícitamente, NO usar `git add .`)
 2. Generar mensaje de commit basado en los cambios (prefijo feat:/fix:/refactor: según corresponda)
 3. Hacer `git commit` con el mensaje
-4. Hacer `git push origin main`
-5. Confirmar éxito mostrando el hash del commit
+4. **OBLIGATORIO: Actualizar CHANGELOG.md** — Agregar entrada para el nuevo commit con formato `### #NNN — Nombre Descriptivo` al inicio del changelog. Incluir el commit en el `git add` y hacer un segundo commit `docs: actualizar changelog #NNN` si es necesario, o incluir CHANGELOG.md en el commit original.
+5. Hacer `git push origin main`
+6. Confirmar éxito mostrando el hash del commit
 
 Si alguno es FAIL:
 1. Listar problemas encontrados
