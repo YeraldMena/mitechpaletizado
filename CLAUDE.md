@@ -8,11 +8,10 @@ MI-TECH Paletizado is an industrial pallet tracking dashboard. It displays real-
 
 ## Architecture
 
-### Frontend (index.html — single monolithic file, ~3500 lines)
+### Frontend (index.html — single monolithic file, ~2700 lines)
 - Pure HTML/CSS/JS — no build step, no framework
 - Dark-themed dashboard with sidebar navigation and 5 views: Dashboard, Palets, Órdenes, Formulario, Configuración
-- Fully responsive: mobile breakpoints at 768px and 480px with collapsible sections, card views replacing tables, horizontal stat cards
-- Uses Chart.js v4 for charts (doughnut, bar horizontal, line), Flatpickr for date picker, Font Awesome for icons
+- Uses Chart.js for charts (donut, bar, line), Flatpickr for date picker, Font Awesome for icons
 - Data comes from two sources:
   - **Google Sheets** (via JSONP `gviz/tq` endpoint) — fetched directly in the browser for the main data tables
   - **Backend API** (`/api/...`) — used by dashboard charts and aggregated views
@@ -72,8 +71,6 @@ Disponibles en `.claude/commands/`:
 | `/refactor-section` | Refactorizar una sección del index.html |
 | `/verify-forms` | Verificar que los formularios funcionen correctamente (estructura, validaciones, envío, flujo completo) |
 | `/pre-push` | Agente de deploy: verificar, commit, push y pull de forma segura |
-| `/mobile-fix` | Diagnosticar y corregir problemas de responsive/mobile en el dashboard |
-| `/add-dashboard-panel` | Agregar un panel de datos resumidos al Dashboard principal |
 
 ## MANDATORY: Git Operations Protocol
 
@@ -87,16 +84,6 @@ Disponibles en `.claude/commands/`:
 2. Que no haya archivos "deleted" en git status
 3. Que index.html, backend/ y config estén íntegros
 4. Que no se suban archivos sensibles o node_modules
-
-## Responsive/Mobile Patterns
-
-The dashboard uses these established patterns for mobile support:
-
-- **Collapsible sections**: `.collapsible-toggle` (hidden on desktop, flex on mobile) + `.collapsible-body.collapsed` (max-height:0, opacity:0). Toggle via `toggleCollapsible(btn)`. Graphs auto-collapse on load for mobile.
-- **Card views**: Tables replaced by `.ordenes-card-list` on mobile (`display:none` on desktop, `flex` on mobile). Cards use `.orden-card` with grid layout.
-- **Horizontal stat cards**: On mobile, `.stat-card` switches to `flex-direction: row` with icon left, text right, `.stat-change` hidden.
-- **Chart.js lifecycle**: Always destroy previous instance before creating a new one (`if (chart) chart.destroy()`).
-- **Dashboard panels**: Pattern from `dash-ordenes-panel` — mini KPIs grid + Chart.js canvases + compact table, rendered from `processSheetData` callback.
 
 ## Key Conventions
 
