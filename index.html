@@ -2811,7 +2811,9 @@
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pallet, qty, condicion, destino, pedido, turno, escaneadora })
+                body: JSON.stringify({ pallet, qty, condicion, destino, pedido, turno, escaneadora,
+                    timestamp: (() => { const now = new Date(); return `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`; })()
+                })
             }).then(() => {
                 showInvStatus('Registro enviado correctamente.', 'success');
                 document.getElementById('inventario-form').reset();
