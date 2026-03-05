@@ -618,6 +618,64 @@
             }
         }
 
+        /* === SECCIONES DESPLEGABLES MOBILE === */
+        .collapsible-section {
+            margin-top: 1rem;
+        }
+
+        .collapsible-toggle {
+            display: none; /* Solo visible en mobile */
+            width: 100%;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s ease;
+        }
+
+        .collapsible-toggle:hover {
+            border-color: var(--accent-primary);
+        }
+
+        .collapsible-toggle i.toggle-icon {
+            transition: transform 0.3s ease;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .collapsible-toggle.collapsed i.toggle-icon {
+            transform: rotate(-90deg);
+        }
+
+        .collapsible-body {
+            transition: max-height 0.3s ease, opacity 0.3s ease;
+            overflow: hidden;
+        }
+
+        @media (max-width: 768px) {
+            .collapsible-toggle {
+                display: flex;
+            }
+
+            .collapsible-body.collapsed {
+                max-height: 0 !important;
+                opacity: 0;
+                pointer-events: none;
+                margin-top: 0 !important;
+            }
+
+            .collapsible-body {
+                opacity: 1;
+                margin-top: 0.75rem;
+            }
+        }
+
         /* Órdenes dashboard charts */
         .ordenes-charts-grid {
             display: grid;
@@ -853,6 +911,12 @@
         </div>
 
         <!-- Stats Grid -->
+        <div class="collapsible-section">
+            <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
+                <span><i class="fa-solid fa-chart-simple" style="margin-right: 0.5rem; color: var(--accent-primary);"></i>Indicadores</span>
+                <i class="fa-solid fa-chevron-down toggle-icon"></i>
+            </button>
+            <div class="collapsible-body">
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-header">
@@ -913,8 +977,16 @@
             </div>
 
         </div>
+            </div><!-- /collapsible-body stats -->
+        </div><!-- /collapsible-section stats -->
 
         <!-- Content Grid -->
+        <div class="collapsible-section">
+            <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
+                <span><i class="fa-solid fa-chart-pie" style="margin-right: 0.5rem; color: #10b981;"></i>Gráficos</span>
+                <i class="fa-solid fa-chevron-down toggle-icon"></i>
+            </button>
+            <div class="collapsible-body">
         <div class="content-grid">
             <!-- Nuevo Recuadro: Órdenes Especiales Consolidado (Movido a la Fila de Gráficos) -->
             <div class="panel" id="ordenes-especiales-card" style="display: none; flex-direction: column;">
@@ -1090,6 +1162,8 @@
                 </div>
             </div>
         </div><!-- /content-grid -->
+            </div><!-- /collapsible-body charts -->
+        </div><!-- /collapsible-section charts -->
         </div><!-- /view-dashboard -->
 
         <!-- Vista Palets -->
@@ -1158,7 +1232,13 @@
             </header>
 
             <!-- KPIs de órdenes -->
-            <div class="stats-grid" id="ordenes-stats" style="margin-top: 1rem;">
+            <div class="collapsible-section">
+                <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
+                    <span><i class="fa-solid fa-chart-simple" style="margin-right: 0.5rem; color: #ef4444;"></i>Indicadores</span>
+                    <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                </button>
+                <div class="collapsible-body">
+            <div class="stats-grid" id="ordenes-stats" style="margin-top: 0;">
                 <div class="stat-card">
                     <div class="stat-info">
                         <span>Total Órdenes</span>
@@ -1197,7 +1277,16 @@
                 </div>
             </div>
 
+                </div><!-- /collapsible-body ordenes stats -->
+            </div><!-- /collapsible-section ordenes stats -->
+
             <!-- Dashboard de Órdenes: Gráficos -->
+            <div class="collapsible-section">
+                <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
+                    <span><i class="fa-solid fa-chart-bar" style="margin-right: 0.5rem; color: #3b82f6;"></i>Gráficos</span>
+                    <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                </button>
+                <div class="collapsible-body">
             <div class="ordenes-charts-grid">
                 <div class="ordenes-chart-card">
                     <h3><i class="fa-solid fa-chart-bar" style="color: var(--accent-primary); margin-right: 0.5rem;"></i>Pallets por Pedido</h3>
@@ -1212,6 +1301,8 @@
                     </div>
                 </div>
             </div>
+                </div><!-- /collapsible-body ordenes charts -->
+            </div><!-- /collapsible-section ordenes charts -->
 
             <div class="palets-header" style="margin-top: 1rem;">
                 <div class="palets-filters">
@@ -2320,6 +2411,14 @@
         window.toggleMobileMenu = function () {
             document.getElementById('sidebar').classList.toggle('open');
             document.querySelector('.mobile-menu-overlay').classList.toggle('open');
+        };
+
+        // === SECCIONES DESPLEGABLES MOBILE ===
+        window.toggleCollapsible = function (btn) {
+            const body = btn.nextElementSibling;
+            if (!body) return;
+            const isCollapsed = body.classList.toggle('collapsed');
+            btn.classList.toggle('collapsed', isCollapsed);
         };
 
         // === NAVEGACIÓN ENTRE VISTAS ===
