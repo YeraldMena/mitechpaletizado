@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #039 — PDF Reporte Completo
+- **Commit:** `pending`
+- **Tipo:** feat
+- **Fecha:** 2026-03-05
+- **Descripcion:** Rediseño completo del PDF: tema blanco limpio, todas las tablas, errores, ordenes y seccion de recomendaciones inteligentes
+- **Archivos:** index.html
+
+---
+
 ### #038 — Export PDF Reporte Dashboard
 - **Commit:** `dba7400`
 - **Tipo:** feat

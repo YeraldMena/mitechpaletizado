@@ -3214,129 +3214,162 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('p', 'mm', 'letter');
             const pageW = doc.internal.pageSize.getWidth();
+            const pageH = doc.internal.pageSize.getHeight();
             const margin = 14;
-            let y = 14;
+            const contentW = pageW - margin * 2;
+            let y = 0;
 
-            // --- Colores del tema ---
-            const darkBg = [15, 23, 42];
-            const cardBg = [30, 41, 59];
-            const accent = [59, 130, 246];
-            const textMain = [248, 250, 252];
-            const textMuted = [148, 163, 184];
+            // --- Colores limpios ---
+            const white = [255, 255, 255];
+            const black = [33, 33, 33];
+            const gray = [120, 120, 120];
+            const lightGray = [245, 245, 245];
+            const headerBg = [15, 23, 42];
+            const accentBlue = [59, 130, 246];
+            const accentRed = [239, 68, 68];
+            const accentGreen = [16, 185, 129];
+            const accentYellow = [245, 158, 11];
+            const accentPurple = [139, 92, 246];
 
-            // Fondo oscuro en toda la página
-            function fillPageBg() {
-                doc.setFillColor(...darkBg);
-                doc.rect(0, 0, pageW, doc.internal.pageSize.getHeight(), 'F');
-            }
-            fillPageBg();
-
-            // --- Header del reporte ---
-            doc.setFontSize(18);
-            doc.setTextColor(...textMain);
-            doc.text('Reporte Dashboard Paletizado', margin, y);
-            y += 7;
-            doc.setFontSize(9);
-            doc.setTextColor(...textMuted);
             const now = new Date();
             const fechaReporte = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
-            const filtroActivo = document.getElementById('dateFilter')?.value || 'Todas las fechas';
-            doc.text(`Generado: ${fechaReporte}  |  Filtro: ${filtroActivo || 'Todas las fechas'}`, margin, y);
-            y += 10;
+            const filtroActivo = document.getElementById('dateFilter')?.value || '';
+
+            // --- Utilidades ---
+            function checkPage(needed) {
+                if (y + needed > pageH - 16) {
+                    doc.addPage();
+                    y = 14;
+                }
+            }
+
+            function sectionTitle(text, icon) {
+                checkPage(12);
+                doc.setFillColor(...headerBg);
+                doc.roundedRect(margin, y, contentW, 8, 1.5, 1.5, 'F');
+                doc.setFontSize(9);
+                doc.setTextColor(...white);
+                doc.text((icon ? icon + '  ' : '') + text, margin + 4, y + 5.5);
+                y += 12;
+            }
+
+            function addChart(canvasId, x, cw, ch) {
+                const canvas = document.getElementById(canvasId);
+                if (!canvas) return;
+                try {
+                    const imgData = canvas.toDataURL('image/png');
+                    doc.addImage(imgData, 'PNG', x, y, cw, ch);
+                } catch (e) { /* canvas tainted */ }
+            }
+
+            // ============================================================
+            // PÁGINA 1: PORTADA + KPIs + GRÁFICOS PRINCIPALES
+            // ============================================================
+
+            // --- Banner Header ---
+            doc.setFillColor(...headerBg);
+            doc.rect(0, 0, pageW, 36, 'F');
+            doc.setFontSize(20);
+            doc.setTextColor(...white);
+            doc.text('Reporte de Paletizado', margin, 16);
+            doc.setFontSize(9);
+            doc.setTextColor(180, 195, 220);
+            doc.text('PaletTrack  —  Dashboard de Produccion', margin, 23);
+            doc.setFontSize(8);
+            doc.text(`Generado: ${fechaReporte}`, pageW - margin, 16, { align: 'right' });
+            doc.text(`Filtro: ${filtroActivo || 'Todas las fechas'}`, pageW - margin, 22, { align: 'right' });
+            // Línea decorativa
+            doc.setFillColor(...accentBlue);
+            doc.rect(0, 36, pageW, 1.2, 'F');
+            y = 44;
 
             // --- KPIs Principales ---
             const kpis = [
-                { label: 'Pallets Históricos', value: document.getElementById('stat-activos')?.innerText || '0' },
-                { label: 'Envíos en Tránsito', value: document.getElementById('stat-transito')?.innerText || '0' },
-                { label: 'Promedio Día', value: document.getElementById('stat-promedio-day')?.innerText?.replace(/^.*?(\d)/, '$1') || '0' },
-                { label: 'Pallets Seleccionados', value: document.getElementById('stat-filtros')?.innerText || '0' }
+                { label: 'Pallets Historicos', value: document.getElementById('stat-activos')?.innerText || '0', color: accentBlue },
+                { label: 'Envios en Transito', value: document.getElementById('stat-transito')?.innerText || '0', color: accentYellow },
+                { label: 'Promedio Dia', value: document.getElementById('stat-promedio-day')?.innerText?.replace(/^.*?(\d)/, '$1') || '0', color: accentGreen },
+                { label: 'Pallets Seleccionados', value: document.getElementById('stat-filtros')?.innerText || '0', color: accentPurple }
             ];
 
-            const kpiW = (pageW - margin * 2 - 6 * 3) / 4;
+            const kpiW = (contentW - 6 * 3) / 4;
             kpis.forEach((kpi, i) => {
                 const x = margin + i * (kpiW + 6);
-                doc.setFillColor(...cardBg);
-                doc.roundedRect(x, y, kpiW, 18, 2, 2, 'F');
-                doc.setFontSize(13);
-                doc.setTextColor(...accent);
-                doc.text(kpi.value, x + kpiW / 2, y + 8, { align: 'center' });
-                doc.setFontSize(7);
-                doc.setTextColor(...textMuted);
-                doc.text(kpi.label, x + kpiW / 2, y + 14, { align: 'center' });
+                doc.setFillColor(...lightGray);
+                doc.roundedRect(x, y, kpiW, 20, 2, 2, 'F');
+                // Barra de color superior
+                doc.setFillColor(...kpi.color);
+                doc.rect(x, y, kpiW, 2.5, 'F');
+                doc.setFontSize(14);
+                doc.setTextColor(...kpi.color);
+                doc.text(kpi.value, x + kpiW / 2, y + 10.5, { align: 'center' });
+                doc.setFontSize(6.5);
+                doc.setTextColor(...gray);
+                doc.text(kpi.label, x + kpiW / 2, y + 16, { align: 'center' });
             });
-            y += 24;
+            y += 26;
 
-            // --- Gráficos del Dashboard (captura de canvas) ---
-            const chartPairs = [
+            // --- Gráficos fila 1: Inventario + Turnos ---
+            sectionTitle('Graficos de Produccion');
+            const chartW = (contentW - 6) / 2;
+            const chartH = 58;
+
+            const charts1 = [
                 { id: 'doughnutChart', title: 'Estado de Inventario' },
-                { id: 'barChart', title: 'Envíos por Turno' }
+                { id: 'barChart', title: 'Envios por Turno' }
             ];
-
-            const chartW = (pageW - margin * 2 - 6) / 2;
-            const chartH = 55;
-
-            chartPairs.forEach((ch, i) => {
-                const canvas = document.getElementById(ch.id);
-                if (canvas) {
-                    const x = margin + i * (chartW + 6);
-                    doc.setFillColor(...cardBg);
-                    doc.roundedRect(x, y, chartW, chartH + 8, 2, 2, 'F');
-                    doc.setFontSize(8);
-                    doc.setTextColor(...textMuted);
-                    doc.text(ch.title, x + 4, y + 5);
-                    try {
-                        const imgData = canvas.toDataURL('image/png');
-                        doc.addImage(imgData, 'PNG', x + 2, y + 8, chartW - 4, chartH - 4);
-                    } catch (e) { /* canvas tainted */ }
-                }
+            charts1.forEach((ch, i) => {
+                const x = margin + i * (chartW + 6);
+                doc.setFillColor(...lightGray);
+                doc.roundedRect(x, y, chartW, chartH + 10, 2, 2, 'F');
+                doc.setFontSize(8);
+                doc.setTextColor(...black);
+                doc.setFont(undefined, 'bold');
+                doc.text(ch.title, x + 4, y + 6);
+                doc.setFont(undefined, 'normal');
+                addChart(ch.id, x + 2, chartW - 4, chartH - 2);
             });
-            y += chartH + 14;
+            y += chartH + 16;
 
-            // Producción Diaria y Errores
-            const chartPairs2 = [
-                { id: 'lineChart', title: 'Producción Diaria (7 Días)' },
-                { id: 'errorsChart', title: 'Errores de Liberación' }
+            // --- Gráficos fila 2: Producción 7D + Errores ---
+            const charts2 = [
+                { id: 'lineChart', title: 'Produccion Diaria (7 Dias)' },
+                { id: 'errorsChart', title: 'Errores de Liberacion' }
             ];
-
-            chartPairs2.forEach((ch, i) => {
-                const canvas = document.getElementById(ch.id);
-                if (canvas) {
-                    const x = margin + i * (chartW + 6);
-                    doc.setFillColor(...cardBg);
-                    doc.roundedRect(x, y, chartW, chartH + 8, 2, 2, 'F');
-                    doc.setFontSize(8);
-                    doc.setTextColor(...textMuted);
-                    doc.text(ch.title, x + 4, y + 5);
-                    try {
-                        const imgData = canvas.toDataURL('image/png');
-                        doc.addImage(imgData, 'PNG', x + 2, y + 8, chartW - 4, chartH - 4);
-                    } catch (e) { /* canvas tainted */ }
-                }
+            checkPage(chartH + 16);
+            charts2.forEach((ch, i) => {
+                const x = margin + i * (chartW + 6);
+                doc.setFillColor(...lightGray);
+                doc.roundedRect(x, y, chartW, chartH + 10, 2, 2, 'F');
+                doc.setFontSize(8);
+                doc.setTextColor(...black);
+                doc.setFont(undefined, 'bold');
+                doc.text(ch.title, x + 4, y + 6);
+                doc.setFont(undefined, 'normal');
+                addChart(ch.id, x + 2, chartW - 4, chartH - 2);
             });
-            y += chartH + 14;
+            y += chartH + 16;
 
-            // --- Últimos Registros de Hoy (tabla) ---
-            const todayObj = new Date();
-            const todayStr = `${todayObj.getMonth() + 1}/${todayObj.getDate()}/${todayObj.getFullYear()}`;
+            // ============================================================
+            // PÁGINA 2: TABLAS DE DATOS
+            // ============================================================
+            doc.addPage();
+            y = 14;
+
+            // --- Tabla: Últimos Registros ---
             const val = document.getElementById('dateFilter')?.value || '';
             const selectedDates = val ? val.split(', ') : [];
-
             let filteredRows = allSheetData;
             if (selectedDates.length > 0 && selectedDates[0] !== '') {
                 filteredRows = allSheetData.filter(r => selectedDates.includes(r.fecha));
             }
-
-            const recentRows = filteredRows.slice(-30).reverse();
+            const recentRows = filteredRows.slice(-50).reverse();
 
             if (recentRows.length > 0) {
-                doc.setFontSize(10);
-                doc.setTextColor(...textMain);
-                doc.text('Últimos Registros (según filtro)', margin, y);
-                y += 4;
+                sectionTitle('Ultimos Registros (' + recentRows.length + ' pallets)');
 
                 doc.autoTable({
                     startY: y,
-                    head: [['Pallet ID', 'Cantidad', 'Destino', 'Condición', 'Fecha', 'Turno']],
+                    head: [['Pallet ID', 'Cantidad', 'Destino', 'Condicion', 'Fecha', 'Turno']],
                     body: recentRows.map(r => [
                         r.id.length > 6 ? r.id.substring(0, 6) : r.id,
                         r.cantidad,
@@ -3347,84 +3380,129 @@
                     ]),
                     margin: { left: margin, right: margin },
                     styles: {
-                        fillColor: cardBg,
-                        textColor: textMain,
+                        fillColor: white,
+                        textColor: black,
                         fontSize: 7,
-                        cellPadding: 1.5,
-                        lineColor: [51, 65, 85],
-                        lineWidth: 0.2
+                        cellPadding: 2,
+                        lineColor: [220, 220, 220],
+                        lineWidth: 0.3
                     },
                     headStyles: {
-                        fillColor: accent,
-                        textColor: [255, 255, 255],
+                        fillColor: headerBg,
+                        textColor: white,
                         fontSize: 7,
                         fontStyle: 'bold'
                     },
                     alternateRowStyles: {
-                        fillColor: [22, 33, 52]
-                    },
-                    didDrawPage: function () { fillPageBg(); }
+                        fillColor: lightGray
+                    }
                 });
                 y = doc.lastAutoTable.finalY + 8;
             }
 
-            // --- Página 2: Órdenes Especiales (si hay datos) ---
+            // --- Tabla: Errores / Defectos ---
+            if (typeof allErrorsData !== 'undefined' && allErrorsData.length > 0) {
+                checkPage(30);
+                // Agrupar errores
+                const errorCounts = {};
+                allErrorsData.forEach(r => {
+                    errorCounts[r.defecto] = (errorCounts[r.defecto] || 0) + 1;
+                });
+                const sortedErrors = Object.entries(errorCounts).sort((a, b) => b[1] - a[1]);
+
+                sectionTitle('Errores de Liberacion (' + allErrorsData.length + ' incidencias)');
+
+                doc.autoTable({
+                    startY: y,
+                    head: [['Tipo de Defecto', 'Cantidad', '% del Total']],
+                    body: sortedErrors.map(([defecto, count]) => [
+                        defecto,
+                        count,
+                        (count / allErrorsData.length * 100).toFixed(1) + '%'
+                    ]),
+                    margin: { left: margin, right: margin },
+                    styles: {
+                        fillColor: white,
+                        textColor: black,
+                        fontSize: 7,
+                        cellPadding: 2,
+                        lineColor: [220, 220, 220],
+                        lineWidth: 0.3
+                    },
+                    headStyles: {
+                        fillColor: [180, 80, 20],
+                        textColor: white,
+                        fontSize: 7,
+                        fontStyle: 'bold'
+                    },
+                    alternateRowStyles: {
+                        fillColor: [255, 248, 240]
+                    }
+                });
+                y = doc.lastAutoTable.finalY + 8;
+            }
+
+            // ============================================================
+            // PÁGINA 3: ÓRDENES ESPECIALES (si hay datos)
+            // ============================================================
             const ordenesData = allSheetData.filter(r => r.pedido && r.pedido.trim() !== '');
             if (ordenesData.length > 0) {
                 doc.addPage();
-                fillPageBg();
                 y = 14;
 
-                doc.setFontSize(14);
-                doc.setTextColor(...textMain);
-                doc.text('Órdenes de Atención Especial', margin, y);
-                y += 8;
+                // Header de sección
+                doc.setFillColor(...accentRed);
+                doc.roundedRect(margin, y, contentW, 8, 1.5, 1.5, 'F');
+                doc.setFontSize(9);
+                doc.setTextColor(...white);
+                doc.text('Ordenes de Atencion Especial', margin + 4, y + 5.5);
+                y += 12;
 
                 // KPIs de órdenes
                 const ordKpis = [
-                    { label: 'Total Órdenes', value: document.getElementById('ordenes-stat-total')?.textContent || ordenesData.length.toString(), color: [239, 68, 68] },
-                    { label: 'Pallets Hoy', value: document.getElementById('ordenes-stat-hoy')?.textContent || '0', color: [59, 130, 246] },
-                    { label: 'Unidades', value: document.getElementById('ordenes-stat-unidades')?.textContent || '0', color: [16, 185, 129] },
-                    { label: 'Pedidos Únicos', value: document.getElementById('ordenes-stat-pedidos')?.textContent || '0', color: [245, 158, 11] }
+                    { label: 'Total Ordenes', value: document.getElementById('ordenes-stat-total')?.textContent || ordenesData.length.toString(), color: accentRed },
+                    { label: 'Pallets Hoy', value: document.getElementById('ordenes-stat-hoy')?.textContent || '0', color: accentBlue },
+                    { label: 'Unidades', value: document.getElementById('ordenes-stat-unidades')?.textContent || '0', color: accentGreen },
+                    { label: 'Pedidos Unicos', value: document.getElementById('ordenes-stat-pedidos')?.textContent || '0', color: accentYellow }
                 ];
 
                 ordKpis.forEach((kpi, i) => {
                     const x = margin + i * (kpiW + 6);
-                    doc.setFillColor(...cardBg);
-                    doc.roundedRect(x, y, kpiW, 18, 2, 2, 'F');
-                    doc.setFontSize(13);
+                    doc.setFillColor(...lightGray);
+                    doc.roundedRect(x, y, kpiW, 20, 2, 2, 'F');
+                    doc.setFillColor(...kpi.color);
+                    doc.rect(x, y, kpiW, 2.5, 'F');
+                    doc.setFontSize(14);
                     doc.setTextColor(...kpi.color);
-                    doc.text(kpi.value, x + kpiW / 2, y + 8, { align: 'center' });
-                    doc.setFontSize(7);
-                    doc.setTextColor(...textMuted);
-                    doc.text(kpi.label, x + kpiW / 2, y + 14, { align: 'center' });
+                    doc.text(kpi.value, x + kpiW / 2, y + 10.5, { align: 'center' });
+                    doc.setFontSize(6.5);
+                    doc.setTextColor(...gray);
+                    doc.text(kpi.label, x + kpiW / 2, y + 16, { align: 'center' });
                 });
-                y += 24;
+                y += 26;
 
                 // Gráficos de órdenes
                 const ordCharts = [
                     { id: 'ordenes-chart-pedidos', title: 'Pallets por Pedido' },
-                    { id: 'ordenes-chart-turno', title: 'Distribución por Turno' }
+                    { id: 'ordenes-chart-turno', title: 'Distribucion por Turno' }
                 ];
-
                 ordCharts.forEach((ch, i) => {
                     const canvas = document.getElementById(ch.id);
                     if (canvas) {
                         const x = margin + i * (chartW + 6);
-                        doc.setFillColor(...cardBg);
-                        doc.roundedRect(x, y, chartW, chartH + 8, 2, 2, 'F');
+                        doc.setFillColor(...lightGray);
+                        doc.roundedRect(x, y, chartW, chartH + 10, 2, 2, 'F');
                         doc.setFontSize(8);
-                        doc.setTextColor(...textMuted);
-                        doc.text(ch.title, x + 4, y + 5);
-                        try {
-                            const imgData = canvas.toDataURL('image/png');
-                            doc.addImage(imgData, 'PNG', x + 2, y + 8, chartW - 4, chartH - 4);
-                        } catch (e) { /* canvas tainted */ }
+                        doc.setTextColor(...black);
+                        doc.setFont(undefined, 'bold');
+                        doc.text(ch.title, x + 4, y + 6);
+                        doc.setFont(undefined, 'normal');
+                        addChart(ch.id, x + 2, chartW - 4, chartH - 2);
                     }
                 });
-                y += chartH + 14;
+                y += chartH + 16;
 
-                // Tabla de órdenes (respeta filtros si la pestaña está activa)
+                // Tabla de órdenes
                 const ordRows = lastFilteredOrdenes.length > 0 ? lastFilteredOrdenes : ordenesData.map(r => ({
                     nombrePedido: (/\b\d{8}\b/.exec(r.destinoOriginal + ' ' + r.pedido) || ['Especial'])[0],
                     id: r.id,
@@ -3436,14 +3514,15 @@
                     operador: r.operador
                 }));
 
-                doc.setFontSize(10);
-                doc.setTextColor(...textMain);
-                doc.text(`Detalle Órdenes (${ordRows.length} registros)`, margin, y);
+                checkPage(20);
+                doc.setFontSize(8);
+                doc.setTextColor(...gray);
+                doc.text(`Detalle: ${ordRows.length} registros`, margin, y);
                 y += 4;
 
                 doc.autoTable({
                     startY: y,
-                    head: [['Pedido', 'Pallet ID', 'Cantidad', 'Condición', 'Destino', 'Fecha', 'Turno', 'Operador']],
+                    head: [['Pedido', 'Pallet ID', 'Cant.', 'Condicion', 'Destino', 'Fecha', 'Turno', 'Operador']],
                     body: ordRows.slice().reverse().map(r => [
                         r.nombrePedido || r.pedido || '-',
                         r.id?.length > 6 ? r.id.substring(0, 6) : (r.id || '-'),
@@ -3456,34 +3535,188 @@
                     ]),
                     margin: { left: margin, right: margin },
                     styles: {
-                        fillColor: cardBg,
-                        textColor: textMain,
+                        fillColor: white,
+                        textColor: black,
                         fontSize: 6.5,
-                        cellPadding: 1.5,
-                        lineColor: [51, 65, 85],
-                        lineWidth: 0.2
+                        cellPadding: 1.8,
+                        lineColor: [220, 220, 220],
+                        lineWidth: 0.3
                     },
                     headStyles: {
-                        fillColor: [239, 68, 68],
-                        textColor: [255, 255, 255],
+                        fillColor: accentRed,
+                        textColor: white,
                         fontSize: 6.5,
                         fontStyle: 'bold'
                     },
                     alternateRowStyles: {
-                        fillColor: [22, 33, 52]
-                    },
-                    didDrawPage: function () { fillPageBg(); }
+                        fillColor: [255, 245, 245]
+                    }
+                });
+                y = doc.lastAutoTable.finalY + 8;
+            }
+
+            // ============================================================
+            // ÚLTIMA PÁGINA: RECOMENDACIONES
+            // ============================================================
+            doc.addPage();
+            y = 14;
+
+            doc.setFillColor(...accentGreen);
+            doc.roundedRect(margin, y, contentW, 8, 1.5, 1.5, 'F');
+            doc.setFontSize(9);
+            doc.setTextColor(...white);
+            doc.text('Analisis y Recomendaciones', margin + 4, y + 5.5);
+            y += 14;
+
+            // Generar recomendaciones dinámicas basadas en los datos
+            const recs = [];
+
+            // 1. Análisis de producción por turno
+            let dayCount = 0, nightCount = 0;
+            allSheetData.forEach(r => {
+                const t = r.turno || '';
+                if (t.includes('Noche') || t.toLowerCase().includes('night')) nightCount++;
+                else dayCount++;
+            });
+            const totalPallets = dayCount + nightCount;
+            if (totalPallets > 0) {
+                const dayPct = (dayCount / totalPallets * 100).toFixed(1);
+                const nightPct = (nightCount / totalPallets * 100).toFixed(1);
+                const dominant = dayCount > nightCount ? 'Dia' : 'Noche';
+                recs.push({
+                    title: 'Distribucion por Turno',
+                    text: `Turno Dia: ${dayCount.toLocaleString()} pallets (${dayPct}%) | Turno Noche: ${nightCount.toLocaleString()} pallets (${nightPct}%). El turno ${dominant} concentra la mayor produccion.`,
+                    type: 'info'
+                });
+                if (Math.abs(dayCount - nightCount) / totalPallets > 0.3) {
+                    recs.push({
+                        title: 'Desbalance de Turnos',
+                        text: `Existe una diferencia significativa entre turnos (>${((Math.abs(dayCount - nightCount) / totalPallets) * 100).toFixed(0)}%). Considerar redistribuir carga de trabajo para equilibrar produccion.`,
+                        type: 'warning'
+                    });
+                }
+            }
+
+            // 2. Análisis de destinos
+            const destCounts = {};
+            allSheetData.forEach(r => { destCounts[r.destinoOriginal] = (destCounts[r.destinoOriginal] || 0) + 1; });
+            const topDest = Object.entries(destCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+            if (topDest.length > 0) {
+                recs.push({
+                    title: 'Destinos Principales',
+                    text: `Los 3 destinos con mayor volumen: ${topDest.map(d => d[0] + ' (' + d[1] + ')').join(', ')}. Estos representan el ${(topDest.reduce((s, d) => s + d[1], 0) / totalPallets * 100).toFixed(1)}% del total.`,
+                    type: 'info'
                 });
             }
 
-            // --- Footer en todas las páginas ---
+            // 3. Análisis de errores
+            if (typeof allErrorsData !== 'undefined' && allErrorsData.length > 0) {
+                const errRate = (allErrorsData.length / totalPallets * 100).toFixed(2);
+                const topError = {};
+                allErrorsData.forEach(r => { topError[r.defecto] = (topError[r.defecto] || 0) + 1; });
+                const topErr = Object.entries(topError).sort((a, b) => b[1] - a[1])[0];
+
+                recs.push({
+                    title: 'Tasa de Errores',
+                    text: `${allErrorsData.length} incidencias sobre ${totalPallets.toLocaleString()} pallets = ${errRate}% de tasa de error. ${parseFloat(errRate) > 5 ? 'La tasa supera el 5%, se recomienda revision de procesos.' : 'La tasa esta dentro de parametros aceptables.'}`,
+                    type: parseFloat(errRate) > 5 ? 'warning' : 'success'
+                });
+
+                if (topErr) {
+                    recs.push({
+                        title: 'Defecto Principal',
+                        text: `"${topErr[0]}" es el defecto mas frecuente con ${topErr[1]} incidencias (${(topErr[1] / allErrorsData.length * 100).toFixed(1)}% de errores). Priorizar acciones correctivas en este tipo de defecto.`,
+                        type: 'warning'
+                    });
+                }
+            }
+
+            // 4. Órdenes especiales
+            if (ordenesData.length > 0) {
+                const ordPct = (ordenesData.length / totalPallets * 100).toFixed(1);
+                recs.push({
+                    title: 'Ordenes Especiales',
+                    text: `${ordenesData.length} pallets en ordenes especiales (${ordPct}% del total). Estas requieren seguimiento prioritario y mayor atencion en el proceso de empaque.`,
+                    type: ordenesData.length > 20 ? 'warning' : 'info'
+                });
+            }
+
+            // 5. Duplicados
+            const palletIdFreqs = {};
+            allSheetData.forEach(r => {
+                const sid = r.id.substring(0, 6);
+                if (sid.length >= 6) palletIdFreqs[sid] = (palletIdFreqs[sid] || 0) + 1;
+            });
+            const duplicados = Object.entries(palletIdFreqs).filter(e => e[1] > 1);
+            if (duplicados.length > 0) {
+                recs.push({
+                    title: 'IDs Duplicados Detectados',
+                    text: `Se encontraron ${duplicados.length} Pallet IDs con registros duplicados. Los mas repetidos: ${duplicados.sort((a, b) => b[1] - a[1]).slice(0, 5).map(d => d[0] + ' (x' + d[1] + ')').join(', ')}. Verificar si son errores de escaneo.`,
+                    type: 'danger'
+                });
+            }
+
+            // 6. Recomendación general
+            recs.push({
+                title: 'Resumen General',
+                text: `Total de pallets registrados: ${totalPallets.toLocaleString()}. Se recomienda revisar este reporte periodicamente para identificar tendencias y oportunidades de mejora en el proceso de paletizado.`,
+                type: 'info'
+            });
+
+            // Renderizar recomendaciones
+            const typeColors = {
+                info: { bg: [235, 245, 255], border: accentBlue, icon: 'INFO' },
+                success: { bg: [235, 255, 245], border: accentGreen, icon: 'OK' },
+                warning: { bg: [255, 250, 235], border: accentYellow, icon: 'ALERTA' },
+                danger: { bg: [255, 240, 240], border: accentRed, icon: 'CRITICO' }
+            };
+
+            recs.forEach(rec => {
+                const tc = typeColors[rec.type] || typeColors.info;
+                const textLines = doc.splitTextToSize(rec.text, contentW - 24);
+                const boxH = 10 + textLines.length * 3.5;
+                checkPage(boxH + 4);
+
+                // Fondo
+                doc.setFillColor(...tc.bg);
+                doc.roundedRect(margin, y, contentW, boxH, 2, 2, 'F');
+                // Barra lateral de color
+                doc.setFillColor(...tc.border);
+                doc.rect(margin, y, 3, boxH, 'F');
+
+                // Badge
+                doc.setFontSize(5.5);
+                doc.setTextColor(...tc.border);
+                doc.text(tc.icon, margin + 6, y + 4.5);
+
+                // Título
+                doc.setFontSize(8);
+                doc.setTextColor(...black);
+                doc.setFont(undefined, 'bold');
+                doc.text(rec.title, margin + 18, y + 5);
+                doc.setFont(undefined, 'normal');
+
+                // Texto
+                doc.setFontSize(7);
+                doc.setTextColor(80, 80, 80);
+                doc.text(textLines, margin + 6, y + 9.5);
+
+                y += boxH + 3;
+            });
+
+            // ============================================================
+            // FOOTER EN TODAS LAS PÁGINAS
+            // ============================================================
             const totalPages = doc.internal.getNumberOfPages();
             for (let i = 1; i <= totalPages; i++) {
                 doc.setPage(i);
-                doc.setFontSize(7);
-                doc.setTextColor(...textMuted);
-                doc.text(`PaletTrack — Reporte generado ${fechaReporte}`, margin, doc.internal.pageSize.getHeight() - 6);
-                doc.text(`Página ${i} de ${totalPages}`, pageW - margin, doc.internal.pageSize.getHeight() - 6, { align: 'right' });
+                // Línea separadora
+                doc.setDrawColor(200, 200, 200);
+                doc.line(margin, pageH - 10, pageW - margin, pageH - 10);
+                doc.setFontSize(6.5);
+                doc.setTextColor(...gray);
+                doc.text(`PaletTrack  |  Reporte generado: ${fechaReporte}`, margin, pageH - 6);
+                doc.text(`Pagina ${i} de ${totalPages}`, pageW - margin, pageH - 6, { align: 'right' });
             }
 
             const fechaFile = now.toISOString().slice(0, 10);
