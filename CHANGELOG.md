@@ -7,7 +7,7 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 ---
 
 ### #036 — URL Apps Script Nueva
-- **Commit:** `pendiente`
+- **Commit:** `eacfba2`
 - **Tipo:** fix
 - **Fecha:** 2026-03-05
 - **Descripcion:** Actualizar URL de Apps Script a nueva implementacion con formato de fecha sin ceros
