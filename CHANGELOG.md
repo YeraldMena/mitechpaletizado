@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #036 — URL Apps Script Nueva
+- **Commit:** `pendiente`
+- **Tipo:** fix
+- **Fecha:** 2026-03-05
+- **Descripcion:** Actualizar URL de Apps Script a nueva implementacion con formato de fecha sin ceros
+- **Archivos:** index.html
+
+---
+
 ### #035 — Agente Changelog
 - **Commit:** `25d05dc`
 - **Tipo:** feat
