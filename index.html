@@ -676,6 +676,99 @@
             }
         }
 
+        /* === ÓRDENES: CARDS MOBILE === */
+        .ordenes-card-list {
+            display: none; /* Solo visible en mobile */
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .orden-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 0.85rem;
+        }
+
+        .orden-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .orden-card-badge {
+            background: rgba(239,68,68,0.15);
+            color: #ef4444;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        .orden-card-id {
+            font-weight: 700;
+            color: var(--text-main);
+            font-size: 0.9rem;
+        }
+
+        .orden-card-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.3rem 1rem;
+        }
+
+        .orden-card-field {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            padding: 2px 0;
+        }
+
+        .orden-card-field .label {
+            color: var(--text-muted);
+        }
+
+        .orden-card-field .value {
+            color: var(--text-main);
+            font-weight: 500;
+            text-align: right;
+        }
+
+        @media (max-width: 768px) {
+            .ordenes-card-list {
+                display: flex;
+            }
+
+            .ordenes-table-wrapper {
+                display: none !important;
+            }
+
+            .ordenes-chart-area {
+                height: 200px !important;
+            }
+
+            .ordenes-chart-card h3 {
+                font-size: 0.85rem;
+            }
+
+            /* Header más compacto */
+            #view-ordenes .page-title h1 {
+                font-size: 1.1rem;
+                line-height: 1.2;
+            }
+
+            #view-ordenes .page-title p {
+                font-size: 0.7rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .orden-card-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
         /* Órdenes dashboard charts */
         .ordenes-charts-grid {
             display: grid;
@@ -1319,7 +1412,8 @@
                 <span class="palets-count" id="ordenes-count">0 resultados</span>
             </div>
 
-            <div class="panel" style="margin-top: 1rem;">
+            <!-- Tabla desktop -->
+            <div class="panel ordenes-table-wrapper" style="margin-top: 1rem;">
                 <div style="overflow-x: auto; max-height: 70vh; overflow-y: auto;">
                     <table>
                         <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
@@ -1343,6 +1437,12 @@
                     </table>
                 </div>
             </div>
+
+            <!-- Cards mobile -->
+            <div class="ordenes-card-list" id="ordenes-card-list" style="margin-top: 1rem;">
+                <!-- JS inyecta las tarjetas aquí -->
+            </div>
+
         </div><!-- /view-ordenes -->
 
         <!-- Vista Inventario -->
@@ -2791,6 +2891,36 @@
                 `;
                 tbody.appendChild(tr);
             });
+
+            // Renderizar cards mobile
+            const cardList = document.getElementById('ordenes-card-list');
+            if (cardList) {
+                cardList.innerHTML = '';
+                if (display.length === 0) {
+                    cardList.innerHTML = '<div style="text-align:center; color: var(--text-muted); padding: 2rem;">No se encontraron órdenes especiales.</div>';
+                } else {
+                    display.forEach(row => {
+                        const idShort = row.id.length > 6 ? row.id.substring(0, 6) : row.id;
+                        const card = document.createElement('div');
+                        card.className = 'orden-card';
+                        card.innerHTML = `
+                            <div class="orden-card-header">
+                                <span class="orden-card-badge">${row.nombrePedido}</span>
+                                <span class="orden-card-id">${idShort}</span>
+                            </div>
+                            <div class="orden-card-grid">
+                                <div class="orden-card-field"><span class="label">Cantidad</span><span class="value">${row.cantidad}</span></div>
+                                <div class="orden-card-field"><span class="label">Condición</span><span class="value">${row.condicion || '-'}</span></div>
+                                <div class="orden-card-field"><span class="label">Destino</span><span class="value">${row.destinoOriginal || '-'}</span></div>
+                                <div class="orden-card-field"><span class="label">Fecha</span><span class="value">${row.fecha}</span></div>
+                                <div class="orden-card-field"><span class="label">Turno</span><span class="value">${row.turno}</span></div>
+                                <div class="orden-card-field"><span class="label">Operador</span><span class="value">${row.operador || '-'}</span></div>
+                            </div>
+                        `;
+                        cardList.appendChild(card);
+                    });
+                }
+            }
         };
 
         // === GRÁFICOS DASHBOARD DE ÓRDENES ===
