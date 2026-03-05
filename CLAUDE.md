@@ -70,7 +70,20 @@ Disponibles en `.claude/commands/`:
 | `/sync-debug` | Diagnosticar problemas de sincronización Sheets-MySQL |
 | `/refactor-section` | Refactorizar una sección del index.html |
 | `/verify-forms` | Verificar que los formularios funcionen correctamente (estructura, validaciones, envío, flujo completo) |
-| `/pre-push` | Tester completo antes de subir a GitHub: estructura, git, HTML, backend, consistencia |
+| `/pre-push` | Agente de deploy: verificar, commit, push y pull de forma segura |
+
+## MANDATORY: Git Operations Protocol
+
+**SIEMPRE usar `/pre-push` antes de cualquier operación git que suba o baje cambios.** Esto incluye:
+- `git push` → usar `/pre-push subir`
+- `git pull` → usar `/pre-push bajar`
+- `git commit` + push → usar `/pre-push`
+
+**NUNCA hacer push/pull directo sin pasar por el agente.** El agente verifica:
+1. Que los archivos del proyecto estén en la raíz (no en .claude/)
+2. Que no haya archivos "deleted" en git status
+3. Que index.html, backend/ y config estén íntegros
+4. Que no se suban archivos sensibles o node_modules
 
 ## Key Conventions
 

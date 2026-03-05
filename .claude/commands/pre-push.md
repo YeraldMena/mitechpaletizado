@@ -1,96 +1,139 @@
-# Pre-Push Tester — Verificar antes de subir a GitHub
+# Agente de Deploy — Verificar, Commit, Push y Pull
 
-Agente tester que verifica la integridad completa del proyecto antes de hacer commit y push. Asegura que nada se corrompa al subir cambios.
+Agente que verifica la integridad del proyecto y ejecuta operaciones git de forma segura. Usa este agente SIEMPRE que necesites hacer push, pull, commit o cualquier operación que suba/baje cambios.
 
 ## Instrucciones
 
-Ejecuta TODAS las verificaciones en orden. Si alguna falla, NO procedas al push — reporta el problema y propón la corrección.
+Detecta automáticamente qué operación necesita el usuario según el contexto o `$ARGUMENTS`:
+- Si dice "push", "subir", "deploy" → ejecuta flujo PUSH
+- Si dice "pull", "bajar", "actualizar" → ejecuta flujo PULL
+- Si no especifica → ejecuta flujo PUSH (por defecto)
 
-### 1. Estructura de Archivos
+---
 
-Verificar que estos archivos existen EN LA RAÍZ del proyecto (NO dentro de .claude/):
-- [ ] `index.html` — frontend principal
-- [ ] `backend/server.js` — servidor Express
-- [ ] `backend/config.js` — configuración MySQL y puerto
-- [ ] `backend/package.json` — dependencias del backend
-- [ ] `backend/package-lock.json` — lockfile de dependencias
-- [ ] `backend/sync-sheets.js` — script de sincronización standalone
-- [ ] `START-SERVER.bat` — launcher Windows
-- [ ] `.gitignore` — debe contener `node_modules/`
-- [ ] `Staticfile` — archivo de Cloud Foundry
-- [ ] `dashboard Paletizado.html` — dashboard legacy
-- [ ] `README.md`
+## FLUJO PUSH (subir cambios)
 
-Si algún archivo está dentro de `.claude/` en vez de la raíz, MOVERLO de vuelta antes de continuar.
+### Paso 1: Verificación de estructura
+Ejecutar estos comandos en paralelo:
+```bash
+# Verificar que los 11 archivos existen en la RAÍZ (no en .claude/)
+for f in index.html backend/server.js backend/config.js backend/package.json backend/package-lock.json backend/sync-sheets.js START-SERVER.bat .gitignore Staticfile "dashboard Paletizado.html" README.md; do test -f "$f" && echo "OK: $f" || echo "FAIL: $f"; done
 
-### 2. Git Status Limpio
+# Git status
+git status
 
-- [ ] Ejecutar `git status` y verificar que NO hay archivos eliminados ("deleted")
-- [ ] Verificar que `node_modules/` NO está siendo trackeado (debe estar en .gitignore)
-- [ ] Verificar que NO hay archivos sensibles staged (`.env`, credenciales extra, etc.)
-- [ ] Verificar que la rama actual es `main`
+# Verificar .gitignore
+cat .gitignore
+```
 
-### 3. Validación del HTML (index.html)
+**Si algún archivo del proyecto está dentro de `.claude/` en vez de la raíz, MOVERLO con `mv` antes de continuar.** Esto es CRÍTICO — si los archivos están en `.claude/`, git los verá como "deleted" y el repo en GitHub quedará vacío.
 
-- [ ] El archivo NO está vacío y tiene más de 2000 líneas
-- [ ] Empieza con `<!DOCTYPE html>` y termina con `</html>`
-- [ ] Contiene las 5 vistas: `view-dashboard`, `view-palets`, `view-ordenes`, `view-formulario`, `view-configuracion`
-- [ ] La función `switchView` existe y maneja las 5 vistas
-- [ ] Los CDN externos están presentes (Chart.js, Flatpickr, Font Awesome, Google Fonts)
-- [ ] Las URLs de Google Sheets están presentes (spreadsheet IDs: `1Su-CGdOPU-etXKoVXAKYx6qKhN92RFBiH-gLeN_XElk` y `1FjVHlUNzu0gqhBunDNXKD5GUpcKGviLrFdJJAZG5qhg`)
-- [ ] La URL de Apps Script (`APPS_SCRIPT_URL`) está definida
-- [ ] No hay tags HTML rotos (verificar que cada `<div` tiene su `</div>`, cada `<script>` tiene `</script>`)
-- [ ] No hay errores de sintaxis JavaScript evidentes (funciones sin cerrar, llaves desbalanceadas)
+### Paso 2: Validación del código
+Ejecutar en paralelo:
+```bash
+# HTML: verificar estructura básica
+wc -l index.html          # debe ser > 2000 líneas
+head -1 index.html         # debe ser <!DOCTYPE html>
+tail -1 index.html         # debe ser </html>
 
-### 4. Validación del Backend
+# Verificar que las 5 vistas existen
+grep -c "view-dashboard\|view-palets\|view-ordenes\|view-formulario\|view-configuracion" index.html  # debe ser >= 10
 
-- [ ] `backend/server.js` contiene `app.listen(config.port`
-- [ ] `backend/server.js` contiene `express.static(path.join(__dirname, '..'))`  — debe apuntar a `..` (raíz), NO a otro path
-- [ ] `backend/config.js` exporta `db` y `port`
-- [ ] `backend/package.json` tiene las 3 dependencias: `express`, `mysql2`, `cors`
-- [ ] Las URLs de Google Sheets en `server.js` coinciden con las de `index.html` (mismos spreadsheet IDs)
+# Verificar CDNs y URLs críticas
+grep -c "chart.js\|flatpickr\|font-awesome" index.html  # debe ser > 0
+grep -c "APPS_SCRIPT_URL" index.html                      # debe ser > 0
 
-### 5. Validación de Consistencia
+# Backend: verificar integridad
+grep -c "app.listen(config.port" backend/server.js         # debe ser 1
+grep -c "express.static" backend/server.js                 # debe ser 1
+grep "express\|mysql2\|cors" backend/package.json          # las 3 deps
+```
 
-- [ ] Los valores de turno del formulario son compatibles con la normalización del backend
-- [ ] Los destinos del formulario son compatibles con la normalización del backend
-- [ ] `START-SERVER.bat` apunta a `http://localhost:3009` (puerto correcto según config.js)
-- [ ] El `.gitignore` incluye `node_modules/`
+### Paso 3: Revisar cambios
+```bash
+git diff --stat            # resumen de cambios
+git diff                   # cambios detallados
+git status                 # archivos sin trackear
+```
 
-### 6. Verificar Cambios Pendientes
+Verificar que:
+- NO hay archivos "deleted" en git status
+- NO se incluye `node_modules/`
+- NO hay archivos sensibles (.env, credenciales extra)
+- Los cambios tienen sentido (no hay código borrado por accidente)
 
-- [ ] Ejecutar `git diff` y `git diff --staged` para ver todos los cambios
-- [ ] Verificar que los cambios tienen sentido (no hay código borrado por accidente, no hay archivos corruptos)
-- [ ] Verificar que NO se están subiendo archivos binarios grandes innecesarios
-- [ ] Verificar que `backend/node_modules/` NO está en el diff
-
-### 7. Reporte Final
-
-Genera un reporte con este formato:
-
+### Paso 4: Reporte y acción
+Generar reporte:
 ```
 ==========================================
   PRE-PUSH TEST REPORT
 ==========================================
-
-Estructura de archivos:  [PASS/FAIL]
-Git status:              [PASS/FAIL]
-HTML válido:             [PASS/FAIL]
-Backend válido:          [PASS/FAIL]
-Consistencia:            [PASS/FAIL]
-Cambios revisados:       [PASS/FAIL]
-
-RESULTADO: [LISTO PARA PUSH / BLOQUEADO]
+Estructura:    [PASS/FAIL]
+HTML válido:   [PASS/FAIL]
+Backend:       [PASS/FAIL]
+Cambios:       [PASS/FAIL]
+RESULTADO:     [LISTO / BLOQUEADO]
 ==========================================
 ```
 
-Si TODAS las verificaciones son PASS:
-- Preguntar al usuario si quiere que haga el commit y push
-- Sugerir un mensaje de commit basado en los cambios detectados
+Si TODO es PASS:
+1. Hacer `git add` de los archivos modificados (nombrarlos explícitamente, NO usar `git add .`)
+2. Generar mensaje de commit basado en los cambios (prefijo feat:/fix:/refactor: según corresponda)
+3. Hacer `git commit` con el mensaje
+4. Hacer `git push origin main`
+5. Confirmar éxito mostrando el hash del commit
 
-Si alguna es FAIL:
-- Listar los problemas encontrados
-- Proponer correcciones específicas
-- Preguntar si quiere que las aplique
+Si alguno es FAIL:
+1. Listar problemas encontrados
+2. Corregirlos automáticamente si es posible (como mover archivos de .claude/ a raíz)
+3. Si no se puede corregir automáticamente, explicar qué hacer
+4. Volver a ejecutar las verificaciones después de corregir
+
+---
+
+## FLUJO PULL (bajar cambios)
+
+### Paso 1: Pre-pull check
+```bash
+git status                 # verificar si hay cambios locales sin commit
+git stash list             # verificar si hay stashes previos
+```
+
+Si hay cambios locales sin commit:
+- Preguntar al usuario si quiere hacer stash, commit, o descartar
+- NO hacer pull con cambios sin guardar (puede causar conflictos)
+
+### Paso 2: Ejecutar pull
+```bash
+git pull origin main
+```
+
+### Paso 3: Post-pull verification
+Ejecutar las mismas verificaciones del flujo PUSH (estructura, HTML, backend) para asegurar que el pull no corrompió nada.
+
+Si hay conflictos de merge:
+1. Mostrar los archivos en conflicto
+2. Leer los archivos y resolver los conflictos preservando ambos cambios cuando sea posible
+3. Verificar que el código resultante funciona
+4. Hacer commit del merge
+
+### Paso 4: Confirmar éxito
+```bash
+git log --oneline -3       # mostrar últimos commits
+git status                 # verificar que está limpio
+```
+
+---
+
+## REGLAS IMPORTANTES
+
+- NUNCA hacer `git add .` o `git add -A` — siempre nombrar archivos explícitamente
+- NUNCA hacer `git push --force`
+- NUNCA hacer `git reset --hard` sin preguntar
+- NUNCA hacer commit si hay verificaciones FAIL
+- SIEMPRE verificar que los archivos están en la raíz, no en .claude/
+- SIEMPRE mostrar el reporte antes de ejecutar push/pull
+- Si el usuario pide push y hay cambios sin commit, hacer commit primero
+- El mensaje de commit debe seguir el formato: `feat:`, `fix:`, `refactor:` + descripción en español
 
 $ARGUMENTS
