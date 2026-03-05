@@ -767,6 +767,14 @@
             .orden-card-grid {
                 grid-template-columns: 1fr;
             }
+
+            #dash-ordenes-kpis {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+
+            #dash-ordenes-panel .panel-header {
+                flex-wrap: wrap;
+            }
         }
 
         /* Órdenes dashboard charts */
@@ -1228,6 +1236,56 @@
                         </div>
                     </div>
                 </div> <!-- Se cierra adecuadamente .panel de Errores -->
+
+                <!-- Panel Órdenes de Atención Especial - Dashboard -->
+                <div class="panel" id="dash-ordenes-panel" style="grid-column: 1 / -1; display: none;">
+                    <div class="panel-header" style="margin-bottom: 0.75rem;">
+                        <h2 class="panel-title" style="display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fa-solid fa-fire" style="color: #ef4444;"></i> Órdenes de Atención Especial
+                        </h2>
+                        <span id="dash-ordenes-badge" style="background: rgba(239,68,68,0.15); color: #ef4444; padding: 3px 12px; border-radius: 12px; font-weight: 600; font-size: 0.85rem;">0</span>
+                    </div>
+                    <!-- KPIs mini -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin-bottom: 1rem;" id="dash-ordenes-kpis">
+                        <div style="background: var(--bg-dark); border-radius: 0.5rem; padding: 0.6rem 0.75rem; text-align: center;">
+                            <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 2px;">Total</div>
+                            <div id="dash-ord-total" style="font-size: 1.1rem; font-weight: 700; color: #ef4444;">0</div>
+                        </div>
+                        <div style="background: var(--bg-dark); border-radius: 0.5rem; padding: 0.6rem 0.75rem; text-align: center;">
+                            <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 2px;">Hoy</div>
+                            <div id="dash-ord-hoy" style="font-size: 1.1rem; font-weight: 700; color: #3b82f6;">0</div>
+                        </div>
+                        <div style="background: var(--bg-dark); border-radius: 0.5rem; padding: 0.6rem 0.75rem; text-align: center;">
+                            <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 2px;">Unidades</div>
+                            <div id="dash-ord-unidades" style="font-size: 1.1rem; font-weight: 700; color: #10b981;">0</div>
+                        </div>
+                        <div style="background: var(--bg-dark); border-radius: 0.5rem; padding: 0.6rem 0.75rem; text-align: center;">
+                            <div style="color: var(--text-muted); font-size: 0.7rem; margin-bottom: 2px;">Pedidos</div>
+                            <div id="dash-ord-pedidos" style="font-size: 1.1rem; font-weight: 700; color: #f59e0b;">0</div>
+                        </div>
+                    </div>
+                    <!-- Gráficos mini -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div style="height: 180px;"><canvas id="dash-ordenes-chart-bar"></canvas></div>
+                        <div style="height: 180px;"><canvas id="dash-ordenes-chart-donut"></canvas></div>
+                    </div>
+                    <!-- Tabla compacta de últimas órdenes -->
+                    <div style="margin-top: 0.75rem; max-height: 200px; overflow-y: auto; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="font-size: 0.75rem; padding: 0.4rem;">Pedido</th>
+                                    <th style="font-size: 0.75rem; padding: 0.4rem;">Pallet ID</th>
+                                    <th style="font-size: 0.75rem; padding: 0.4rem;">Cant.</th>
+                                    <th style="font-size: 0.75rem; padding: 0.4rem;">Fecha</th>
+                                    <th style="font-size: 0.75rem; padding: 0.4rem;">Turno</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dash-ordenes-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
                 <!-- Recent Activity Panel, por fuera de Errores -->
                 <div class="panel" style="grid-column: 1 / -1;">
@@ -2124,6 +2182,9 @@
                     resetPaletsFilterOptions();
                     window.renderPaletsTable();
                 }
+
+                // Actualizar panel de órdenes en el dashboard principal
+                if (typeof renderDashOrdenesPanel === 'function') renderDashOrdenesPanel();
 
                 // Si la vista Órdenes está activa, refrescar tabla
                 const ordenesView = document.getElementById('view-ordenes');
@@ -3024,6 +3085,111 @@
                         }
                     }
                 });
+            }
+        }
+
+        // === DASHBOARD PRINCIPAL: PANEL DE ÓRDENES ESPECIALES ===
+        let dashOrdChartBar = null;
+        let dashOrdChartDonut = null;
+
+        function renderDashOrdenesPanel() {
+            if (allSheetData.length === 0) return;
+
+            const ordenesData = allSheetData.filter(r => r.pedido && r.pedido.trim() !== '');
+            const panel = document.getElementById('dash-ordenes-panel');
+            if (!panel) return;
+
+            if (ordenesData.length === 0) {
+                panel.style.display = 'none';
+                return;
+            }
+            panel.style.display = '';
+
+            const todayStr = new Date().toLocaleDateString('en-US');
+            const hoyRows = ordenesData.filter(r => r.fecha === todayStr);
+            const totalUnidades = ordenesData.reduce((s, r) => s + r.cantidad, 0);
+            const pedidosUnicos = new Set(ordenesData.map(r => r.pedido.trim()));
+
+            // KPIs
+            document.getElementById('dash-ordenes-badge').textContent = ordenesData.length;
+            document.getElementById('dash-ord-total').textContent = ordenesData.length.toLocaleString();
+            document.getElementById('dash-ord-hoy').textContent = hoyRows.length.toLocaleString();
+            document.getElementById('dash-ord-unidades').textContent = totalUnidades.toLocaleString('es-MX');
+            document.getElementById('dash-ord-pedidos').textContent = pedidosUnicos.size.toLocaleString();
+
+            // Gráfico barras: pallets por pedido
+            const pedidoCount = {};
+            ordenesData.forEach(r => {
+                const p = r.pedido.trim();
+                pedidoCount[p] = (pedidoCount[p] || 0) + 1;
+            });
+            const sorted = Object.entries(pedidoCount).sort((a, b) => b[1] - a[1]).slice(0, 8);
+            const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
+
+            const ctx1 = document.getElementById('dash-ordenes-chart-bar');
+            if (ctx1) {
+                if (dashOrdChartBar) dashOrdChartBar.destroy();
+                dashOrdChartBar = new Chart(ctx1, {
+                    type: 'bar',
+                    data: {
+                        labels: sorted.map(e => e[0]),
+                        datasets: [{
+                            data: sorted.map(e => e[1]),
+                            backgroundColor: sorted.map((_, i) => colors[i % colors.length]),
+                            borderRadius: 4, barThickness: 14
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(148,163,184,0.1)' } },
+                            y: { ticks: { color: '#f8fafc', font: { size: 10 } }, grid: { display: false } }
+                        }
+                    }
+                });
+            }
+
+            // Gráfico donut: turno
+            const turnoCount = { 'Día': 0, 'Noche': 0 };
+            ordenesData.forEach(r => {
+                const t = r.turno || '';
+                if (t.includes('Noche') || t.toLowerCase().includes('night')) turnoCount['Noche']++;
+                else turnoCount['Día']++;
+            });
+
+            const ctx2 = document.getElementById('dash-ordenes-chart-donut');
+            if (ctx2) {
+                if (dashOrdChartDonut) dashOrdChartDonut.destroy();
+                dashOrdChartDonut = new Chart(ctx2, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Día', 'Noche'],
+                        datasets: [{ data: [turnoCount['Día'], turnoCount['Noche']], backgroundColor: ['#3b82f6', '#6366f1'], borderWidth: 0 }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, cutout: '60%',
+                        plugins: {
+                            legend: { position: 'bottom', labels: { color: '#f8fafc', font: { size: 11 }, padding: 12 } }
+                        }
+                    }
+                });
+            }
+
+            // Tabla compacta (últimas 10)
+            const tbody = document.getElementById('dash-ordenes-table-body');
+            if (tbody) {
+                const recent = ordenesData.slice().reverse().slice(0, 10);
+                tbody.innerHTML = recent.map(r => {
+                    const idShort = r.id.length > 6 ? r.id.substring(0, 6) : r.id;
+                    return `<tr>
+                        <td style="padding:0.35rem; font-size:0.8rem;"><span style="background:rgba(239,68,68,0.15); color:#ef4444; padding:2px 6px; border-radius:8px; font-weight:600; font-size:0.75rem;">${r.pedido.trim()}</span></td>
+                        <td style="padding:0.35rem; font-size:0.8rem;"><strong>${idShort}</strong></td>
+                        <td style="padding:0.35rem; font-size:0.8rem;">${r.cantidad}</td>
+                        <td style="padding:0.35rem; font-size:0.8rem;">${r.fecha}</td>
+                        <td style="padding:0.35rem; font-size:0.8rem;">${r.turno}</td>
+                    </tr>`;
+                }).join('');
             }
         }
 
