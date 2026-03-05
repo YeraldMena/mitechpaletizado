@@ -553,39 +553,91 @@
                 padding-top: 4rem;
             }
 
-            /* Responsive: stats cards en 2 columnas en mobile */
+            /* Responsive: stats cards en 2 columnas, layout horizontal */
             .stats-grid {
                 grid-template-columns: repeat(2, 1fr) !important;
                 gap: 0.5rem;
             }
 
             .stat-card {
-                padding: 0.75rem;
+                padding: 0.6rem 0.75rem;
+                flex-direction: row !important;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.5rem;
+                border-radius: 0.75rem;
             }
 
-            .stat-card h2 {
-                font-size: 1.2rem;
+            .stat-card:hover {
+                transform: none;
+                box-shadow: none;
+            }
+
+            .stat-card .stat-info {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .stat-card .stat-info span {
+                font-size: 0.65rem;
+                display: block;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .stat-card .stat-info h2,
+            .stat-card .stat-value {
+                font-size: 1.1rem !important;
+                margin-top: 1px;
+            }
+
+            .stat-card .stat-header {
+                flex-direction: row-reverse;
+                gap: 0.5rem;
+            }
+
+            .stat-card .stat-header span {
+                font-size: 0.65rem;
+            }
+
+            .stat-card .stat-value {
+                font-size: 1.1rem !important;
+            }
+
+            .stat-card .stat-change {
+                display: none;
             }
 
             .stat-icon {
                 width: 28px;
                 height: 28px;
-                font-size: 0.9rem;
+                font-size: 0.85rem;
+                flex-shrink: 0;
             }
 
             /* Responsive: filtros en columna */
             .palets-header {
                 flex-direction: column;
                 align-items: stretch;
+                gap: 0.5rem;
             }
 
             .palets-filters {
                 flex-direction: column;
+                gap: 0.4rem;
             }
 
             .palets-filters input,
             .palets-filters select {
                 width: 100% !important;
+                padding: 0.6rem 0.75rem;
+                font-size: 0.85rem;
+            }
+
+            .palets-count {
+                text-align: center;
+                font-size: 0.8rem;
             }
 
             /* Responsive: tablas con scroll horizontal */
@@ -597,6 +649,21 @@
             /* Responsive: gráficos de órdenes */
             .ordenes-charts-grid {
                 grid-template-columns: 1fr !important;
+                gap: 0.75rem;
+            }
+
+            .ordenes-chart-card {
+                padding: 0.75rem;
+            }
+
+            .ordenes-chart-card h3 {
+                font-size: 0.8rem;
+                margin-bottom: 0.5rem;
+            }
+
+            /* Responsive: header de vista órdenes */
+            #view-ordenes > header {
+                padding-bottom: 0;
             }
         }
 
@@ -774,6 +841,17 @@
 
             #dash-ordenes-panel .panel-header {
                 flex-wrap: wrap;
+            }
+
+            /* Dashboard principal: panel órdenes en mobile */
+            #dash-ordenes-panel [style*="grid-template-columns: 1fr 1fr"] {
+                grid-template-columns: 1fr !important;
+            }
+
+            /* Contenedor 50/50 producción/errores en mobile */
+            .content-grid > [style*="grid-column: span 3"] {
+                grid-column: span 1 !important;
+                grid-template-columns: 1fr !important;
             }
         }
 
@@ -3390,6 +3468,19 @@
             // Validación en tiempo real del Pallet ID en formulario
             const invPalletInput = document.getElementById('inv-pallet');
             if (invPalletInput) invPalletInput.addEventListener('input', validatePalletInput);
+
+            // En mobile: colapsar gráficos por defecto para mostrar la tabla primero
+            if (window.innerWidth <= 768) {
+                document.querySelectorAll('.collapsible-section').forEach((section, idx) => {
+                    const toggle = section.querySelector('.collapsible-toggle');
+                    const body = section.querySelector('.collapsible-body');
+                    // Colapsar secciones de gráficos (índice impar: 1 y 3)
+                    if (toggle && body && (idx % 2 === 1)) {
+                        body.classList.add('collapsed');
+                        toggle.classList.add('collapsed');
+                    }
+                });
+            }
 
             // Cargar datos inicialmente
             fetchSheetData();
