@@ -15,6 +15,9 @@
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- jsPDF + AutoTable para exportar PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <style>
         :root {
             /* Escala nativa base para evitar "Zoom Out". 
@@ -1119,6 +1122,9 @@
                     <i class="fa-solid fa-magnifying-glass"></i>
                     <input type="text" placeholder="Buscar palets, IDs...">
                 </div>
+                <button type="button" class="btn-export" onclick="exportDashboardPDF()" style="white-space: nowrap;">
+                    <i class="fa-solid fa-file-pdf"></i> Exportar PDF
+                </button>
                 <div class="profile">
                     <div class="avatar">L2</div>
                 </div>
@@ -1245,7 +1251,7 @@
             <div class="panel">
                 <div class="panel-header">
                     <h2 class="panel-title">Estado de Inventario</h2>
-                    <button class="btn">Exportar PDF</button>
+                    <button class="btn" onclick="exportDashboardPDF()">Exportar PDF</button>
                 </div>
                 <div class="chart-area">
                     <canvas id="doughnutChart"></canvas>
@@ -3201,6 +3207,287 @@
 
             const fechaHoy = new Date().toISOString().slice(0, 10);
             XLSX.writeFile(wb, `Ordenes_Especiales_${fechaHoy}.xlsx`);
+        };
+
+        // === EXPORTAR DASHBOARD A PDF (REPORTE) ===
+        window.exportDashboardPDF = function () {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'letter');
+            const pageW = doc.internal.pageSize.getWidth();
+            const margin = 14;
+            let y = 14;
+
+            // --- Colores del tema ---
+            const darkBg = [15, 23, 42];
+            const cardBg = [30, 41, 59];
+            const accent = [59, 130, 246];
+            const textMain = [248, 250, 252];
+            const textMuted = [148, 163, 184];
+
+            // Fondo oscuro en toda la página
+            function fillPageBg() {
+                doc.setFillColor(...darkBg);
+                doc.rect(0, 0, pageW, doc.internal.pageSize.getHeight(), 'F');
+            }
+            fillPageBg();
+
+            // --- Header del reporte ---
+            doc.setFontSize(18);
+            doc.setTextColor(...textMain);
+            doc.text('Reporte Dashboard Paletizado', margin, y);
+            y += 7;
+            doc.setFontSize(9);
+            doc.setTextColor(...textMuted);
+            const now = new Date();
+            const fechaReporte = `${now.getDate()}/${now.getMonth() + 1}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+            const filtroActivo = document.getElementById('dateFilter')?.value || 'Todas las fechas';
+            doc.text(`Generado: ${fechaReporte}  |  Filtro: ${filtroActivo || 'Todas las fechas'}`, margin, y);
+            y += 10;
+
+            // --- KPIs Principales ---
+            const kpis = [
+                { label: 'Pallets Históricos', value: document.getElementById('stat-activos')?.innerText || '0' },
+                { label: 'Envíos en Tránsito', value: document.getElementById('stat-transito')?.innerText || '0' },
+                { label: 'Promedio Día', value: document.getElementById('stat-promedio-day')?.innerText?.replace(/^.*?(\d)/, '$1') || '0' },
+                { label: 'Pallets Seleccionados', value: document.getElementById('stat-filtros')?.innerText || '0' }
+            ];
+
+            const kpiW = (pageW - margin * 2 - 6 * 3) / 4;
+            kpis.forEach((kpi, i) => {
+                const x = margin + i * (kpiW + 6);
+                doc.setFillColor(...cardBg);
+                doc.roundedRect(x, y, kpiW, 18, 2, 2, 'F');
+                doc.setFontSize(13);
+                doc.setTextColor(...accent);
+                doc.text(kpi.value, x + kpiW / 2, y + 8, { align: 'center' });
+                doc.setFontSize(7);
+                doc.setTextColor(...textMuted);
+                doc.text(kpi.label, x + kpiW / 2, y + 14, { align: 'center' });
+            });
+            y += 24;
+
+            // --- Gráficos del Dashboard (captura de canvas) ---
+            const chartPairs = [
+                { id: 'doughnutChart', title: 'Estado de Inventario' },
+                { id: 'barChart', title: 'Envíos por Turno' }
+            ];
+
+            const chartW = (pageW - margin * 2 - 6) / 2;
+            const chartH = 55;
+
+            chartPairs.forEach((ch, i) => {
+                const canvas = document.getElementById(ch.id);
+                if (canvas) {
+                    const x = margin + i * (chartW + 6);
+                    doc.setFillColor(...cardBg);
+                    doc.roundedRect(x, y, chartW, chartH + 8, 2, 2, 'F');
+                    doc.setFontSize(8);
+                    doc.setTextColor(...textMuted);
+                    doc.text(ch.title, x + 4, y + 5);
+                    try {
+                        const imgData = canvas.toDataURL('image/png');
+                        doc.addImage(imgData, 'PNG', x + 2, y + 8, chartW - 4, chartH - 4);
+                    } catch (e) { /* canvas tainted */ }
+                }
+            });
+            y += chartH + 14;
+
+            // Producción Diaria y Errores
+            const chartPairs2 = [
+                { id: 'lineChart', title: 'Producción Diaria (7 Días)' },
+                { id: 'errorsChart', title: 'Errores de Liberación' }
+            ];
+
+            chartPairs2.forEach((ch, i) => {
+                const canvas = document.getElementById(ch.id);
+                if (canvas) {
+                    const x = margin + i * (chartW + 6);
+                    doc.setFillColor(...cardBg);
+                    doc.roundedRect(x, y, chartW, chartH + 8, 2, 2, 'F');
+                    doc.setFontSize(8);
+                    doc.setTextColor(...textMuted);
+                    doc.text(ch.title, x + 4, y + 5);
+                    try {
+                        const imgData = canvas.toDataURL('image/png');
+                        doc.addImage(imgData, 'PNG', x + 2, y + 8, chartW - 4, chartH - 4);
+                    } catch (e) { /* canvas tainted */ }
+                }
+            });
+            y += chartH + 14;
+
+            // --- Últimos Registros de Hoy (tabla) ---
+            const todayObj = new Date();
+            const todayStr = `${todayObj.getMonth() + 1}/${todayObj.getDate()}/${todayObj.getFullYear()}`;
+            const val = document.getElementById('dateFilter')?.value || '';
+            const selectedDates = val ? val.split(', ') : [];
+
+            let filteredRows = allSheetData;
+            if (selectedDates.length > 0 && selectedDates[0] !== '') {
+                filteredRows = allSheetData.filter(r => selectedDates.includes(r.fecha));
+            }
+
+            const recentRows = filteredRows.slice(-30).reverse();
+
+            if (recentRows.length > 0) {
+                doc.setFontSize(10);
+                doc.setTextColor(...textMain);
+                doc.text('Últimos Registros (según filtro)', margin, y);
+                y += 4;
+
+                doc.autoTable({
+                    startY: y,
+                    head: [['Pallet ID', 'Cantidad', 'Destino', 'Condición', 'Fecha', 'Turno']],
+                    body: recentRows.map(r => [
+                        r.id.length > 6 ? r.id.substring(0, 6) : r.id,
+                        r.cantidad,
+                        r.destinoOriginal || '-',
+                        r.condicion || '-',
+                        r.fecha,
+                        r.turno
+                    ]),
+                    margin: { left: margin, right: margin },
+                    styles: {
+                        fillColor: cardBg,
+                        textColor: textMain,
+                        fontSize: 7,
+                        cellPadding: 1.5,
+                        lineColor: [51, 65, 85],
+                        lineWidth: 0.2
+                    },
+                    headStyles: {
+                        fillColor: accent,
+                        textColor: [255, 255, 255],
+                        fontSize: 7,
+                        fontStyle: 'bold'
+                    },
+                    alternateRowStyles: {
+                        fillColor: [22, 33, 52]
+                    },
+                    didDrawPage: function () { fillPageBg(); }
+                });
+                y = doc.lastAutoTable.finalY + 8;
+            }
+
+            // --- Página 2: Órdenes Especiales (si hay datos) ---
+            const ordenesData = allSheetData.filter(r => r.pedido && r.pedido.trim() !== '');
+            if (ordenesData.length > 0) {
+                doc.addPage();
+                fillPageBg();
+                y = 14;
+
+                doc.setFontSize(14);
+                doc.setTextColor(...textMain);
+                doc.text('Órdenes de Atención Especial', margin, y);
+                y += 8;
+
+                // KPIs de órdenes
+                const ordKpis = [
+                    { label: 'Total Órdenes', value: document.getElementById('ordenes-stat-total')?.textContent || ordenesData.length.toString(), color: [239, 68, 68] },
+                    { label: 'Pallets Hoy', value: document.getElementById('ordenes-stat-hoy')?.textContent || '0', color: [59, 130, 246] },
+                    { label: 'Unidades', value: document.getElementById('ordenes-stat-unidades')?.textContent || '0', color: [16, 185, 129] },
+                    { label: 'Pedidos Únicos', value: document.getElementById('ordenes-stat-pedidos')?.textContent || '0', color: [245, 158, 11] }
+                ];
+
+                ordKpis.forEach((kpi, i) => {
+                    const x = margin + i * (kpiW + 6);
+                    doc.setFillColor(...cardBg);
+                    doc.roundedRect(x, y, kpiW, 18, 2, 2, 'F');
+                    doc.setFontSize(13);
+                    doc.setTextColor(...kpi.color);
+                    doc.text(kpi.value, x + kpiW / 2, y + 8, { align: 'center' });
+                    doc.setFontSize(7);
+                    doc.setTextColor(...textMuted);
+                    doc.text(kpi.label, x + kpiW / 2, y + 14, { align: 'center' });
+                });
+                y += 24;
+
+                // Gráficos de órdenes
+                const ordCharts = [
+                    { id: 'ordenes-chart-pedidos', title: 'Pallets por Pedido' },
+                    { id: 'ordenes-chart-turno', title: 'Distribución por Turno' }
+                ];
+
+                ordCharts.forEach((ch, i) => {
+                    const canvas = document.getElementById(ch.id);
+                    if (canvas) {
+                        const x = margin + i * (chartW + 6);
+                        doc.setFillColor(...cardBg);
+                        doc.roundedRect(x, y, chartW, chartH + 8, 2, 2, 'F');
+                        doc.setFontSize(8);
+                        doc.setTextColor(...textMuted);
+                        doc.text(ch.title, x + 4, y + 5);
+                        try {
+                            const imgData = canvas.toDataURL('image/png');
+                            doc.addImage(imgData, 'PNG', x + 2, y + 8, chartW - 4, chartH - 4);
+                        } catch (e) { /* canvas tainted */ }
+                    }
+                });
+                y += chartH + 14;
+
+                // Tabla de órdenes (respeta filtros si la pestaña está activa)
+                const ordRows = lastFilteredOrdenes.length > 0 ? lastFilteredOrdenes : ordenesData.map(r => ({
+                    nombrePedido: (/\b\d{8}\b/.exec(r.destinoOriginal + ' ' + r.pedido) || ['Especial'])[0],
+                    id: r.id,
+                    cantidad: r.cantidad,
+                    condicion: r.condicion,
+                    destinoOriginal: r.destinoOriginal,
+                    fecha: r.fecha,
+                    turno: r.turno,
+                    operador: r.operador
+                }));
+
+                doc.setFontSize(10);
+                doc.setTextColor(...textMain);
+                doc.text(`Detalle Órdenes (${ordRows.length} registros)`, margin, y);
+                y += 4;
+
+                doc.autoTable({
+                    startY: y,
+                    head: [['Pedido', 'Pallet ID', 'Cantidad', 'Condición', 'Destino', 'Fecha', 'Turno', 'Operador']],
+                    body: ordRows.slice().reverse().map(r => [
+                        r.nombrePedido || r.pedido || '-',
+                        r.id?.length > 6 ? r.id.substring(0, 6) : (r.id || '-'),
+                        r.cantidad || 0,
+                        r.condicion || '-',
+                        r.destinoOriginal || '-',
+                        r.fecha || '-',
+                        r.turno || '-',
+                        r.operador || '-'
+                    ]),
+                    margin: { left: margin, right: margin },
+                    styles: {
+                        fillColor: cardBg,
+                        textColor: textMain,
+                        fontSize: 6.5,
+                        cellPadding: 1.5,
+                        lineColor: [51, 65, 85],
+                        lineWidth: 0.2
+                    },
+                    headStyles: {
+                        fillColor: [239, 68, 68],
+                        textColor: [255, 255, 255],
+                        fontSize: 6.5,
+                        fontStyle: 'bold'
+                    },
+                    alternateRowStyles: {
+                        fillColor: [22, 33, 52]
+                    },
+                    didDrawPage: function () { fillPageBg(); }
+                });
+            }
+
+            // --- Footer en todas las páginas ---
+            const totalPages = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= totalPages; i++) {
+                doc.setPage(i);
+                doc.setFontSize(7);
+                doc.setTextColor(...textMuted);
+                doc.text(`PaletTrack — Reporte generado ${fechaReporte}`, margin, doc.internal.pageSize.getHeight() - 6);
+                doc.text(`Página ${i} de ${totalPages}`, pageW - margin, doc.internal.pageSize.getHeight() - 6, { align: 'right' });
+            }
+
+            const fechaFile = now.toISOString().slice(0, 10);
+            doc.save(`Reporte_Dashboard_${fechaFile}.pdf`);
         };
 
         // === GRÁFICOS DASHBOARD DE ÓRDENES ===

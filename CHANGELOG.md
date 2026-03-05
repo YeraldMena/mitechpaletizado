@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #038 — Export PDF Reporte Dashboard
+- **Commit:** `pending`
+- **Tipo:** feat
+- **Fecha:** 2026-03-05
+- **Descripcion:** Boton Exportar PDF en dashboard que genera reporte con KPIs, graficos, tablas y ordenes respetando filtros
+- **Archivos:** index.html
+
+---
+
 ### #037 — URL Apps Script Texto Plano
 - **Commit:** `ada8953`
 - **Tipo:** fix
