@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #037 — URL Apps Script Texto Plano
+- **Commit:** `pending`
+- **Tipo:** fix
+- **Fecha:** 2026-03-05
+- **Descripcion:** Actualizar URL de Apps Script a deploy con setNumberFormat para forzar texto plano en fechas
+- **Archivos:** index.html
+
+---
+
 ### #036 — URL Apps Script Nueva
 - **Commit:** `eacfba2`
 - **Tipo:** fix
