@@ -14,6 +14,7 @@
     <link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/dark.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <style>
         :root {
             /* Escala nativa base para evitar "Zoom Out". 
@@ -499,6 +500,38 @@
             font-size: 0.85rem;
         }
 
+        .btn-export {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-export:hover {
+            background: rgba(16, 185, 129, 0.25);
+            border-color: #10b981;
+        }
+
+        .ordenes-date-range {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .ordenes-date-range input {
+            width: 130px;
+        }
+        .ordenes-date-range span {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
         /* Responsive */
         @media (max-width: 1024px) {
             .content-grid {
@@ -633,6 +666,20 @@
                 width: 100% !important;
                 padding: 0.6rem 0.75rem;
                 font-size: 0.85rem;
+            }
+
+            .ordenes-date-range {
+                width: 100%;
+            }
+            .ordenes-date-range input {
+                flex: 1;
+                width: auto !important;
+            }
+
+            .btn-export {
+                width: 100%;
+                justify-content: center;
+                padding: 0.65rem 1rem;
             }
 
             .palets-count {
@@ -1544,6 +1591,15 @@
                     <select id="ordenes-pedido-filter">
                         <option value="Todos">Todos los pedidos</option>
                     </select>
+                    <div class="ordenes-date-range">
+                        <input type="text" id="ordenes-fecha-desde" placeholder="Fecha desde" readonly>
+                        <span>a</span>
+                        <input type="text" id="ordenes-fecha-hasta" placeholder="Fecha hasta" readonly>
+                        <button type="button" id="ordenes-fecha-clear" title="Limpiar fechas" style="background:none; border:none; color: var(--text-muted); cursor:pointer; font-size: 0.9rem; padding: 0.3rem;"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <button type="button" class="btn-export" onclick="exportOrdenesExcel()">
+                        <i class="fa-solid fa-file-excel"></i> Exportar Excel
+                    </button>
                 </div>
                 <span class="palets-count" id="ordenes-count">0 resultados</span>
             </div>
@@ -2949,6 +3005,8 @@
         }
 
         // === RENDERIZADO DE TABLA ÓRDENES ESPECIALES ===
+        let lastFilteredOrdenes = [];
+
         window.renderOrdenesTable = function () {
             const tbody = document.getElementById('ordenes-table-body');
             const countEl = document.getElementById('ordenes-count');
@@ -2973,6 +3031,8 @@
             const searchVal = (document.getElementById('ordenes-search')?.value || '').trim().toLowerCase();
             const turnoVal = document.getElementById('ordenes-turno-filter')?.value || 'Todos';
             const pedidoVal = document.getElementById('ordenes-pedido-filter')?.value || 'Todos';
+            const fechaDesdeVal = document.getElementById('ordenes-fecha-desde')?._flatpickr?.selectedDates[0] || null;
+            const fechaHastaVal = document.getElementById('ordenes-fecha-hasta')?._flatpickr?.selectedDates[0] || null;
 
             let filtered = ordenesData.filter(row => {
                 if (searchVal && !row.nombrePedido.toLowerCase().includes(searchVal) && !row.id.toLowerCase().includes(searchVal)) return false;
@@ -2985,6 +3045,25 @@
                 }
 
                 if (pedidoVal !== 'Todos' && row.nombrePedido !== pedidoVal) return false;
+
+                // Filtro de rango de fechas
+                if (fechaDesdeVal || fechaHastaVal) {
+                    const parts = (row.fecha || '').split('/');
+                    if (parts.length === 3) {
+                        const rowDate = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+                        rowDate.setHours(0, 0, 0, 0);
+                        if (fechaDesdeVal) {
+                            const desde = new Date(fechaDesdeVal);
+                            desde.setHours(0, 0, 0, 0);
+                            if (rowDate < desde) return false;
+                        }
+                        if (fechaHastaVal) {
+                            const hasta = new Date(fechaHastaVal);
+                            hasta.setHours(23, 59, 59, 999);
+                            if (rowDate > hasta) return false;
+                        }
+                    }
+                }
 
                 return true;
             });
@@ -2999,6 +3078,9 @@
             document.getElementById('ordenes-stat-hoy').textContent = hoyRows.length.toLocaleString();
             document.getElementById('ordenes-stat-unidades').textContent = totalUnidades.toLocaleString('es-MX');
             document.getElementById('ordenes-stat-pedidos').textContent = pedidosUnicos.size.toLocaleString();
+
+            // Guardar para exportación
+            lastFilteredOrdenes = filtered;
 
             // Actualizar gráficos del dashboard de órdenes
             renderOrdenesCharts(filtered);
@@ -3060,6 +3142,37 @@
                     });
                 }
             }
+        };
+
+        // === EXPORTAR ÓRDENES A EXCEL ===
+        window.exportOrdenesExcel = function () {
+            if (lastFilteredOrdenes.length === 0) {
+                alert('No hay datos para exportar. Ajusta los filtros e intenta de nuevo.');
+                return;
+            }
+
+            const data = lastFilteredOrdenes.slice().reverse().map(row => ({
+                'Pedido': row.nombrePedido,
+                'Pallet ID': row.id,
+                'Cantidad': row.cantidad,
+                'Condición': row.condicion || '',
+                'Destino': row.destinoOriginal || '',
+                'Fecha': row.fecha,
+                'Turno': row.turno,
+                'Operador': row.operador || ''
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(data);
+            ws['!cols'] = [
+                { wch: 18 }, { wch: 14 }, { wch: 10 }, { wch: 14 },
+                { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 16 }
+            ];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Órdenes Especiales');
+
+            const fechaHoy = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `Ordenes_Especiales_${fechaHoy}.xlsx`);
         };
 
         // === GRÁFICOS DASHBOARD DE ÓRDENES ===
@@ -3464,6 +3577,29 @@
             if (ordenesSearch) ordenesSearch.addEventListener('input', renderOrdenesTable);
             if (ordenesTurno) ordenesTurno.addEventListener('change', renderOrdenesTable);
             if (ordenesPedido) ordenesPedido.addEventListener('change', renderOrdenesTable);
+
+            // Flatpickr para filtro de fechas en Órdenes
+            const fpConfig = {
+                locale: 'es',
+                dateFormat: 'm/d/Y',
+                altInput: true,
+                altFormat: 'd/m/Y',
+                allowInput: false,
+                onChange: function () { renderOrdenesTable(); }
+            };
+            const fpDesde = document.getElementById('ordenes-fecha-desde');
+            const fpHasta = document.getElementById('ordenes-fecha-hasta');
+            if (fpDesde) flatpickr(fpDesde, { ...fpConfig, placeholder: 'Fecha desde' });
+            if (fpHasta) flatpickr(fpHasta, { ...fpConfig, placeholder: 'Fecha hasta' });
+
+            const fechaClearBtn = document.getElementById('ordenes-fecha-clear');
+            if (fechaClearBtn) {
+                fechaClearBtn.addEventListener('click', function () {
+                    if (fpDesde?._flatpickr) fpDesde._flatpickr.clear();
+                    if (fpHasta?._flatpickr) fpHasta._flatpickr.clear();
+                    renderOrdenesTable();
+                });
+            }
 
             // Validación en tiempo real del Pallet ID en formulario
             const invPalletInput = document.getElementById('inv-pallet');
