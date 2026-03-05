@@ -7,7 +7,7 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 ---
 
 ### #038 — Export PDF Reporte Dashboard
-- **Commit:** `pending`
+- **Commit:** `dba7400`
 - **Tipo:** feat
 - **Fecha:** 2026-03-05
 - **Descripcion:** Boton Exportar PDF en dashboard que genera reporte con KPIs, graficos, tablas y ordenes respetando filtros
