@@ -552,6 +552,97 @@
                 margin-left: 0;
                 padding-top: 4rem;
             }
+
+            /* Responsive: stats cards en 2 columnas en mobile */
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+                gap: 0.5rem;
+            }
+
+            .stat-card {
+                padding: 0.75rem;
+            }
+
+            .stat-card h2 {
+                font-size: 1.2rem;
+            }
+
+            .stat-icon {
+                width: 28px;
+                height: 28px;
+                font-size: 0.9rem;
+            }
+
+            /* Responsive: filtros en columna */
+            .palets-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .palets-filters {
+                flex-direction: column;
+            }
+
+            .palets-filters input,
+            .palets-filters select {
+                width: 100% !important;
+            }
+
+            /* Responsive: tablas con scroll horizontal */
+            table th, table td {
+                padding: 0.5rem 0.4rem;
+                font-size: 0.75rem;
+            }
+
+            /* Responsive: gráficos de órdenes */
+            .ordenes-charts-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr !important;
+            }
+
+            .stat-info span {
+                font-size: 0.7rem;
+            }
+
+            .page-title h1 {
+                font-size: 1.3rem;
+            }
+
+            .page-title p {
+                font-size: 0.75rem;
+            }
+        }
+
+        /* Órdenes dashboard charts */
+        .ordenes-charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .ordenes-chart-card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 1rem;
+        }
+
+        .ordenes-chart-card h3 {
+            color: var(--text-main);
+            font-size: 0.95rem;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+        }
+
+        .ordenes-chart-area {
+            height: 220px;
+            position: relative;
         }
 
         /* === FORMULARIO INVENTARIO === */
@@ -1102,6 +1193,22 @@
                     </div>
                     <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
                         <i class="fa-solid fa-clipboard-list"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard de Órdenes: Gráficos -->
+            <div class="ordenes-charts-grid">
+                <div class="ordenes-chart-card">
+                    <h3><i class="fa-solid fa-chart-bar" style="color: var(--accent-primary); margin-right: 0.5rem;"></i>Pallets por Pedido</h3>
+                    <div class="ordenes-chart-area">
+                        <canvas id="ordenes-chart-pedidos"></canvas>
+                    </div>
+                </div>
+                <div class="ordenes-chart-card">
+                    <h3><i class="fa-solid fa-chart-pie" style="color: #f59e0b; margin-right: 0.5rem;"></i>Distribución por Turno</h3>
+                    <div class="ordenes-chart-area">
+                        <canvas id="ordenes-chart-turno"></canvas>
                     </div>
                 </div>
             </div>
@@ -2555,6 +2662,9 @@
             document.getElementById('ordenes-stat-unidades').textContent = totalUnidades.toLocaleString('es-MX');
             document.getElementById('ordenes-stat-pedidos').textContent = pedidosUnicos.size.toLocaleString();
 
+            // Actualizar gráficos del dashboard de órdenes
+            renderOrdenesCharts(filtered);
+
             // Más recientes primero
             const display = filtered.slice().reverse();
 
@@ -2583,6 +2693,110 @@
                 tbody.appendChild(tr);
             });
         };
+
+        // === GRÁFICOS DASHBOARD DE ÓRDENES ===
+        let ordenesChartPedidos = null;
+        let ordenesChartTurno = null;
+
+        function renderOrdenesCharts(data) {
+            const chartColors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#14b8a6', '#6366f1'];
+
+            // --- Gráfico 1: Pallets por Pedido (barras horizontales) ---
+            const pedidoCount = {};
+            data.forEach(r => {
+                const p = r.nombrePedido || 'Sin pedido';
+                pedidoCount[p] = (pedidoCount[p] || 0) + 1;
+            });
+            const pedidosSorted = Object.entries(pedidoCount).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            const pedidoLabels = pedidosSorted.map(e => e[0]);
+            const pedidoValues = pedidosSorted.map(e => e[1]);
+
+            const ctx1 = document.getElementById('ordenes-chart-pedidos');
+            if (ctx1) {
+                if (ordenesChartPedidos) ordenesChartPedidos.destroy();
+                ordenesChartPedidos = new Chart(ctx1, {
+                    type: 'bar',
+                    data: {
+                        labels: pedidoLabels,
+                        datasets: [{
+                            label: 'Pallets',
+                            data: pedidoValues,
+                            backgroundColor: pedidoLabels.map((_, i) => chartColors[i % chartColors.length]),
+                            borderRadius: 6,
+                            barThickness: 18
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => `${ctx.raw} pallets`
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#94a3b8', font: { size: 11 } },
+                                grid: { color: 'rgba(148,163,184,0.1)' }
+                            },
+                            y: {
+                                ticks: { color: '#f8fafc', font: { size: 11 } },
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // --- Gráfico 2: Distribución por Turno (doughnut) ---
+            const turnoCount = { 'Día': 0, 'Noche': 0 };
+            data.forEach(r => {
+                const t = r.turno || '';
+                if (t.includes('Noche') || t.toLowerCase().includes('night')) turnoCount['Noche']++;
+                else turnoCount['Día']++;
+            });
+
+            const ctx2 = document.getElementById('ordenes-chart-turno');
+            if (ctx2) {
+                if (ordenesChartTurno) ordenesChartTurno.destroy();
+                ordenesChartTurno = new Chart(ctx2, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Día', 'Noche'],
+                        datasets: [{
+                            data: [turnoCount['Día'], turnoCount['Noche']],
+                            backgroundColor: ['#3b82f6', '#6366f1'],
+                            borderWidth: 0,
+                            hoverOffset: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '65%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { color: '#f8fafc', font: { size: 12 }, padding: 16 }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => {
+                                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                        const pct = total > 0 ? Math.round(ctx.raw / total * 100) : 0;
+                                        return `${ctx.label}: ${ctx.raw} pallets (${pct}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
 
         function populateOrdenesPedidoFilter(ordenesData) {
             const sel = document.getElementById('ordenes-pedido-filter');
