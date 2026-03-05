@@ -1225,6 +1225,31 @@
             </div>
         </div><!-- /view-formulario -->
 
+        <div id="view-configuracion" style="display:none;">
+            <header>
+                <div class="page-title">
+                    <h1>Configuración</h1>
+                    <p>Ajustes del sistema</p>
+                </div>
+            </header>
+            <div class="panel" style="margin-top: 1rem; padding: 2rem;">
+                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div>
+                        <h3 style="margin-bottom: 0.5rem; color: var(--text-main);">Sincronización</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Los datos se sincronizan automáticamente desde Google Sheets cada 30 segundos.</p>
+                    </div>
+                    <div>
+                        <h3 style="margin-bottom: 0.5rem; color: var(--text-main);">Servidor</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">API corriendo en <strong>http://localhost:3009</strong></p>
+                    </div>
+                    <div>
+                        <h3 style="margin-bottom: 0.5rem; color: var(--text-main);">Base de Datos</h3>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">MySQL — <strong>paletizado_db</strong></p>
+                    </div>
+                </div>
+            </div>
+        </div><!-- /view-configuracion -->
+
     </main>
 
     <script>
@@ -1614,8 +1639,8 @@
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td style="padding: 0.5rem; text-align: center; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-dark);">${row.defecto}</td>
-                    <td style="padding: 0.5rem; text-align: center; font-size: 0.75rem; border-bottom: 1px solid var(--border-dark);"><strong>${displayId}</strong></td>
+                    <td style="padding: 0.5rem; text-align: center; font-size: 0.75rem; color: var(--text-main); border-bottom: 1px solid var(--border-color);">${row.defecto}</td>
+                    <td style="padding: 0.5rem; text-align: center; font-size: 0.75rem; border-bottom: 1px solid var(--border-color);"><strong>${displayId}</strong></td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -2244,6 +2269,26 @@
                 return;
             }
 
+            // Bloquear envío si el Pallet ID tiene menos de 6 dígitos
+            const palletDigits = pallet.replace(/\D/g, '');
+            if (palletDigits.length > 0 && palletDigits.length < 6) {
+                showInvStatus(`El Pallet ID debe tener al menos 6 dígitos (actualmente tiene ${palletDigits.length}).`, 'error');
+                document.getElementById('inv-pallet').focus();
+                return;
+            }
+
+            // Bloquear envío si el Pallet ID es duplicado
+            if (allSheetData.length > 0) {
+                const inputId = pallet.split('-')[0].trim();
+                const duplicados = allSheetData.filter(row => row.id === inputId);
+                if (duplicados.length > 0) {
+                    const last = duplicados[duplicados.length - 1];
+                    showInvStatus(`Pallet duplicado — "${inputId}" ya existe (${duplicados.length}x). Último: ${last.fecha}, ${last.turno}.`, 'error');
+                    document.getElementById('inv-pallet').focus();
+                    return;
+                }
+            }
+
             const btn = document.getElementById('inv-submit-btn');
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
@@ -2306,6 +2351,7 @@
                 }
             }
 
+            const btn = document.getElementById('inv-submit-btn');
             if (warnings.length > 0) {
                 const isError = warnings.length > 1 || warnings[0].includes('duplicado');
                 warn.style.display = 'block';
@@ -2314,6 +2360,17 @@
                 warn.style.color = isError ? '#ef4444' : '#f59e0b';
                 warn.innerHTML = warnings.join('<br style="margin: 4px 0;">');
                 input.style.borderColor = isError ? '#ef4444' : '#f59e0b';
+                // Deshabilitar botón mientras hay advertencias
+                if (btn) {
+                    btn.disabled = true;
+                    btn.title = 'Corrige las advertencias del Pallet ID antes de enviar';
+                }
+            } else {
+                // Rehabilitar botón cuando no hay advertencias
+                if (btn) {
+                    btn.disabled = false;
+                    btn.title = '';
+                }
             }
         }
 
