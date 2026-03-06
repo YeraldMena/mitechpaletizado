@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #042 — Formulario Step-by-Step
+- **Commit:** `pending`
+- **Tipo:** feat
+- **Fecha:** 2026-03-06
+- **Descripcion:** Formulario desglosado pregunta por pregunta con barra de progreso, navegacion con flechas y Enter, animaciones y auto-focus
+- **Archivos:** index.html
+
+---
+
 ### #041 — Formulario Fullscreen
 - **Commit:** `95061b8`
 - **Tipo:** feat

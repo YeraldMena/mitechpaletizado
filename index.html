@@ -716,55 +716,39 @@
                 padding-bottom: 0;
             }
 
-            /* Responsive: formulario fullscreen en móvil */
+            /* Responsive: formulario steps en móvil */
             #view-formulario {
                 min-height: calc(100vh - 4rem);
-                padding: 0.5rem;
-                justify-content: flex-start;
-                padding-top: 1rem;
+                padding: 0.75rem;
+                padding-top: 0.75rem;
             }
 
-            .inventario-form-panel {
-                max-width: 100%;
-                padding: 1.5rem 1.15rem;
+            .inv-step-card {
+                padding: 1.75rem 1.25rem;
                 border-radius: 1rem;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
             }
 
-            .inv-form-header {
-                margin-bottom: 1.25rem;
-                padding-bottom: 1rem;
-            }
-
-            .inv-form-header h2 {
+            .inv-step-label {
                 font-size: 1.15rem;
             }
 
-            .inv-form-header p {
-                font-size: 0.8rem;
-            }
-
-            .inv-field-row {
-                grid-template-columns: 1fr;
-                gap: 1.25rem;
-            }
-
-            .inv-field input,
-            .inv-field select {
-                padding: 0.85rem 1rem;
-                font-size: 1rem;
-                border-radius: 0.65rem;
-            }
-
-            .inv-field label {
+            .inv-step-hint {
                 font-size: 0.82rem;
             }
 
-            .inv-btn-submit {
-                padding: 1rem;
+            .inv-step-card input,
+            .inv-step-card select {
+                padding: 0.9rem 1rem;
                 font-size: 1.05rem;
-                border-radius: 0.65rem;
-                margin-top: 1.5rem;
+            }
+
+            .inv-btn-nav {
+                padding: 0.85rem;
+                font-size: 0.95rem;
+            }
+
+            .inv-key-hint {
+                display: none;
             }
         }
 
@@ -983,12 +967,11 @@
             position: relative;
         }
 
-        /* === FORMULARIO INVENTARIO — Fullscreen Style === */
+        /* === FORMULARIO INVENTARIO — One Question at a Time === */
         #view-formulario {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             min-height: calc(100vh - 2rem);
             padding: 1rem;
         }
@@ -1000,101 +983,156 @@
         .inventario-form-panel {
             width: 100%;
             max-width: 600px;
+            background: none;
+            border: none;
+            padding: 0;
+            box-shadow: none;
+        }
+
+        /* Barra de progreso */
+        .inv-progress {
+            width: 100%;
+            margin-bottom: 2rem;
+        }
+
+        .inv-progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--bg-dark);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .inv-progress-fill {
+            height: 100%;
+            background: var(--accent-primary);
+            border-radius: 3px;
+            transition: width 0.4s ease;
+        }
+
+        .inv-progress-text {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.5rem;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        /* Contenedor de steps */
+        .inv-steps-container {
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .inv-step {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            animation: invFadeIn 0.35s ease;
+        }
+
+        .inv-step.active {
+            display: flex;
+        }
+
+        @keyframes invFadeIn {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Card de cada pregunta */
+        .inv-step-card {
+            width: 100%;
             background: var(--bg-card);
+            border: 1px solid var(--border-color);
             border-radius: 1.25rem;
             padding: 2.5rem 2rem;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
         }
 
-        .inv-form-header {
-            text-align: center;
-            margin-bottom: 2rem;
-            padding-bottom: 1.25rem;
-            border-bottom: 1px solid var(--border-color);
+        .inv-step-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            background: var(--accent-primary);
+            color: #fff;
+            border-radius: 50%;
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
         }
 
-        .inv-form-header h2 {
-            font-size: 1.4rem;
+        .inv-step-label {
+            font-size: 1.35rem;
             font-weight: 700;
             color: var(--text-main);
-            margin: 0 0 0.5rem 0;
+            margin-bottom: 0.5rem;
+            line-height: 1.3;
         }
 
-        .inv-form-header p {
+        .inv-step-hint {
             font-size: 0.88rem;
             color: var(--text-muted);
-            margin: 0;
+            margin-bottom: 1.5rem;
         }
 
-        .inv-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 1.4rem;
-        }
-
-        .inv-field {
-            position: relative;
-        }
-
-        .inv-field label {
-            display: block;
-            font-size: 0.82rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            margin-bottom: 0.5rem;
-            letter-spacing: 0.02em;
-        }
-
-        .inv-req {
-            color: #ef4444;
-        }
-
-        .inv-field input,
-        .inv-field select {
+        .inv-step-card input,
+        .inv-step-card select {
             width: 100%;
-            padding: 0.75rem 1rem;
+            padding: 1rem 1.15rem;
             background: var(--bg-dark);
-            border: 1.5px solid var(--border-color);
-            border-radius: 0.75rem;
+            border: 2px solid var(--border-color);
+            border-radius: 0.85rem;
             color: var(--text-main);
-            font-size: 0.95rem;
+            font-size: 1.15rem;
             font-family: inherit;
             transition: border-color 0.2s ease, box-shadow 0.2s ease;
             -webkit-appearance: none;
             appearance: none;
         }
 
-        .inv-field select {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+        .inv-step-card select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
             background-repeat: no-repeat;
-            background-position: right 1rem center;
-            padding-right: 2.5rem;
+            background-position: right 1.15rem center;
+            padding-right: 3rem;
         }
 
-        .inv-field input:focus,
-        .inv-field select:focus {
+        .inv-step-card input:focus,
+        .inv-step-card select:focus {
             outline: none;
             border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
         }
 
-        .inv-field input::placeholder {
+        .inv-step-card input::placeholder {
             color: #475569;
         }
 
-        .inv-field-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
+        #inv-pallet-warn {
+            margin-top: 8px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            line-height: 1.3;
         }
 
-        .inv-btn-submit {
-            margin-top: 1.75rem;
+        /* Navegación entre steps */
+        .inv-step-nav {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
             width: 100%;
-            padding: 0.85rem;
-            background: var(--accent-primary);
-            color: #fff;
+        }
+
+        .inv-btn-nav {
+            flex: 1;
+            padding: 0.9rem;
             border: none;
             border-radius: 0.75rem;
             font-size: 1rem;
@@ -1108,12 +1146,39 @@
             font-family: inherit;
         }
 
-        .inv-btn-submit:hover {
+        .inv-btn-nav:active {
+            transform: scale(0.97);
+        }
+
+        .inv-btn-back {
+            background: var(--bg-dark);
+            color: var(--text-muted);
+            border: 1px solid var(--border-color);
+            flex: 0 0 auto;
+            width: 56px;
+        }
+
+        .inv-btn-back:hover {
+            background: var(--bg-card);
+            color: var(--text-main);
+        }
+
+        .inv-btn-next {
+            background: var(--accent-primary);
+            color: #fff;
+        }
+
+        .inv-btn-next:hover {
             background: #2563eb;
         }
 
-        .inv-btn-submit:active {
-            transform: scale(0.98);
+        .inv-btn-submit {
+            background: #10b981;
+            color: #fff;
+        }
+
+        .inv-btn-submit:hover {
+            background: #059669;
         }
 
         .inv-btn-submit:disabled {
@@ -1121,13 +1186,18 @@
             cursor: not-allowed;
         }
 
+        .inv-req {
+            color: #ef4444;
+        }
+
         .inv-status {
-            margin-top: 1rem;
-            padding: 0.75rem 1rem;
-            border-radius: 0.75rem;
-            font-size: 0.85rem;
+            margin-top: 1.25rem;
+            padding: 1rem 1.25rem;
+            border-radius: 0.85rem;
+            font-size: 0.95rem;
             font-weight: 500;
             text-align: center;
+            width: 100%;
         }
 
         .inv-status.success {
@@ -1140,6 +1210,15 @@
             background: rgba(239, 68, 68, 0.15);
             color: #ef4444;
             border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        /* Keyboard shortcut hint */
+        .inv-key-hint {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            opacity: 0.6;
         }
 
     </style>
@@ -1737,26 +1816,55 @@
             </header>
 
             <div class="inventario-form-panel">
-                <div class="inv-form-header">
-                    <h2><i class="fa-solid fa-clipboard-list" style="color: var(--accent-primary); margin-right: 0.5rem;"></i>Nuevo Registro</h2>
-                    <p>Completa los campos para registrar un pallet al inventario</p>
+                <!-- Barra de progreso -->
+                <div class="inv-progress">
+                    <div class="inv-progress-bar"><div class="inv-progress-fill" id="inv-progress-fill" style="width: 14.3%;"></div></div>
+                    <div class="inv-progress-text">
+                        <span id="inv-progress-label">Pregunta 1 de 7</span>
+                        <span id="inv-progress-pct">14%</span>
+                    </div>
                 </div>
+
                 <form id="inventario-form" onsubmit="submitInventarioForm(event)">
-                    <div class="inv-grid">
-                        <div class="inv-field">
-                            <label for="inv-pallet"><i class="fa-solid fa-barcode" style="margin-right: 4px;"></i>Número de Pallet <span class="inv-req">*</span></label>
-                            <input type="text" id="inv-pallet" placeholder="Ej: PLT-001" required>
-                            <div id="inv-pallet-warn" style="display:none; margin-top: 6px; padding: 6px 10px; border-radius: 8px; font-size: 0.82rem; font-weight: 500; line-height: 1.3;"></div>
+                    <div class="inv-steps-container">
+                        <!-- Step 1: Pallet ID -->
+                        <div class="inv-step active" data-step="1">
+                            <div class="inv-step-card">
+                                <div class="inv-step-number">1</div>
+                                <div class="inv-step-label"><i class="fa-solid fa-barcode" style="margin-right: 6px; color: var(--accent-primary);"></i>Numero de Pallet <span class="inv-req">*</span></div>
+                                <div class="inv-step-hint">Escanea o escribe el ID del pallet</div>
+                                <input type="text" id="inv-pallet" placeholder="Ej: PLT-001" required autofocus>
+                                <div id="inv-pallet-warn" style="display:none;"></div>
+                            </div>
+                            <div class="inv-step-nav">
+                                <button type="button" class="inv-btn-nav inv-btn-next" onclick="invNextStep()"><span>Siguiente</span> <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                            <div class="inv-key-hint">Enter para continuar</div>
                         </div>
-                        <div class="inv-field-row">
-                            <div class="inv-field">
-                                <label for="inv-qty"><i class="fa-solid fa-cubes" style="margin-right: 4px;"></i>Cantidad QTY <span class="inv-req">*</span></label>
+
+                        <!-- Step 2: Cantidad -->
+                        <div class="inv-step" data-step="2">
+                            <div class="inv-step-card">
+                                <div class="inv-step-number">2</div>
+                                <div class="inv-step-label"><i class="fa-solid fa-cubes" style="margin-right: 6px; color: #f59e0b;"></i>Cantidad QTY <span class="inv-req">*</span></div>
+                                <div class="inv-step-hint">Ingresa la cantidad de unidades del pallet</div>
                                 <input type="number" id="inv-qty" placeholder="Ej: 50" min="1" required>
                             </div>
-                            <div class="inv-field">
-                                <label for="inv-condicion"><i class="fa-solid fa-tags" style="margin-right: 4px;"></i>Condición <span class="inv-req">*</span></label>
+                            <div class="inv-step-nav">
+                                <button type="button" class="inv-btn-nav inv-btn-back" onclick="invPrevStep()"><i class="fa-solid fa-arrow-left"></i></button>
+                                <button type="button" class="inv-btn-nav inv-btn-next" onclick="invNextStep()"><span>Siguiente</span> <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                            <div class="inv-key-hint">Enter para continuar</div>
+                        </div>
+
+                        <!-- Step 3: Condición -->
+                        <div class="inv-step" data-step="3">
+                            <div class="inv-step-card">
+                                <div class="inv-step-number">3</div>
+                                <div class="inv-step-label"><i class="fa-solid fa-tags" style="margin-right: 6px; color: #8b5cf6;"></i>Condicion <span class="inv-req">*</span></div>
+                                <div class="inv-step-hint">Selecciona la condicion del pallet</div>
                                 <select id="inv-condicion" required>
-                                    <option value="" disabled selected>Seleccionar...</option>
+                                    <option value="" disabled selected>Seleccionar condicion...</option>
                                     <option value="GRA">GRA</option>
                                     <option value="GRB">GRB</option>
                                     <option value="GRC">GRC</option>
@@ -1770,45 +1878,86 @@
                                     <option value="DMA">DMA</option>
                                 </select>
                             </div>
+                            <div class="inv-step-nav">
+                                <button type="button" class="inv-btn-nav inv-btn-back" onclick="invPrevStep()"><i class="fa-solid fa-arrow-left"></i></button>
+                                <button type="button" class="inv-btn-nav inv-btn-next" onclick="invNextStep()"><span>Siguiente</span> <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
                         </div>
-                        <div class="inv-field-row">
-                            <div class="inv-field">
-                                <label for="inv-destino"><i class="fa-solid fa-location-dot" style="margin-right: 4px;"></i>Destino <span class="inv-req">*</span></label>
+
+                        <!-- Step 4: Destino -->
+                        <div class="inv-step" data-step="4">
+                            <div class="inv-step-card">
+                                <div class="inv-step-number">4</div>
+                                <div class="inv-step-label"><i class="fa-solid fa-location-dot" style="margin-right: 6px; color: #10b981;"></i>Destino <span class="inv-req">*</span></div>
+                                <div class="inv-step-hint">Selecciona el destino del pallet</div>
                                 <select id="inv-destino" required>
-                                    <option value="" disabled selected>Seleccionar...</option>
+                                    <option value="" disabled selected>Seleccionar destino...</option>
                                     <option value="TRG">TRG</option>
                                     <option value="HV (High Value) Televisiones">HV Televisiones</option>
-                                    <option value="Almacén">Almacén</option>
+                                    <option value="Almacén">Almacen</option>
                                     <option value="HV (High Value)">HV (High Value)</option>
                                 </select>
                             </div>
-                            <div class="inv-field">
-                                <label for="inv-turno"><i class="fa-solid fa-clock" style="margin-right: 4px;"></i>Turno <span class="inv-req">*</span></label>
+                            <div class="inv-step-nav">
+                                <button type="button" class="inv-btn-nav inv-btn-back" onclick="invPrevStep()"><i class="fa-solid fa-arrow-left"></i></button>
+                                <button type="button" class="inv-btn-nav inv-btn-next" onclick="invNextStep()"><span>Siguiente</span> <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- Step 5: Turno -->
+                        <div class="inv-step" data-step="5">
+                            <div class="inv-step-card">
+                                <div class="inv-step-number">5</div>
+                                <div class="inv-step-label"><i class="fa-solid fa-clock" style="margin-right: 6px; color: #3b82f6;"></i>Turno <span class="inv-req">*</span></div>
+                                <div class="inv-step-hint">Selecciona el turno actual</div>
                                 <select id="inv-turno" required>
-                                    <option value="" disabled selected>Seleccionar...</option>
-                                    <option value="Day (día)">Day (Día)</option>
+                                    <option value="" disabled selected>Seleccionar turno...</option>
+                                    <option value="Day (día)">Day (Dia)</option>
                                     <option value="Night (Noche)">Night (Noche)</option>
                                 </select>
                             </div>
+                            <div class="inv-step-nav">
+                                <button type="button" class="inv-btn-nav inv-btn-back" onclick="invPrevStep()"><i class="fa-solid fa-arrow-left"></i></button>
+                                <button type="button" class="inv-btn-nav inv-btn-next" onclick="invNextStep()"><span>Siguiente</span> <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
                         </div>
-                        <div class="inv-field">
-                            <label for="inv-pedido"><i class="fa-solid fa-file-lines" style="margin-right: 4px;"></i>Pedido <span style="color:var(--text-muted);font-size:0.78rem;">(opcional)</span></label>
-                            <input type="text" id="inv-pedido" placeholder="Ej: PED-123 o número de 8 dígitos">
+
+                        <!-- Step 6: Pedido (opcional) -->
+                        <div class="inv-step" data-step="6">
+                            <div class="inv-step-card">
+                                <div class="inv-step-number">6</div>
+                                <div class="inv-step-label"><i class="fa-solid fa-file-lines" style="margin-right: 6px; color: #f97316;"></i>Pedido <span style="color:var(--text-muted); font-size:0.85rem; font-weight:400;">(opcional)</span></div>
+                                <div class="inv-step-hint">Si aplica, ingresa el numero de pedido especial</div>
+                                <input type="text" id="inv-pedido" placeholder="Ej: PED-123 o numero de 8 digitos">
+                            </div>
+                            <div class="inv-step-nav">
+                                <button type="button" class="inv-btn-nav inv-btn-back" onclick="invPrevStep()"><i class="fa-solid fa-arrow-left"></i></button>
+                                <button type="button" class="inv-btn-nav inv-btn-next" onclick="invNextStep()"><span>Siguiente</span> <i class="fa-solid fa-arrow-right"></i></button>
+                            </div>
+                            <div class="inv-key-hint">Enter para continuar (puedes dejarlo vacio)</div>
                         </div>
-                        <div class="inv-field">
-                            <label for="inv-escaneadora"><i class="fa-solid fa-user" style="margin-right: 4px;"></i>Escaneadora <span class="inv-req">*</span></label>
-                            <select id="inv-escaneadora" required>
-                                <option value="" disabled selected>Seleccionar...</option>
-                                <option value="Yusley Montes">Yusley Montes</option>
-                                <option value="Angelica Aleman">Angelica Aleman</option>
-                                <option value="Cecilia Perez">Cecilia Perez</option>
-                                <option value="Nathalie Lopez">Nathalie Lopez</option>
-                            </select>
+
+                        <!-- Step 7: Escaneadora -->
+                        <div class="inv-step" data-step="7">
+                            <div class="inv-step-card">
+                                <div class="inv-step-number">7</div>
+                                <div class="inv-step-label"><i class="fa-solid fa-user" style="margin-right: 6px; color: #ec4899;"></i>Escaneadora <span class="inv-req">*</span></div>
+                                <div class="inv-step-hint">Selecciona quien esta escaneando</div>
+                                <select id="inv-escaneadora" required>
+                                    <option value="" disabled selected>Seleccionar escaneadora...</option>
+                                    <option value="Yusley Montes">Yusley Montes</option>
+                                    <option value="Angelica Aleman">Angelica Aleman</option>
+                                    <option value="Cecilia Perez">Cecilia Perez</option>
+                                    <option value="Nathalie Lopez">Nathalie Lopez</option>
+                                </select>
+                            </div>
+                            <div class="inv-step-nav">
+                                <button type="button" class="inv-btn-nav inv-btn-back" onclick="invPrevStep()"><i class="fa-solid fa-arrow-left"></i></button>
+                                <button type="submit" class="inv-btn-nav inv-btn-submit" id="inv-submit-btn"><i class="fa-solid fa-paper-plane"></i> <span>Enviar Registro</span></button>
+                            </div>
                         </div>
                     </div>
-                    <button type="submit" class="inv-btn-submit" id="inv-submit-btn">
-                        <i class="fa-solid fa-paper-plane"></i> Enviar Registro
-                    </button>
+
                     <div id="inv-status" class="inv-status" style="display:none;"></div>
                 </form>
             </div>
@@ -2915,6 +3064,7 @@
             }).then(() => {
                 showInvStatus('Registro enviado correctamente.', 'success');
                 document.getElementById('inventario-form').reset();
+                invShowStep(1);
                 if (typeof fetchSheetData === 'function') fetchSheetData();
             }).catch(() => {
                 showInvStatus('Error al enviar. Intenta de nuevo.', 'error');
@@ -3000,6 +3150,70 @@
                 }
             }
         }
+
+        // === NAVEGACIÓN STEP-BY-STEP DEL FORMULARIO ===
+        let invCurrentStep = 1;
+        const invTotalSteps = 7;
+
+        function invUpdateProgress() {
+            const pct = Math.round((invCurrentStep / invTotalSteps) * 100);
+            const fill = document.getElementById('inv-progress-fill');
+            const label = document.getElementById('inv-progress-label');
+            const pctEl = document.getElementById('inv-progress-pct');
+            if (fill) fill.style.width = pct + '%';
+            if (label) label.textContent = `Pregunta ${invCurrentStep} de ${invTotalSteps}`;
+            if (pctEl) pctEl.textContent = pct + '%';
+        }
+
+        function invShowStep(n) {
+            const steps = document.querySelectorAll('.inv-step');
+            steps.forEach(s => s.classList.remove('active'));
+            const target = document.querySelector(`.inv-step[data-step="${n}"]`);
+            if (target) {
+                target.classList.add('active');
+                // Auto-focus en el input/select del step
+                const focusable = target.querySelector('input, select');
+                if (focusable) setTimeout(() => focusable.focus(), 100);
+            }
+            invCurrentStep = n;
+            invUpdateProgress();
+            // Scroll al top del formulario
+            const panel = document.querySelector('.inventario-form-panel');
+            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        window.invNextStep = function () {
+            // Validar campo actual antes de avanzar
+            const currentStepEl = document.querySelector(`.inv-step[data-step="${invCurrentStep}"]`);
+            const input = currentStepEl?.querySelector('input, select');
+            if (input && input.required && !input.value) {
+                input.focus();
+                input.style.borderColor = '#ef4444';
+                input.style.boxShadow = '0 0 0 4px rgba(239, 68, 68, 0.15)';
+                setTimeout(() => { input.style.borderColor = ''; input.style.boxShadow = ''; }, 1500);
+                return;
+            }
+            if (invCurrentStep < invTotalSteps) {
+                invShowStep(invCurrentStep + 1);
+            }
+        };
+
+        window.invPrevStep = function () {
+            if (invCurrentStep > 1) {
+                invShowStep(invCurrentStep - 1);
+            }
+        };
+
+        // Enter avanza al siguiente step (excepto en el último que hace submit)
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter') return;
+            const formView = document.getElementById('view-formulario');
+            if (!formView || formView.style.display === 'none') return;
+            // No interceptar si es el botón de submit
+            if (invCurrentStep === invTotalSteps) return;
+            e.preventDefault();
+            invNextStep();
+        });
 
         // === RENDERIZADO DE TABLA COMPLETA DE PALETS ===
         window.renderPaletsTable = function () {
