@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #045 — Checkboxes Condición en Vertical
+- **Commit:** `13b0b7f`
+- **Tipo:** fix
+- **Fecha:** 2026-03-06
+- **Descripcion:** Checkboxes de condición cambiados a layout vertical (columna) para mejor legibilidad
+- **Archivos:** index.html
+
+---
+
 ### #044 — Condición con Checkboxes Múltiples
 - **Commit:** `8d3f4ac`
 - **Tipo:** feat
