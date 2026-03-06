@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #047 — Mood Nathy Rosa Más Vivo
+- **Commit:** `e9f73da`
+- **Tipo:** fix
+- **Fecha:** 2026-03-06
+- **Descripcion:** Color rosa actualizado de #ec4899 a #ff2d87 (rosa neón más vivo) en todo el tema Mood Nathy
+- **Archivos:** index.html
+
+---
+
 ### #046 — Mood Nathy (Tema Dark Rosa)
 - **Commit:** `d9bfb77`
 - **Tipo:** feat
