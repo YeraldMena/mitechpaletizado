@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #046 — Mood Nathy (Tema Dark Rosa)
+- **Commit:** `d9bfb77`
+- **Tipo:** feat
+- **Fecha:** 2026-03-06
+- **Descripcion:** Nuevo mood con paleta dark rosa/púrpura. Toggle switch en Configuración con persistencia en localStorage. Cambia acentos, sidebar, cards, botones y formulario a rosa #ec4899
+- **Archivos:** index.html
+
+---
+
 ### #045 — Checkboxes Condición en Vertical
 - **Commit:** `13b0b7f`
 - **Tipo:** fix
