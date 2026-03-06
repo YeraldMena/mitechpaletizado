@@ -2,7 +2,16 @@
 
 Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuencial y nombre descriptivo.
 
-> Ultima actualizacion: 2026-03-05
+> Ultima actualizacion: 2026-03-06
+
+---
+
+### #043 — Formulario Google Forms Cards
+- **Commit:** `afd5af2`
+- **Tipo:** feat
+- **Fecha:** 2026-03-06
+- **Descripcion:** Reemplaza step-by-step por cards visibles con scroll vertical estilo Google Forms real. Header con borde de color, 7 question cards, inputs underline, footer con enviar/borrar
+- **Archivos:** index.html
 
 ---
 
