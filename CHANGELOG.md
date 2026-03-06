@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #048 — Mood Nathy Rosa Cálido
+- **Commit:** `29ebcb5`
+- **Tipo:** fix
+- **Fecha:** 2026-03-06
+- **Descripcion:** Rosa cambiado a tono cálido elegante #d6336c (sin neón), fondos y bordes ajustados
+- **Archivos:** index.html
+
+---
+
 ### #047 — Mood Nathy Rosa Más Vivo
 - **Commit:** `e9f73da`
 - **Tipo:** fix
