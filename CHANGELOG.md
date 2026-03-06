@@ -7,7 +7,7 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 ---
 
 ### #041 — Formulario Fullscreen
-- **Commit:** `pending`
+- **Commit:** `95061b8`
 - **Tipo:** feat
 - **Fecha:** 2026-03-06
 - **Descripcion:** Formulario ocupa toda la pantalla centrado como app de Google Forms, header oculto, panel con sombra y max-width 600px
