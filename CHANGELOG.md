@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #044 — Condición con Checkboxes Múltiples
+- **Commit:** `8d3f4ac`
+- **Tipo:** feat
+- **Fecha:** 2026-03-06
+- **Descripcion:** Campo condición cambiado de dropdown a checkboxes múltiples estilo chips/tags. Permite seleccionar varias condiciones que se envían separadas por coma
+- **Archivos:** index.html
+
+---
+
 ### #043 — Formulario Google Forms Cards
 - **Commit:** `afd5af2`
 - **Tipo:** feat
