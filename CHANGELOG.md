@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #049 — Mood Nathy Rosa Pastel
+- **Commit:** `17fe3bf`
+- **Tipo:** fix
+- **Fecha:** 2026-03-06
+- **Descripcion:** Rosa cambiado a tono pastel suave #f2a5c4 sobre fondo oscuro púrpura. Botones con texto oscuro para contraste
+- **Archivos:** index.html
+
+---
+
 ### #048 — Mood Nathy Rosa Cálido
 - **Commit:** `29ebcb5`
 - **Tipo:** fix
