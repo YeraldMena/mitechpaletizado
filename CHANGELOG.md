@@ -7,7 +7,7 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 ---
 
 ### #040 — Formulario Estilo Google Forms
-- **Commit:** `pending`
+- **Commit:** `4dc64f8`
 - **Tipo:** feat
 - **Fecha:** 2026-03-06
 - **Descripcion:** Rediseño del formulario con layout centrado tipo Google Forms, condiciones como menu desplegable, campos agrupados en filas y responsive movil
