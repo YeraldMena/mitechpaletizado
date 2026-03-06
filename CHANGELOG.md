@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #050 — Mood Nathy Fondo Claro
+- **Commit:** `518e43c`
+- **Tipo:** fix
+- **Fecha:** 2026-03-06
+- **Descripcion:** Mood Nathy cambiado a fondo claro rosado (#fdf2f6), cards blancas, sidebar rosa suave, acentos #e8749c
+- **Archivos:** index.html
+
+---
+
 ### #049 — Mood Nathy Rosa Pastel
 - **Commit:** `17fe3bf`
 - **Tipo:** fix
