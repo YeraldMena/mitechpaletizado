@@ -6,6 +6,15 @@ Registro enumerado de cambios del proyecto. Cada entrada tiene un numero secuenc
 
 ---
 
+### #051 — Orden Cronológico Web + Drive
+- **Commit:** `b2f8ce7`
+- **Tipo:** feat
+- **Fecha:** 2026-03-06
+- **Descripcion:** Registros del spreadsheet se ordenan por timestamp al cargar, sincronizando el orden entre formulario web y Google Form de Drive
+- **Archivos:** index.html
+
+---
+
 ### #050 — Mood Nathy Fondo Claro
 - **Commit:** `518e43c`
 - **Tipo:** fix
