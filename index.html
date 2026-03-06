@@ -2446,8 +2446,13 @@
                         uniqueMonths.add(`${parts[0]}/${parts[2]}`);
                     }
 
+                    // Guardar timestamp (c[0]) para ordenar cronológicamente
+                    const tsRaw = (c[0] && c[0].v != null) ? c[0].v.toString() : '';
+                    const tsDate = tsRaw ? new Date(tsRaw) : null;
+
                     allSheetData.push({
                         rowValues: rawValues,
+                        timestamp: tsDate,
                         id: (c[1] && c[1].v != null) ? c[1].v.toString().split('-')[0].trim() : 'Sin ID',
                         cantidad: rawValues[1] ? (parseFloat(rawValues[1].toString().replace(/,/g, '')) || 0) : 0,
                         condicion: (c[3] && c[3].v != null) ? c[3].v.toString().trim() : '',
@@ -2457,6 +2462,14 @@
                         operador: (c[7] && c[7].v != null) ? c[7].v.toString().trim() : '',
                         pedido: (c[8] && c[8].v != null) ? c[8].v.toString().trim() : ''
                     });
+                });
+
+                // Ordenar por timestamp para que web y Drive queden en orden cronológico
+                allSheetData.sort((a, b) => {
+                    if (!a.timestamp && !b.timestamp) return 0;
+                    if (!a.timestamp) return -1;
+                    if (!b.timestamp) return 1;
+                    return a.timestamp - b.timestamp;
                 });
 
                 // Configurar el Calendario Flatpickr UNA SOLA VEZ permitiendo selecciones múltiples
