@@ -715,6 +715,54 @@
             #view-ordenes > header {
                 padding-bottom: 0;
             }
+
+            /* Responsive: formulario tipo Google Forms en móvil */
+            .inventario-form-panel {
+                max-width: 100%;
+                padding: 1.25rem 1rem;
+                border-radius: 0.75rem;
+                margin-top: 0.5rem;
+            }
+
+            .inv-form-header {
+                margin-bottom: 1.25rem;
+                padding-bottom: 1rem;
+            }
+
+            .inv-form-header h2 {
+                font-size: 1.1rem;
+            }
+
+            .inv-form-header p {
+                font-size: 0.8rem;
+            }
+
+            .inv-field-row {
+                grid-template-columns: 1fr;
+                gap: 1.25rem;
+            }
+
+            .inv-field input,
+            .inv-field select {
+                padding: 0.85rem 1rem;
+                font-size: 1rem;
+                border-radius: 0.65rem;
+            }
+
+            .inv-field label {
+                font-size: 0.8rem;
+            }
+
+            .inv-btn-submit {
+                padding: 1rem;
+                font-size: 1.05rem;
+                border-radius: 0.65rem;
+                margin-top: 1.5rem;
+            }
+
+            #view-formulario > header .page-title h1 {
+                font-size: 1.2rem;
+            }
         }
 
         @media (max-width: 480px) {
@@ -934,21 +982,51 @@
 
         /* === FORMULARIO INVENTARIO === */
         .inventario-form-panel {
-            max-width: 480px;
+            max-width: 540px;
+            margin: 0 auto;
+            background: var(--bg-card);
+            border-radius: 1rem;
+            padding: 2rem 1.75rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .inv-form-header {
+            text-align: center;
+            margin-bottom: 1.75rem;
+            padding-bottom: 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .inv-form-header h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0 0 0.4rem 0;
+        }
+
+        .inv-form-header p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin: 0;
         }
 
         .inv-grid {
             display: flex;
             flex-direction: column;
-            gap: 1.25rem;
+            gap: 1.4rem;
+        }
+
+        .inv-field {
+            position: relative;
         }
 
         .inv-field label {
             display: block;
-            font-size: 0.85rem;
-            font-weight: 500;
+            font-size: 0.82rem;
+            font-weight: 600;
             color: var(--text-muted);
-            margin-bottom: 0.4rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.02em;
         }
 
         .inv-req {
@@ -958,66 +1036,50 @@
         .inv-field input,
         .inv-field select {
             width: 100%;
-            padding: 0.65rem 0.85rem;
+            padding: 0.75rem 1rem;
             background: var(--bg-dark);
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
+            border: 1.5px solid var(--border-color);
+            border-radius: 0.75rem;
             color: var(--text-main);
-            font-size: 0.9rem;
-            transition: border-color 0.2s ease;
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .inv-field select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            padding-right: 2.5rem;
         }
 
         .inv-field input:focus,
         .inv-field select:focus {
             outline: none;
             border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
         }
 
         .inv-field input::placeholder {
             color: #475569;
         }
 
-        .inv-checkbox-group {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-
-        .inv-chip {
-            display: flex;
-            align-items: center;
-            cursor: pointer;
-        }
-
-        .inv-chip input[type="checkbox"] {
-            display: none;
-        }
-
-        .inv-chip span {
-            padding: 0.45rem 0.85rem;
-            background: var(--bg-dark);
-            border: 1px solid var(--border-color);
-            border-radius: 0.5rem;
-            color: var(--text-muted);
-            font-size: 0.85rem;
-            font-weight: 500;
-            transition: all 0.2s ease;
-        }
-
-        .inv-chip input:checked + span {
-            background: rgba(59, 130, 246, 0.15);
-            border-color: var(--accent-primary);
-            color: var(--accent-primary);
+        .inv-field-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
         }
 
         .inv-btn-submit {
-            margin-top: 1.5rem;
+            margin-top: 1.75rem;
             width: 100%;
-            padding: 0.75rem;
+            padding: 0.85rem;
             background: var(--accent-primary);
             color: #fff;
             border: none;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
@@ -1025,11 +1087,16 @@
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
-            transition: background 0.2s ease;
+            transition: background 0.2s ease, transform 0.1s ease;
+            font-family: inherit;
         }
 
         .inv-btn-submit:hover {
             background: #2563eb;
+        }
+
+        .inv-btn-submit:active {
+            transform: scale(0.98);
         }
 
         .inv-btn-submit:disabled {
@@ -1040,7 +1107,7 @@
         .inv-status {
             margin-top: 1rem;
             padding: 0.75rem 1rem;
-            border-radius: 0.5rem;
+            border-radius: 0.75rem;
             font-size: 0.85rem;
             font-weight: 500;
             text-align: center;
@@ -1652,58 +1719,67 @@
                 </div>
             </header>
 
-            <div class="panel inventario-form-panel" style="margin-top: 1rem;">
+            <div class="inventario-form-panel">
+                <div class="inv-form-header">
+                    <h2><i class="fa-solid fa-clipboard-list" style="color: var(--accent-primary); margin-right: 0.5rem;"></i>Nuevo Registro</h2>
+                    <p>Completa los campos para registrar un pallet al inventario</p>
+                </div>
                 <form id="inventario-form" onsubmit="submitInventarioForm(event)">
                     <div class="inv-grid">
                         <div class="inv-field">
-                            <label for="inv-pallet">Número de Pallet <span class="inv-req">*</span></label>
+                            <label for="inv-pallet"><i class="fa-solid fa-barcode" style="margin-right: 4px;"></i>Número de Pallet <span class="inv-req">*</span></label>
                             <input type="text" id="inv-pallet" placeholder="Ej: PLT-001" required>
-                            <div id="inv-pallet-warn" style="display:none; margin-top: 6px; padding: 6px 10px; border-radius: 6px; font-size: 0.82rem; font-weight: 500; line-height: 1.3;"></div>
+                            <div id="inv-pallet-warn" style="display:none; margin-top: 6px; padding: 6px 10px; border-radius: 8px; font-size: 0.82rem; font-weight: 500; line-height: 1.3;"></div>
                         </div>
-                        <div class="inv-field">
-                            <label for="inv-qty">Cantidad QTY <span class="inv-req">*</span></label>
-                            <input type="number" id="inv-qty" placeholder="Ej: 50" min="1" required>
+                        <div class="inv-field-row">
+                            <div class="inv-field">
+                                <label for="inv-qty"><i class="fa-solid fa-cubes" style="margin-right: 4px;"></i>Cantidad QTY <span class="inv-req">*</span></label>
+                                <input type="number" id="inv-qty" placeholder="Ej: 50" min="1" required>
+                            </div>
+                            <div class="inv-field">
+                                <label for="inv-condicion"><i class="fa-solid fa-tags" style="margin-right: 4px;"></i>Condición <span class="inv-req">*</span></label>
+                                <select id="inv-condicion" required>
+                                    <option value="" disabled selected>Seleccionar...</option>
+                                    <option value="GRA">GRA</option>
+                                    <option value="GRB">GRB</option>
+                                    <option value="GRC">GRC</option>
+                                    <option value="ICB">ICB</option>
+                                    <option value="ICC">ICC</option>
+                                    <option value="ICD">ICD</option>
+                                    <option value="ICX">ICX</option>
+                                    <option value="BOX">BOX</option>
+                                    <option value="DNP">DNP</option>
+                                    <option value="DMT">DMT</option>
+                                    <option value="DMA">DMA</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="inv-field">
-                            <label>Condición <span class="inv-req">*</span></label>
-                            <div class="inv-checkbox-group" id="inv-condicion-group">
-                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="GRA"><span>GRA</span></label>
-                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="GRB"><span>GRB</span></label>
-                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="GRC"><span>GRC</span></label>
-                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="ICB"><span>ICB</span></label>
-                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="ICC"><span>ICC</span></label>
-                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="ICD"><span>ICD</span></label>
-                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="ICX"><span>ICX</span></label>
-                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="BOX"><span>BOX</span></label>
-                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="DNP"><span>DNP</span></label>
-                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="DMT"><span>DMT</span></label>
-                                <label class="inv-chip"><input type="checkbox" name="inv-condicion" value="DMA"><span>DMA</span></label>
+                        <div class="inv-field-row">
+                            <div class="inv-field">
+                                <label for="inv-destino"><i class="fa-solid fa-location-dot" style="margin-right: 4px;"></i>Destino <span class="inv-req">*</span></label>
+                                <select id="inv-destino" required>
+                                    <option value="" disabled selected>Seleccionar...</option>
+                                    <option value="TRG">TRG</option>
+                                    <option value="HV (High Value) Televisiones">HV Televisiones</option>
+                                    <option value="Almacén">Almacén</option>
+                                    <option value="HV (High Value)">HV (High Value)</option>
+                                </select>
+                            </div>
+                            <div class="inv-field">
+                                <label for="inv-turno"><i class="fa-solid fa-clock" style="margin-right: 4px;"></i>Turno <span class="inv-req">*</span></label>
+                                <select id="inv-turno" required>
+                                    <option value="" disabled selected>Seleccionar...</option>
+                                    <option value="Day (día)">Day (Día)</option>
+                                    <option value="Night (Noche)">Night (Noche)</option>
+                                </select>
                             </div>
                         </div>
                         <div class="inv-field">
-                            <label for="inv-destino">Destino</label>
-                            <select id="inv-destino" required>
-                                <option value="" disabled selected>Seleccionar...</option>
-                                <option value="TRG">TRG</option>
-                                <option value="HV (High Value) Televisiones">HV Televisiones</option>
-                                <option value="Almacén">Almacén</option>
-                                <option value="HV (High Value)">HV (High Value)</option>
-                            </select>
+                            <label for="inv-pedido"><i class="fa-solid fa-file-lines" style="margin-right: 4px;"></i>Pedido <span style="color:var(--text-muted);font-size:0.78rem;">(opcional)</span></label>
+                            <input type="text" id="inv-pedido" placeholder="Ej: PED-123 o número de 8 dígitos">
                         </div>
                         <div class="inv-field">
-                            <label for="inv-pedido">Pedido <span style="color:var(--text-muted);font-size:0.8rem;">(opcional)</span></label>
-                            <input type="text" id="inv-pedido" placeholder="Ej: PED-123">
-                        </div>
-                        <div class="inv-field">
-                            <label for="inv-turno">Turno <span class="inv-req">*</span></label>
-                            <select id="inv-turno" required>
-                                <option value="" disabled selected>Seleccionar...</option>
-                                <option value="Day (día)">Day (Día)</option>
-                                <option value="Night (Noche)">Night (Noche)</option>
-                            </select>
-                        </div>
-                        <div class="inv-field">
-                            <label for="inv-escaneadora">Escaneadora <span class="inv-req">*</span></label>
+                            <label for="inv-escaneadora"><i class="fa-solid fa-user" style="margin-right: 4px;"></i>Escaneadora <span class="inv-req">*</span></label>
                             <select id="inv-escaneadora" required>
                                 <option value="" disabled selected>Seleccionar...</option>
                                 <option value="Yusley Montes">Yusley Montes</option>
@@ -2764,8 +2840,7 @@
 
             const pallet = document.getElementById('inv-pallet').value.trim();
             const qty = document.getElementById('inv-qty').value.trim();
-            const condicionChecks = document.querySelectorAll('input[name="inv-condicion"]:checked');
-            const condicion = Array.from(condicionChecks).map(c => c.value).join(', ');
+            const condicion = document.getElementById('inv-condicion').value;
             const destino = document.getElementById('inv-destino').value;
             const pedido = document.getElementById('inv-pedido').value.trim();
             const turno = document.getElementById('inv-turno').value;
