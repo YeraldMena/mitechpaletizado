@@ -716,12 +716,19 @@
                 padding-bottom: 0;
             }
 
-            /* Responsive: formulario tipo Google Forms en móvil */
+            /* Responsive: formulario fullscreen en móvil */
+            #view-formulario {
+                min-height: calc(100vh - 4rem);
+                padding: 0.5rem;
+                justify-content: flex-start;
+                padding-top: 1rem;
+            }
+
             .inventario-form-panel {
                 max-width: 100%;
-                padding: 1.25rem 1rem;
-                border-radius: 0.75rem;
-                margin-top: 0.5rem;
+                padding: 1.5rem 1.15rem;
+                border-radius: 1rem;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
             }
 
             .inv-form-header {
@@ -730,7 +737,7 @@
             }
 
             .inv-form-header h2 {
-                font-size: 1.1rem;
+                font-size: 1.15rem;
             }
 
             .inv-form-header p {
@@ -750,7 +757,7 @@
             }
 
             .inv-field label {
-                font-size: 0.8rem;
+                font-size: 0.82rem;
             }
 
             .inv-btn-submit {
@@ -758,10 +765,6 @@
                 font-size: 1.05rem;
                 border-radius: 0.65rem;
                 margin-top: 1.5rem;
-            }
-
-            #view-formulario > header .page-title h1 {
-                font-size: 1.2rem;
             }
         }
 
@@ -980,32 +983,46 @@
             position: relative;
         }
 
-        /* === FORMULARIO INVENTARIO === */
+        /* === FORMULARIO INVENTARIO — Fullscreen Style === */
+        #view-formulario {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: calc(100vh - 2rem);
+            padding: 1rem;
+        }
+
+        #view-formulario > header {
+            display: none;
+        }
+
         .inventario-form-panel {
-            max-width: 540px;
-            margin: 0 auto;
+            width: 100%;
+            max-width: 600px;
             background: var(--bg-card);
-            border-radius: 1rem;
-            padding: 2rem 1.75rem;
+            border-radius: 1.25rem;
+            padding: 2.5rem 2rem;
             border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
         }
 
         .inv-form-header {
             text-align: center;
-            margin-bottom: 1.75rem;
+            margin-bottom: 2rem;
             padding-bottom: 1.25rem;
             border-bottom: 1px solid var(--border-color);
         }
 
         .inv-form-header h2 {
-            font-size: 1.3rem;
+            font-size: 1.4rem;
             font-weight: 700;
             color: var(--text-main);
-            margin: 0 0 0.4rem 0;
+            margin: 0 0 0.5rem 0;
         }
 
         .inv-form-header p {
-            font-size: 0.85rem;
+            font-size: 0.88rem;
             color: var(--text-muted);
             margin: 0;
         }
@@ -2806,7 +2823,7 @@
             const views = ['dashboard', 'palets', 'ordenes', 'formulario', 'configuracion'];
             views.forEach(v => {
                 const el = document.getElementById('view-' + v);
-                if (el) el.style.display = (v === viewName) ? '' : 'none';
+                if (el) el.style.display = (v === viewName) ? (v === 'formulario' ? 'flex' : '') : 'none';
             });
 
             // Actualizar clase active en sidebar
