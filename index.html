@@ -1072,6 +1072,49 @@
             color: #475569;
         }
 
+        /* Grupo de checkboxes estilo Google Forms */
+        .inv-checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .inv-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.85rem;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+            user-select: none;
+        }
+
+        .inv-checkbox:hover {
+            border-color: var(--accent-primary);
+        }
+
+        .inv-checkbox input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--accent-primary);
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .inv-checkbox span {
+            font-size: 0.9rem;
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        .inv-checkbox:has(input:checked) {
+            background: rgba(99, 102, 241, 0.12);
+            border-color: var(--accent-primary);
+        }
+
         #inv-pallet-warn {
             margin-top: 8px;
             padding: 8px 12px;
@@ -1775,23 +1818,22 @@
                         <input type="number" id="inv-qty" placeholder="Ej: 50" min="1" required>
                     </div>
 
-                    <!-- 3. Condicion -->
+                    <!-- 3. Condicion (checkboxes múltiples) -->
                     <div class="inv-question-card">
                         <label class="inv-question-label"><i class="fa-solid fa-tags" style="margin-right: 6px; color: #8b5cf6;"></i>Condicion <span class="inv-req">*</span></label>
-                        <select id="inv-condicion" required>
-                            <option value="" disabled selected>Seleccionar condicion...</option>
-                            <option value="GRA">GRA</option>
-                            <option value="GRB">GRB</option>
-                            <option value="GRC">GRC</option>
-                            <option value="ICB">ICB</option>
-                            <option value="ICC">ICC</option>
-                            <option value="ICD">ICD</option>
-                            <option value="ICX">ICX</option>
-                            <option value="BOX">BOX</option>
-                            <option value="DNP">DNP</option>
-                            <option value="DMT">DMT</option>
-                            <option value="DMA">DMA</option>
-                        </select>
+                        <div class="inv-checkbox-group">
+                            <label class="inv-checkbox"><input type="checkbox" name="inv-condicion" value="GRA"><span>GRA</span></label>
+                            <label class="inv-checkbox"><input type="checkbox" name="inv-condicion" value="GRB"><span>GRB</span></label>
+                            <label class="inv-checkbox"><input type="checkbox" name="inv-condicion" value="GRC"><span>GRC</span></label>
+                            <label class="inv-checkbox"><input type="checkbox" name="inv-condicion" value="ICB"><span>ICB</span></label>
+                            <label class="inv-checkbox"><input type="checkbox" name="inv-condicion" value="ICC"><span>ICC</span></label>
+                            <label class="inv-checkbox"><input type="checkbox" name="inv-condicion" value="ICD"><span>ICD</span></label>
+                            <label class="inv-checkbox"><input type="checkbox" name="inv-condicion" value="ICX"><span>ICX</span></label>
+                            <label class="inv-checkbox"><input type="checkbox" name="inv-condicion" value="BOX"><span>BOX</span></label>
+                            <label class="inv-checkbox"><input type="checkbox" name="inv-condicion" value="DNP"><span>DNP</span></label>
+                            <label class="inv-checkbox"><input type="checkbox" name="inv-condicion" value="DMT"><span>DMT</span></label>
+                            <label class="inv-checkbox"><input type="checkbox" name="inv-condicion" value="DMA"><span>DMA</span></label>
+                        </div>
                     </div>
 
                     <!-- 4. Destino -->
@@ -2888,7 +2930,7 @@
 
             const pallet = document.getElementById('inv-pallet').value.trim();
             const qty = document.getElementById('inv-qty').value.trim();
-            const condicion = document.getElementById('inv-condicion').value;
+            const condicion = Array.from(document.querySelectorAll('input[name="inv-condicion"]:checked')).map(c => c.value).join(', ');
             const destino = document.getElementById('inv-destino').value;
             const pedido = document.getElementById('inv-pedido').value.trim();
             const turno = document.getElementById('inv-turno').value;
