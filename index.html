@@ -36,34 +36,34 @@
             /* Reducido de 260px */
         }
 
-        /* Mood Nathy — tema dark rosa */
+        /* Mood Nathy — tema dark rosa pastel */
         :root.mood-nathy {
-            --bg-dark: #1a0c14;
-            --bg-card: #2a1422;
-            --text-main: #f5dce8;
-            --text-muted: #b8839a;
-            --accent-primary: #d6336c;
-            --accent-success: #e8659a;
-            --accent-warning: #e04d85;
-            --border-color: #4a2038;
+            --bg-dark: #1c1020;
+            --bg-card: #2a1a2e;
+            --text-main: #f8e8f0;
+            --text-muted: #c4a0b4;
+            --accent-primary: #f2a5c4;
+            --accent-success: #f0b8d0;
+            --accent-warning: #eda3bf;
+            --border-color: #4d2e44;
         }
 
         :root.mood-nathy body { background-color: var(--bg-dark); }
         :root.mood-nathy .sidebar { background-color: var(--bg-card); border-right-color: var(--border-color); }
-        :root.mood-nathy .nav-item:hover { background: rgba(214, 51, 108, 0.15); }
-        :root.mood-nathy .nav-item.active { background: rgba(214, 51, 108, 0.22); color: #d6336c; }
+        :root.mood-nathy .nav-item:hover { background: rgba(242, 165, 196, 0.12); }
+        :root.mood-nathy .nav-item.active { background: rgba(242, 165, 196, 0.2); color: #f2a5c4; }
         :root.mood-nathy .panel { background: var(--bg-card); border-color: var(--border-color); }
-        :root.mood-nathy .kpi-card { border-left-color: #d6336c; }
-        :root.mood-nathy .btn-export { background: #d6336c; }
-        :root.mood-nathy .btn-export:hover { background: #c2255c; }
-        :root.mood-nathy .inv-header-card { border-top-color: #d6336c; }
-        :root.mood-nathy .inv-question-card:focus-within { border-color: #d6336c; box-shadow: 0 0 0 1px #d6336c; }
-        :root.mood-nathy .inv-btn-submit { background: #d6336c; }
-        :root.mood-nathy .inv-btn-submit:hover { background: #c2255c; }
-        :root.mood-nathy .inv-checkbox:has(input:checked) { background: rgba(214, 51, 108, 0.15); border-color: #d6336c; }
+        :root.mood-nathy .kpi-card { border-left-color: #f2a5c4; }
+        :root.mood-nathy .btn-export { background: #f2a5c4; color: #1c1020; }
+        :root.mood-nathy .btn-export:hover { background: #e990b4; }
+        :root.mood-nathy .inv-header-card { border-top-color: #f2a5c4; }
+        :root.mood-nathy .inv-question-card:focus-within { border-color: #f2a5c4; box-shadow: 0 0 0 1px #f2a5c4; }
+        :root.mood-nathy .inv-btn-submit { background: #f2a5c4; color: #1c1020; }
+        :root.mood-nathy .inv-btn-submit:hover { background: #e990b4; }
+        :root.mood-nathy .inv-checkbox:has(input:checked) { background: rgba(242, 165, 196, 0.15); border-color: #f2a5c4; }
 
         /* Toggle switch */
-        .mood-switch input:checked ~ .mood-track { background: #d6336c; }
+        .mood-switch input:checked ~ .mood-track { background: #f2a5c4; }
         .mood-switch input:checked ~ .mood-knob { transform: translateX(22px); }
 
         * {
@@ -1939,7 +1939,7 @@
                         <p style="color: var(--text-muted); font-size: 0.9rem;">MySQL — <strong>paletizado_db</strong></p>
                     </div>
                     <div style="border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-                        <h3 style="margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-palette" style="margin-right: 6px; color: #d6336c;"></i>Mood Nathy</h3>
+                        <h3 style="margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-palette" style="margin-right: 6px; color: #f2a5c4;"></i>Mood Nathy</h3>
                         <div style="display: flex; align-items: center; gap: 0.75rem;">
                             <label class="mood-switch" style="position: relative; display: inline-block; width: 48px; height: 26px; cursor: pointer;">
                                 <input type="checkbox" id="mood-nathy-toggle" onchange="toggleMoodNathy()" style="opacity: 0; width: 0; height: 0; position: absolute;">
