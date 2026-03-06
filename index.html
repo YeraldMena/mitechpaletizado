@@ -36,34 +36,34 @@
             /* Reducido de 260px */
         }
 
-        /* Mood Nathy — tema dark rosa */
+        /* Mood Nathy — tema dark rosa vivo */
         :root.mood-nathy {
-            --bg-dark: #1a0a14;
-            --bg-card: #2d1225;
-            --text-main: #fce4ec;
-            --text-muted: #c48b9f;
-            --accent-primary: #ec4899;
-            --accent-success: #f472b6;
-            --accent-warning: #fb7185;
-            --border-color: #4a1942;
+            --bg-dark: #140010;
+            --bg-card: #250a1e;
+            --text-main: #ffe0f0;
+            --text-muted: #d4829e;
+            --accent-primary: #ff2d87;
+            --accent-success: #ff6eb4;
+            --accent-warning: #ff4d94;
+            --border-color: #5c1a4a;
         }
 
         :root.mood-nathy body { background-color: var(--bg-dark); }
         :root.mood-nathy .sidebar { background-color: var(--bg-card); border-right-color: var(--border-color); }
-        :root.mood-nathy .nav-item:hover { background: rgba(236, 72, 153, 0.15); }
-        :root.mood-nathy .nav-item.active { background: rgba(236, 72, 153, 0.2); color: #ec4899; }
+        :root.mood-nathy .nav-item:hover { background: rgba(255, 45, 135, 0.18); }
+        :root.mood-nathy .nav-item.active { background: rgba(255, 45, 135, 0.25); color: #ff2d87; }
         :root.mood-nathy .panel { background: var(--bg-card); border-color: var(--border-color); }
-        :root.mood-nathy .kpi-card { border-left-color: #ec4899; }
-        :root.mood-nathy .btn-export { background: #ec4899; }
-        :root.mood-nathy .btn-export:hover { background: #db2777; }
-        :root.mood-nathy .inv-header-card { border-top-color: #ec4899; }
-        :root.mood-nathy .inv-question-card:focus-within { border-color: #ec4899; box-shadow: 0 0 0 1px #ec4899; }
-        :root.mood-nathy .inv-btn-submit { background: #ec4899; }
-        :root.mood-nathy .inv-btn-submit:hover { background: #db2777; }
-        :root.mood-nathy .inv-checkbox:has(input:checked) { background: rgba(236, 72, 153, 0.15); border-color: #ec4899; }
+        :root.mood-nathy .kpi-card { border-left-color: #ff2d87; }
+        :root.mood-nathy .btn-export { background: #ff2d87; }
+        :root.mood-nathy .btn-export:hover { background: #e6196f; }
+        :root.mood-nathy .inv-header-card { border-top-color: #ff2d87; }
+        :root.mood-nathy .inv-question-card:focus-within { border-color: #ff2d87; box-shadow: 0 0 0 1px #ff2d87; }
+        :root.mood-nathy .inv-btn-submit { background: #ff2d87; }
+        :root.mood-nathy .inv-btn-submit:hover { background: #e6196f; }
+        :root.mood-nathy .inv-checkbox:has(input:checked) { background: rgba(255, 45, 135, 0.18); border-color: #ff2d87; }
 
         /* Toggle switch */
-        .mood-switch input:checked ~ .mood-track { background: #ec4899; }
+        .mood-switch input:checked ~ .mood-track { background: #ff2d87; }
         .mood-switch input:checked ~ .mood-knob { transform: translateX(22px); }
 
         * {
@@ -1939,7 +1939,7 @@
                         <p style="color: var(--text-muted); font-size: 0.9rem;">MySQL — <strong>paletizado_db</strong></p>
                     </div>
                     <div style="border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-                        <h3 style="margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-palette" style="margin-right: 6px; color: #ec4899;"></i>Mood Nathy</h3>
+                        <h3 style="margin-bottom: 0.75rem; color: var(--text-main);"><i class="fa-solid fa-palette" style="margin-right: 6px; color: #ff2d87;"></i>Mood Nathy</h3>
                         <div style="display: flex; align-items: center; gap: 0.75rem;">
                             <label class="mood-switch" style="position: relative; display: inline-block; width: 48px; height: 26px; cursor: pointer;">
                                 <input type="checkbox" id="mood-nathy-toggle" onchange="toggleMoodNathy()" style="opacity: 0; width: 0; height: 0; position: absolute;">
