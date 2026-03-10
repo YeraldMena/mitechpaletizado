@@ -2425,8 +2425,10 @@
                 }
 
                 // Mapear y procesar todos los datos iniciales
+                let rowIdx = 0;
                 response.table.rows.forEach(r => {
                     const c = r.c;
+                    rowIdx++;
                     // Índices: c[4] = Destino, c[5] = Fecha, c[6] = Turno
                     if (!c || !c[4] || c[4].v === null) return;
 
@@ -2449,21 +2451,34 @@
                     }
 
                     // Guardar timestamp (c[0]) para ordenar cronológicamente
-                    // gviz devuelve fechas como "Date(y,m,d,h,min,s)" — parsear manualmente
-                    const tsRaw = (c[0] && c[0].v != null) ? c[0].v.toString() : '';
+                    // gviz devuelve fechas nativas como "Date(y,m,d,h,min,s)"
+                    // El web form guarda texto como "3/10/2026 14:30:00" — probar ambos formatos
                     let tsDate = null;
-                    if (tsRaw) {
-                        const gvMatch = tsRaw.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+                    if (c[0] && c[0].v != null) {
+                        const tsV = c[0].v.toString();
+                        // 1) Formato gviz nativo: Date(y,m,d,h,min,s)
+                        const gvMatch = tsV.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
                         if (gvMatch) {
                             tsDate = new Date(+gvMatch[1], +gvMatch[2], +gvMatch[3], +gvMatch[4], +gvMatch[5], +gvMatch[6]);
-                        } else {
-                            const d = new Date(tsRaw);
-                            tsDate = isNaN(d.getTime()) ? null : d;
                         }
+                        // 2) Fallback: intentar parsear el valor directo
+                        if (!tsDate || isNaN(tsDate.getTime())) {
+                            const d = new Date(tsV);
+                            tsDate = (!isNaN(d.getTime())) ? d : null;
+                        }
+                    }
+                    // 3) Fallback: usar c[0].f (valor formateado visible en la hoja)
+                    if ((!tsDate || isNaN(tsDate.getTime())) && c[0] && c[0].f) {
+                        const d = new Date(c[0].f);
+                        tsDate = (!isNaN(d.getTime())) ? d : null;
+                    }
+                    if (!tsDate) {
+                        console.warn('⚠ Timestamp no parseable, fila:', c[1]?.v, '| v:', c[0]?.v, '| f:', c[0]?.f);
                     }
 
                     allSheetData.push({
                         rowValues: rawValues,
+                        _rowIdx: rowIdx,
                         timestamp: tsDate,
                         id: (c[1] && c[1].v != null) ? c[1].v.toString().split('-')[0].trim() : 'Sin ID',
                         cantidad: rawValues[1] ? (parseFloat(rawValues[1].toString().replace(/,/g, '')) || 0) : 0,
@@ -2477,12 +2492,14 @@
                 });
 
                 // Ordenar por timestamp para que web y Drive queden en orden cronológico
+                // Registros sin timestamp mantienen su orden original del sheet
                 allSheetData.sort((a, b) => {
-                    if (!a.timestamp && !b.timestamp) return 0;
-                    if (!a.timestamp) return -1;
-                    if (!b.timestamp) return 1;
+                    if (!a.timestamp && !b.timestamp) return a._rowIdx - b._rowIdx;
+                    if (!a.timestamp) return 1;  // sin timestamp van al final
+                    if (!b.timestamp) return -1;
                     return a.timestamp - b.timestamp;
                 });
+                console.log(`📊 Datos cargados: ${allSheetData.length} registros. Con timestamp: ${allSheetData.filter(r => r.timestamp).length}, sin: ${allSheetData.filter(r => !r.timestamp).length}`);
 
                 // Configurar el Calendario Flatpickr UNA SOLA VEZ permitiendo selecciones múltiples
                 availableDates = Array.from(uniqueDates);
