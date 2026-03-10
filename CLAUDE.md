@@ -72,6 +72,8 @@ Disponibles en `.claude/commands/`:
 | `/verify-forms` | Verificar que los formularios funcionen correctamente (estructura, validaciones, envío, flujo completo) |
 | `/pre-push` | Agente de deploy: verificar, commit, push y pull de forma segura |
 | `/changelog` | Generar/actualizar registro enumerado de commits con nombres descriptivos |
+| `/add-mood-theme` | Agregar un nuevo tema visual (mood) con toggle en Configuración |
+| `/form-field` | Agregar, modificar o eliminar campos del formulario de inventario |
 
 ## MANDATORY: Git Operations Protocol
 

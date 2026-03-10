@@ -60,7 +60,9 @@
         :root.mood-nathy .inv-question-card:focus-within { border-color: #e8749c; box-shadow: 0 0 0 1px #e8749c; }
         :root.mood-nathy .inv-btn-submit { background: #e8749c; color: #fff; }
         :root.mood-nathy .inv-btn-submit:hover { background: #d9608a; }
-        :root.mood-nathy .inv-checkbox:has(input:checked) { background: rgba(232, 116, 156, 0.12); border-color: #e8749c; }
+        :root.mood-nathy .inv-checkbox:has(input:checked) { background: rgba(232, 116, 156, 0.25); border-color: #e8749c; box-shadow: 0 0 0 2px rgba(232, 116, 156, 0.3); }
+        :root.mood-nathy .inv-checkbox:has(input:checked) span { color: #c9366a; font-weight: 600; }
+        :root.mood-nathy .inv-checkbox:has(input:checked) input[type="checkbox"] { accent-color: #e8749c; }
 
         /* Toggle switch */
         .mood-switch input:checked ~ .mood-track { background: #e8749c; }
@@ -3015,18 +3017,7 @@
                     return;
                 }
 
-                // Bloquear envío si la diferencia con el último pallet es > 1000
-                const inputNum = parseInt(palletDigits);
-                const lastPallet = allSheetData[allSheetData.length - 1];
-                const lastNum = parseInt((lastPallet.id || '').replace(/\D/g, ''));
-                if (!isNaN(inputNum) && !isNaN(lastNum)) {
-                    const diff = Math.abs(inputNum - lastNum);
-                    if (diff > 1000) {
-                        showInvStatus(`Diferencia de ${diff.toLocaleString('es-MX')} con el último pallet (${lastPallet.id}). Revisa el número de pallet.`, 'error');
-                        document.getElementById('inv-pallet').focus();
-                        return;
-                    }
-                }
+                // (Regla de diferencia > 1000 eliminada)
             }
 
             const btn = document.getElementById('inv-submit-btn');
@@ -3094,18 +3085,7 @@
                     warnings.push(`<i class="fa-solid fa-copy"></i> Pallet duplicado — Este ID ya existe (${duplicados.length}x). Último registro: ${last.fecha}, ${last.turno}. Verifica la información.`);
                 }
 
-                // Verificar diferencia > 1000 con el último pallet registrado
-                const inputNum = parseInt(digits);
-                if (!isNaN(inputNum) && digits.length >= 6) {
-                    const lastPallet = allSheetData[allSheetData.length - 1];
-                    const lastNum = parseInt((lastPallet.id || '').replace(/\D/g, ''));
-                    if (!isNaN(lastNum)) {
-                        const diff = Math.abs(inputNum - lastNum);
-                        if (diff > 1000) {
-                            warnings.push(`<i class="fa-solid fa-circle-exclamation"></i> Diferencia de ${diff.toLocaleString('es-MX')} con el último pallet registrado (${lastPallet.id}). Revisa el número de pallet.`);
-                        }
-                    }
-                }
+                // (Advertencia de diferencia > 1000 eliminada)
             }
 
             const btn = document.getElementById('inv-submit-btn');
