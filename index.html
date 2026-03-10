@@ -2449,8 +2449,18 @@
                     }
 
                     // Guardar timestamp (c[0]) para ordenar cronológicamente
+                    // gviz devuelve fechas como "Date(y,m,d,h,min,s)" — parsear manualmente
                     const tsRaw = (c[0] && c[0].v != null) ? c[0].v.toString() : '';
-                    const tsDate = tsRaw ? new Date(tsRaw) : null;
+                    let tsDate = null;
+                    if (tsRaw) {
+                        const gvMatch = tsRaw.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+                        if (gvMatch) {
+                            tsDate = new Date(+gvMatch[1], +gvMatch[2], +gvMatch[3], +gvMatch[4], +gvMatch[5], +gvMatch[6]);
+                        } else {
+                            const d = new Date(tsRaw);
+                            tsDate = isNaN(d.getTime()) ? null : d;
+                        }
+                    }
 
                     allSheetData.push({
                         rowValues: rawValues,
