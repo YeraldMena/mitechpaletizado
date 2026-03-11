@@ -2507,29 +2507,30 @@
                     }
 
                     // Guardar timestamp (c[0]) para ordenar cronológicamente
-                    // gviz devuelve fechas nativas como "Date(y,m,d,h,min,s)"
-                    // El web form guarda texto como "3/10/2026 14:30:00" — probar ambos formatos
                     let tsDate = null;
                     if (c[0] && c[0].v != null) {
                         const tsV = c[0].v.toString();
-                        // 1) Formato gviz nativo: Date(y,m,d,h,min,s)
                         const gvMatch = tsV.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
                         if (gvMatch) {
                             tsDate = new Date(+gvMatch[1], +gvMatch[2], +gvMatch[3], +gvMatch[4], +gvMatch[5], +gvMatch[6]);
                         }
-                        // 2) Fallback: intentar parsear el valor directo
                         if (!tsDate || isNaN(tsDate.getTime())) {
                             const d = new Date(tsV);
                             tsDate = (!isNaN(d.getTime())) ? d : null;
                         }
                     }
-                    // 3) Fallback: usar c[0].f (valor formateado visible en la hoja)
                     if ((!tsDate || isNaN(tsDate.getTime())) && c[0] && c[0].f) {
                         const d = new Date(c[0].f);
                         tsDate = (!isNaN(d.getTime())) ? d : null;
                     }
-                    if (!tsDate) {
-                        console.warn('⚠ Timestamp no parseable, fila:', c[1]?.v, '| v:', c[0]?.v, '| f:', c[0]?.f);
+                    // 4) Fallback final: usar columna Fecha (c[5]) para registros sin timestamp
+                    if (!tsDate && rawDate !== 'N/A') {
+                        const d = new Date(rawDate);
+                        if (!isNaN(d.getTime())) {
+                            // Asignar hora según posición de fila para mantener orden relativo
+                            d.setHours(0, 0, rowIdx);
+                            tsDate = d;
+                        }
                     }
 
                     allSheetData.push({
