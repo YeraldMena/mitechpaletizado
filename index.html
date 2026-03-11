@@ -3047,49 +3047,39 @@
                 // (Regla de diferencia > 1000 eliminada)
             }
 
-            const btn = document.getElementById('inv-submit-btn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
-
             const now = new Date();
             const tsString = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
             const rawDate = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
 
-            // Enviar al servidor
+            // Disparar POST en segundo plano (fire-and-forget, no-cors no permite leer respuesta)
             fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pallet, qty, condicion, destino, pedido, turno, escaneadora, timestamp: tsString })
-            }).then(() => {
-                // Actualización optimista: agregar registro localmente al instante
-                allSheetData.push({
-                    rowValues: [pallet, qty, condicion, destino, rawDate, turno],
-                    _rowIdx: allSheetData.length + 1,
-                    timestamp: now,
-                    id: pallet.split('-')[0].trim(),
-                    cantidad: parseFloat(qty.toString().replace(/,/g, '')) || 0,
-                    condicion: condicion,
-                    destinoOriginal: destino,
-                    fecha: rawDate,
-                    turno: turno,
-                    operador: escaneadora,
-                    pedido: pedido || ''
-                });
+            }).catch(err => console.warn('⚠ Error enviando registro:', err));
 
-                showInvStatus('Registro enviado correctamente.', 'success');
-                document.getElementById('inventario-form').reset();
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar Registro';
-                document.querySelector('.inventario-form-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-                // Refrescar datos completos del sheet en segundo plano (sin bloquear)
-                setTimeout(() => { if (typeof fetchSheetData === 'function') fetchSheetData(); }, 3000);
-            }).catch(() => {
-                showInvStatus('Error al enviar. Intenta de nuevo.', 'error');
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar Registro';
+            // Agregar registro localmente AL INSTANTE (sin esperar respuesta del servidor)
+            allSheetData.push({
+                rowValues: [pallet, qty, condicion, destino, rawDate, turno],
+                _rowIdx: allSheetData.length + 1,
+                timestamp: now,
+                id: pallet.split('-')[0].trim(),
+                cantidad: parseFloat(qty.toString().replace(/,/g, '')) || 0,
+                condicion: condicion,
+                destinoOriginal: destino,
+                fecha: rawDate,
+                turno: turno,
+                operador: escaneadora,
+                pedido: pedido || ''
             });
+
+            showInvStatus('Registro enviado correctamente.', 'success');
+            document.getElementById('inventario-form').reset();
+            document.querySelector('.inventario-form-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Sincronizar con el sheet en segundo plano después de 5s
+            setTimeout(() => { if (typeof fetchSheetData === 'function') fetchSheetData(); }, 5000);
         };
 
         function showInvStatus(msg, type) {
