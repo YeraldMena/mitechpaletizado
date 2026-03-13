@@ -925,7 +925,7 @@
                 let includeRow = false;
                 if (currentLineChartTurno === 'Completo') {
                     includeRow = true;
-                } else if (currentLineChartTurno === 'Día' && (tKey.includes("día") || tKey.includes("day"))) {
+                } else if (currentLineChartTurno === 'Día' && (tKey.includes("día") || tKey.includes("dia") || tKey.includes("day"))) {
                     includeRow = true;
                 } else if (currentLineChartTurno === 'Noche' && (tKey.includes("noche") || tKey.includes("night"))) {
                     includeRow = true;
@@ -1213,6 +1213,14 @@
                 const uniqueDates = new Set();
                 const uniqueMonths = new Set(); // Para generar los botones
 
+                // [FIX] Guardar selección actual del calendario para restaurarla después del refresh
+                let previousSelectedStrs = [];
+                if (flatpickrInstance && flatpickrInstance.selectedDates.length > 0) {
+                    previousSelectedStrs = flatpickrInstance.selectedDates.map(d => {
+                        return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+                    });
+                }
+
                 // Parsear encabezados dinámicamente, omitiendo Timestamp (índice 0) y usando hasta el 7
                 const allRawHeaders = response.table.cols.map(c => c ? (c.label || "Columna") : "N/A");
                 const colHeaders = allRawHeaders.slice(1, 7).map((lbl, i) => {
@@ -1277,7 +1285,7 @@
                     });
                 });
 
-                // Configurar el Calendario Flatpickr UNA SOLA VEZ permitiendo selecciones múltiples
+                // Configurar el Calendario Flatpickr permitiendo selecciones múltiples
                 availableDates = Array.from(uniqueDates);
                 if (!flatpickrInstance) {
                     flatpickrInstance = flatpickr("#dateFilter", {
@@ -1290,6 +1298,13 @@
                             window.syncMonthPills();
                         }
                     });
+                } else {
+                    // [FIX] Actualizar fechas habilitadas para incluir nuevos días del Sheet
+                    flatpickrInstance.set('enable', availableDates);
+                    // Restaurar selección previa sin disparar onChange
+                    if (previousSelectedStrs.length > 0) {
+                        flatpickrInstance.setDate(previousSelectedStrs, false);
+                    }
                 }
 
                 // Generar los botones dinámicos de Mes (Pills)
@@ -1338,8 +1353,12 @@
                 // --- Generar Gráfico de 7 Días INDEPENDIENTE ---
                 window.renderLineChart();
 
-                // Renderizado interactivo inicial sin filtros
-                renderDashboard([]);
+                // [FIX] Renderizar respetando la selección previa del calendario
+                if (previousSelectedStrs.length > 0) {
+                    renderDashboard(previousSelectedStrs);
+                } else {
+                    renderDashboard([]);
+                }
                 window.syncMonthPills();
 
             } catch (error) {
@@ -1871,14 +1890,12 @@
             fetchSheetData();
             fetchErrorsData();
 
-            // Mantenemos la actualización silenciosa cada 30 segundos
+            // [FIX] Actualización automática cada 60 segundos (1 minuto), SIEMPRE activa
+            // La selección del calendario se preserva dentro de processSheetData
             setInterval(() => {
-                // Solo si no hay filtro activo (para no borrar su selección actual al hacer fetch)
-                if (!flatpickrInstance || flatpickrInstance.selectedDates.length === 0) {
-                    fetchSheetData();
-                    fetchErrorsData();
-                }
-            }, 30000);
+                fetchSheetData();
+                fetchErrorsData();
+            }, 60000);
         });
     </script>
 </body>
