@@ -2104,7 +2104,7 @@
                 let includeRow = false;
                 if (currentLineChartTurno === 'Completo') {
                     includeRow = true;
-                } else if (currentLineChartTurno === 'Día' && (tKey.includes("día") || tKey.includes("day"))) {
+                } else if (currentLineChartTurno === 'Día' && (tKey.includes("día") || tKey.includes("dia") || tKey.includes("day"))) {
                     includeRow = true;
                 } else if (currentLineChartTurno === 'Noche' && (tKey.includes("noche") || tKey.includes("night"))) {
                     includeRow = true;
@@ -2501,6 +2501,14 @@
                 });
                 console.log(`📊 Datos cargados: ${allSheetData.length} registros. Con timestamp: ${allSheetData.filter(r => r.timestamp).length}, sin: ${allSheetData.filter(r => !r.timestamp).length}`);
 
+                // [FIX] Guardar selección actual del calendario para restaurarla después del refresh
+                let previousSelectedStrs = [];
+                if (flatpickrInstance && flatpickrInstance.selectedDates.length > 0) {
+                    previousSelectedStrs = flatpickrInstance.selectedDates.map(d => {
+                        return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+                    });
+                }
+
                 // Configurar el Calendario Flatpickr UNA SOLA VEZ permitiendo selecciones múltiples
                 availableDates = Array.from(uniqueDates);
                 if (!flatpickrInstance) {
@@ -2514,6 +2522,12 @@
                             window.syncMonthPills();
                         }
                     });
+                } else {
+                    // [FIX] Actualizar fechas disponibles y restaurar selección previa
+                    flatpickrInstance.set('enable', availableDates);
+                    if (previousSelectedStrs.length > 0) {
+                        flatpickrInstance.setDate(previousSelectedStrs, false);
+                    }
                 }
 
                 // Generar los botones dinámicos de Mes (Pills)
@@ -2547,7 +2561,7 @@
                     if (tKey.includes("Noche") || tKey.toLowerCase().includes("night")) {
                         nightPallets++;
                         nightDates.add(row.fecha);
-                    } else if (tKey.includes("día") || tKey.toLowerCase().includes("day")) {
+                    } else if (tKey.includes("día") || tKey.includes("dia") || tKey.toLowerCase().includes("day")) {
                         dayPallets++;
                         dayDates.add(row.fecha);
                     }
@@ -4409,14 +4423,11 @@
             fetchSheetData();
             fetchErrorsData();
 
-            // Mantenemos la actualización silenciosa cada 30 segundos
+            // [FIX] Auto-refresh siempre cada 60s (la selección del calendario se preserva en processSheetData)
             setInterval(() => {
-                // Solo si no hay filtro activo (para no borrar su selección actual al hacer fetch)
-                if (!flatpickrInstance || flatpickrInstance.selectedDates.length === 0) {
-                    fetchSheetData();
-                    fetchErrorsData();
-                }
-            }, 30000);
+                fetchSheetData();
+                fetchErrorsData();
+            }, 60000);
         });
         // === MOOD NATHY (tema rosa) ===
         window.toggleMoodNathy = function () {
