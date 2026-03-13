@@ -949,17 +949,6 @@
                 grid-template-columns: 1fr !important;
             }
 
-            /* Escaneadora: stack vertical en mobile */
-            #escaneadora-cards {
-                min-width: 0 !important;
-            }
-        }
-
-        @media (max-width: 700px) {
-            /* Escaneadora 2-col → 1-col en mobile */
-            .panel > div[style*="grid-template-columns: 280px"] {
-                grid-template-columns: 1fr !important;
-            }
         }
 
         /* Órdenes dashboard charts */
@@ -1522,30 +1511,20 @@
 
             </div><!-- /contenedor 50/50 -->
 
-                <!-- Actividad por Escaneadora -->
+                <!-- Actividad por Escaneadora (Últimos 7 días) -->
                 <div class="panel" style="grid-column: 1 / -1;">
                     <div class="panel-header" style="margin-bottom: 0.75rem;">
                         <h2 class="panel-title" style="font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
                             <i class="fa-solid fa-barcode" style="color: #8b5cf6;"></i> Actividad por Escaneadora
+                            <span style="font-size: 0.7rem; font-weight: 400; color: var(--text-muted); background: var(--bg-dark); padding: 2px 10px; border-radius: 10px;">Últimos 7 días</span>
                         </h2>
-                        <span id="escaneadora-subtitle" style="font-size: 0.75rem; color: var(--text-muted); background: var(--bg-dark); padding: 2px 10px; border-radius: 10px;">Últimos 7 días</span>
                     </div>
-
-                    <!-- Layout 2 columnas: tarjetas | gráfica -->
-                    <div style="display: grid; grid-template-columns: 280px 1fr; gap: 1rem; align-items: start;">
-                        <!-- Izq: Tarjetas compactas (max 5) -->
-                        <div id="escaneadora-cards" style="display: flex; flex-direction: column; gap: 0.4rem;">
-                            <div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">Cargando...</div>
-                        </div>
-                        <!-- Der: Gráfica barras agrupadas -->
-                        <div style="height: 260px;">
-                            <canvas id="escaneadora-chart-7d"></canvas>
-                        </div>
+                    <!-- Gráfica ancho completo -->
+                    <div id="escaneadora-chart-wrap" style="height: 280px;">
+                        <canvas id="escaneadora-chart-7d"></canvas>
                     </div>
-
                     <!-- Mini resumen: última actividad por escaneadora -->
                     <div id="escaneadora-last-activity" style="display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-top: 0.6rem; padding: 0.4rem 0.5rem; background: var(--bg-dark); border-radius: 0.4rem; font-size: 0.7rem; color: var(--text-muted);"></div>
-
                     <!-- Detalle expandible al hacer clic -->
                     <div id="escaneadora-detail" style="display: none; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.75rem; margin-top: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -3990,30 +3969,58 @@
         // === ACTIVIDAD POR ESCANEADORA ===
         let escaneadoraChart7d = null;
 
+        // Normalizar nombres de escaneadoras (acentos + capitalización)
+        function normalizarEscaneadora(raw) {
+            const accentMap = {
+                'angelica': 'Angélica', 'aleman': 'Alemán', 'german': 'Germán',
+                'jose': 'José', 'maria': 'María', 'jesus': 'Jesús', 'cesar': 'César',
+                'raul': 'Raúl', 'ramon': 'Ramón', 'adrian': 'Adrián', 'andres': 'Andrés',
+                'hector': 'Héctor', 'oscar': 'Óscar', 'victor': 'Víctor', 'hector': 'Héctor',
+                'garcia': 'García', 'gonzalez': 'González', 'lopez': 'López', 'martinez': 'Martínez',
+                'rodriguez': 'Rodríguez', 'hernandez': 'Hernández', 'perez': 'Pérez',
+                'sanchez': 'Sánchez', 'ramirez': 'Ramírez', 'flores': 'Flores',
+                'gomez': 'Gómez', 'diaz': 'Díaz', 'torres': 'Torres', 'jimenez': 'Jiménez',
+                'gutierrez': 'Gutiérrez', 'ruiz': 'Ruíz', 'alvarez': 'Álvarez',
+                'nunez': 'Núñez', 'nunes': 'Núñez', 'mendez': 'Méndez',
+                'castaneda': 'Castañeda', 'pena': 'Peña'
+            };
+            // Strip accents for lookup key
+            const strip = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            return raw.trim().split(/\s+/).map(w => {
+                const key = strip(w);
+                return accentMap[key] || (w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+            }).join(' ');
+        }
+
         function renderEscaneadoraPanel() {
-            const cardsContainer = document.getElementById('escaneadora-cards');
-            if (!cardsContainer || allSheetData.length === 0) return;
+            const chartWrap = document.getElementById('escaneadora-chart-wrap');
+            if (!chartWrap || allSheetData.length === 0) return;
 
             const now = new Date();
-            const todayStr = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
 
-            // Calcular fecha límite 7 días atrás
+            // Calcular los 7 días completos (hoy y 6 anteriores)
             const sevenAgo = new Date(now);
-            sevenAgo.setDate(sevenAgo.getDate() - 7);
+            sevenAgo.setDate(sevenAgo.getDate() - 6);
             sevenAgo.setHours(0, 0, 0, 0);
+
+            // Generar array de 7 fechas consecutivas en formato M/D/YYYY
+            const allDateLabels = [];
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(sevenAgo);
+                d.setDate(d.getDate() + i);
+                allDateLabels.push(`${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`);
+            }
 
             // Filtrar rows con operador válido
             const withOp = allSheetData.filter(r => r.operador && r.operador.trim() !== '');
 
-            // Agrupar por escaneadora
+            // Agrupar por escaneadora (nombre normalizado)
             const escMap = {};
             withOp.forEach(r => {
-                const name = r.operador.trim();
-                if (!escMap[name]) escMap[name] = { rows: [], hoy: 0, sem: 0, lastTs: null, errores: 0 };
+                const name = normalizarEscaneadora(r.operador);
+                if (!escMap[name]) escMap[name] = { rows: [], sem: 0, lastTs: null, errores: 0 };
                 escMap[name].rows.push(r);
-                if (r.fecha === todayStr) escMap[name].hoy++;
 
-                // Check if within 7 days
                 const parts = (r.fecha || '').split('/');
                 if (parts.length === 3) {
                     const rd = new Date(+parts[2], +parts[0] - 1, +parts[1]);
@@ -4025,11 +4032,11 @@
                 }
             });
 
-            // Cruzar errores: mapear palletId → escaneadora
+            // Cruzar errores
             const idToEsc = {};
             withOp.forEach(r => {
                 const shortId = r.id.length > 6 ? r.id.substring(0, 6) : r.id;
-                if (!idToEsc[shortId]) idToEsc[shortId] = r.operador.trim();
+                if (!idToEsc[shortId]) idToEsc[shortId] = normalizarEscaneadora(r.operador);
             });
             if (typeof allErrorsData !== 'undefined') {
                 allErrorsData.forEach(e => {
@@ -4039,66 +4046,38 @@
                 });
             }
 
-            // Ordenar por actividad semanal desc
+            // Top 4 por actividad semanal
             const sorted = Object.entries(escMap).sort((a, b) => b[1].sem - a[1].sem);
 
             if (sorted.length === 0) {
-                cardsContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">No hay datos de escaneadoras.</div>';
+                chartWrap.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 2rem;">No hay datos de escaneadoras.</div>';
                 return;
             }
 
-            // A) Tarjetas compactas (máx 5)
-            const escColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#06b6d4'];
-            const top5 = sorted.slice(0, 5);
+            const escColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b'];
+            const top4 = sorted.slice(0, 4);
 
-            cardsContainer.innerHTML = top5.map(([name, data], i) => {
-                const color = escColors[i % escColors.length];
-                const firstName = name.split(' ')[0]; // Nombre corto para display compacto
-                return `<div onclick="showEscaneadoraDetail('${name.replace(/'/g, "\\'")}')" style="background: var(--bg-dark); border-left: 3px solid ${color}; border-radius: 0.4rem; padding: 0.4rem 0.6rem; cursor: pointer; transition: background 0.15s;" onmouseenter="this.style.background='var(--border-color)'" onmouseleave="this.style.background='var(--bg-dark)'">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-weight: 600; font-size: 0.8rem; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px;" title="${name}">${firstName}</span>
-                        ${data.errores > 0 ? `<span style="background: rgba(239,68,68,0.15); color: #ef4444; font-size: 0.55rem; padding: 1px 5px; border-radius: 6px; font-weight: 600;">${data.errores} err</span>` : ''}
-                    </div>
-                    <div style="display: flex; gap: 0.6rem; font-size: 0.7rem; margin-top: 0.15rem;">
-                        <span style="color: var(--text-muted);">Hoy <strong style="color: ${color};">${data.hoy}</strong></span>
-                        <span style="color: var(--text-muted);">7d <strong style="color: var(--text-main);">${data.sem}</strong></span>
-                    </div>
-                </div>`;
-            }).join('');
-
-            // B) Gráfica comparativa 7 días (barras agrupadas, sin leyenda redundante)
+            // Gráfica barras agrupadas — 7 días completos, 0 si no hay datos
             const ctx = document.getElementById('escaneadora-chart-7d');
             if (ctx) {
-                const allDates = new Set();
-                withOp.forEach(r => {
-                    const parts = (r.fecha || '').split('/');
-                    if (parts.length === 3) {
-                        const rd = new Date(+parts[2], +parts[0] - 1, +parts[1]);
-                        if (rd >= sevenAgo) allDates.add(r.fecha);
-                    }
-                });
-                const dateLabels = Array.from(allDates).sort((a, b) => {
-                    const pa = a.split('/'), pb = b.split('/');
-                    return new Date(+pa[2], +pa[0]-1, +pa[1]) - new Date(+pb[2], +pb[0]-1, +pb[1]);
-                }).slice(-7);
-
-                const topEsc = top5.map(e => e[0]);
-                const datasets = topEsc.map((name, i) => {
-                    const color = escColors[i % escColors.length];
-                    const counts = dateLabels.map(d => escMap[name].rows.filter(r => r.fecha === d).length);
+                const datasets = top4.map(([name, data], i) => {
+                    const color = escColors[i];
+                    const counts = allDateLabels.map(d => data.rows.filter(r => r.fecha === d).length);
                     return {
-                        label: name.split(' ')[0],
+                        label: name,
                         data: counts,
                         backgroundColor: color,
                         borderRadius: 3,
-                        barPercentage: 0.75,
-                        categoryPercentage: 0.85
+                        barPercentage: 0.7,
+                        categoryPercentage: 0.8
                     };
                 });
 
-                const shortLabels = dateLabels.map(d => {
+                const shortLabels = allDateLabels.map(d => {
                     const p = d.split('/');
-                    return `${p[1]}/${p[0]}`;
+                    const dayNames = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+                    const dt = new Date(+p[2], +p[0]-1, +p[1]);
+                    return `${dayNames[dt.getDay()]} ${p[1]}/${p[0]}`;
                 });
 
                 if (escaneadoraChart7d) escaneadoraChart7d.destroy();
@@ -4109,7 +4088,11 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            legend: { display: false },
+                            legend: {
+                                display: true,
+                                position: 'top',
+                                labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 12, padding: 16, usePointStyle: true, pointStyle: 'rectRounded' }
+                            },
                             tooltip: {
                                 callbacks: { label: c => `${c.dataset.label}: ${c.raw} pallets` }
                             }
@@ -4124,17 +4107,24 @@
                                 ticks: { color: '#94a3b8', font: { size: 10 }, precision: 0 },
                                 grid: { color: 'rgba(148,163,184,0.06)' }
                             }
+                        },
+                        onClick: (evt, elements) => {
+                            if (elements.length > 0) {
+                                const dsIdx = elements[0].datasetIndex;
+                                const name = top4[dsIdx][0];
+                                showEscaneadoraDetail(name);
+                            }
                         }
                     }
                 });
             }
 
-            // C) Mini resumen: última actividad por escaneadora
+            // Mini resumen: última actividad
             const lastActContainer = document.getElementById('escaneadora-last-activity');
             if (lastActContainer) {
                 lastActContainer.innerHTML = '<span style="font-weight: 600; color: var(--text-muted); margin-right: 0.2rem;"><i class="fa-solid fa-signal" style="margin-right: 3px;"></i>Estado:</span>' +
-                    top5.map(([name, data], i) => {
-                        const color = escColors[i % escColors.length];
+                    top4.map(([name, data], i) => {
+                        const color = escColors[i];
                         let t = '—';
                         if (data.lastTs) {
                             const dm = Math.floor((now - data.lastTs) / 60000);
@@ -4143,9 +4133,9 @@
                             else if (dm < 1440) t = `${Math.floor(dm/60)}h`;
                             else t = `${Math.floor(dm/1440)}d`;
                         }
-                        const isActive = data.lastTs && (now - data.lastTs) < 3600000; // <1h = activo
+                        const isActive = data.lastTs && (now - data.lastTs) < 3600000;
                         const dot = isActive ? '#10b981' : '#ef4444';
-                        return `<span><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:${dot}; margin-right:3px;"></span><strong style="color:${color};">${name.split(' ')[0]}</strong> → ${t}</span>`;
+                        return `<span style="cursor:pointer;" onclick="showEscaneadoraDetail('${name.replace(/'/g, "\\'")}')"><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:${dot}; margin-right:3px;"></span><strong style="color:${color};">${name.split(' ')[0]}</strong> → ${t}</span>`;
                     }).join('');
             }
         }
@@ -4159,7 +4149,7 @@
             if (!panel || !body) return;
 
             const now = new Date();
-            const rows = allSheetData.filter(r => (r.operador || '').trim() === name);
+            const rows = allSheetData.filter(r => normalizarEscaneadora(r.operador || '') === name);
             const todayStr = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
             const hoyCount = rows.filter(r => r.fecha === todayStr).length;
             const totalUnidades = rows.reduce((s, r) => s + r.cantidad, 0);
