@@ -1511,14 +1511,26 @@
                             </button>
                         </div>
                     </div>
-                    <div class="chart-area" style="height: 280px; flex: 1;">
-                        <canvas id="errorsChart"></canvas>
 
+                    <!-- Gráfica de línea: errores por día (últimos 7 días) -->
+                    <div class="chart-area" style="height: 200px; flex: 1;">
+                        <canvas id="errorsLineChart"></canvas>
                     </div>
 
-                    <!-- NUEVA SECCIÓN DE PALLETS RECHAZADOS (ACORDEÓN) -->
+                    <!-- Resumen: defecto más frecuente + total -->
+                    <div id="errorsTopSummary" style="display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0.6rem; margin-top: 0.5rem; background: var(--bg-dark); border-radius: 0.5rem; font-size: 0.75rem; color: var(--text-muted); gap: 0.5rem;">
+                        <span id="errorsTopDefect">—</span>
+                        <span id="errorsTotalBadge" style="background: rgba(239,68,68,0.15); color: #ef4444; padding: 2px 10px; border-radius: 10px; font-weight: 600; white-space: nowrap;">0</span>
+                    </div>
+
+                    <!-- Gráfica de barras: desglose por tipo de defecto -->
+                    <div class="chart-area" style="height: 130px; margin-top: 0.5rem;">
+                        <canvas id="errorsChart"></canvas>
+                    </div>
+
+                    <!-- SECCIÓN DE PALLETS RECHAZADOS (ACORDEÓN) -->
                     <div
-                        style="margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 1rem; position: relative;">
+                        style="margin-top: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem; position: relative;">
                         <button id="toggleRechazadosBtn" onclick="toggleRechazadosTable()"
                             style="width: 100%; background: transparent; border: 1px dashed var(--border-color); color: var(--text-muted); padding: 0.5rem; border-radius: 0.5rem; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;">
                             <i class="fa-solid fa-chevron-down"></i> Ver pallets rechazados
@@ -2170,6 +2182,7 @@
         // ---- NUEVO SISTEMA (JSONP CON INTERCEPTOR) ----
         let allErrorsData = [];
         let myErrorsChart = null;
+        let myErrorsLineChart = null;
 
         // Al usar JSONP evitamos el bloqueo CORS para archivos locales.
         // Google Visualization API siempre devuelve: google.visualization.Query.setResponse(...)
@@ -2251,6 +2264,32 @@
                 });
             }
 
+            // === GRÁFICA DE LÍNEA: errores por día (últimos 7 días) ===
+            let dailyErrorCounts = {};
+            filteredErrorRows.forEach(row => {
+                if (row.fecha && row.fecha !== 'N/A') {
+                    dailyErrorCounts[row.fecha] = (dailyErrorCounts[row.fecha] || 0) + 1;
+                }
+            });
+            let chronoDates = Object.keys(dailyErrorCounts).sort((a, b) => new Date(a) - new Date(b));
+            let last7 = chronoDates.slice(-7);
+            let last7Data = last7.map(d => dailyErrorCounts[d] || 0);
+            let prettyLabels = last7.map(d => {
+                let dt = new Date(d);
+                return dt.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+            });
+
+            if (myErrorsLineChart) {
+                myErrorsLineChart.data.labels = prettyLabels.length > 0 ? prettyLabels : ['Sin datos'];
+                myErrorsLineChart.data.datasets[0].data = last7Data.length > 0 ? last7Data : [0];
+                const lineColor = isFilterHVOn ? '#8b5cf6' : '#ef4444';
+                myErrorsLineChart.data.datasets[0].borderColor = lineColor;
+                myErrorsLineChart.data.datasets[0].backgroundColor = isFilterHVOn ? 'rgba(139,92,246,0.15)' : 'rgba(239,68,68,0.15)';
+                myErrorsLineChart.data.datasets[0].pointBorderColor = lineColor;
+                myErrorsLineChart.update();
+            }
+
+            // === GRÁFICA DE BARRAS: desglose por tipo de defecto ===
             let errorCounts = {};
             filteredErrorRows.forEach(row => {
                 let e = row.defecto;
@@ -2265,10 +2304,22 @@
             if (myErrorsChart) {
                 myErrorsChart.data.labels = labels.length > 0 ? labels : ["Sin Resultados"];
                 myErrorsChart.data.datasets[0].data = data.length > 0 ? data : [0];
-
-                // Color Púrpura si filtramos HIGH VALUE, Naranja por puro default
                 myErrorsChart.data.datasets[0].backgroundColor = isFilterHVOn ? '#8b5cf6' : '#f59e0b';
                 myErrorsChart.update();
+            }
+
+            // === RESUMEN: defecto top + total ===
+            const topEl = document.getElementById('errorsTopDefect');
+            const badgeEl = document.getElementById('errorsTotalBadge');
+            if (topEl) {
+                if (sortedErrors.length > 0) {
+                    topEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="color: #ef4444; margin-right: 4px;"></i> Top: <strong>${sortedErrors[0].label}</strong> (${sortedErrors[0].count})`;
+                } else {
+                    topEl.innerHTML = '<span style="color: var(--text-muted);">Sin errores registrados</span>';
+                }
+            }
+            if (badgeEl) {
+                badgeEl.textContent = filteredErrorRows.length + ' total';
             }
 
             // Renderizado Visual de los Botones
@@ -3716,10 +3767,10 @@
             });
             y += chartH + 16;
 
-            // --- Gráficos fila 2: Producción 7D + Errores ---
+            // --- Gráficos fila 2: Producción 7D + Errores (tendencia + desglose) ---
             const charts2 = [
                 { id: 'lineChart', title: 'Produccion Diaria (7 Dias)' },
-                { id: 'errorsChart', title: 'Errores de Liberacion' }
+                { id: 'errorsLineChart', title: 'Errores Diarios (7 Dias)' }
             ];
             checkPage(chartH + 16);
             charts2.forEach((ch, i) => {
@@ -4458,7 +4509,47 @@
                 }
             });
 
-            // Inicializar el Gráfico de Errores (Bar Chart) vacío o mock
+            // Inicializar el Gráfico de Errores — Línea diaria (últimos 7 días)
+            const errorsLineCtx = document.getElementById('errorsLineChart').getContext('2d');
+            myErrorsLineChart = new Chart(errorsLineCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Cargando...'],
+                    datasets: [{
+                        label: 'Errores',
+                        data: [],
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239,68,68,0.15)',
+                        borderWidth: 2.5,
+                        pointBackgroundColor: '#1e293b',
+                        pointBorderColor: '#ef4444',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8', stepSize: 1 }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    }
+                }
+            });
+
+            // Inicializar el Gráfico de Errores — Barras por tipo de defecto
             const errorsCtx = document.getElementById('errorsChart').getContext('2d');
             myErrorsChart = new Chart(errorsCtx, {
                 type: 'bar',
@@ -4474,7 +4565,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    indexAxis: 'y', // Gráfico Horizontal
+                    indexAxis: 'y',
                     plugins: {
                         legend: { display: false }
                     },
@@ -4486,7 +4577,7 @@
                         },
                         y: {
                             grid: { display: false },
-                            ticks: { color: '#94a3b8' }
+                            ticks: { color: '#94a3b8', font: { size: 10 } }
                         }
                     }
                 }
