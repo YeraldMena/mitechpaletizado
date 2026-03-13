@@ -1247,11 +1247,6 @@
                 <i class="fa-solid fa-pallet"></i>
                 <span>Palets</span>
             </li>
-            <li class="nav-item" onclick="switchView('ordenes')">
-                <i class="fa-solid fa-fire"></i>
-                <span>Órdenes</span>
-                <span id="sidebar-ordenes-badge" style="display:none; background:#ef4444; color:#fff; font-size:0.65rem; font-weight:700; padding:1px 6px; border-radius:10px; margin-left:auto;"></span>
-            </li>
             <li class="nav-item" onclick="switchView('formulario')">
                 <i class="fa-solid fa-clipboard-list"></i>
                 <span>Formulario</span>
@@ -1330,20 +1325,6 @@
 
             <div class="stat-card">
                 <div class="stat-header">
-                    <span>Envíos en Tránsito</span>
-                    <div class="stat-icon icon-yellow">
-                        <i class="fa-solid fa-truck"></i>
-                    </div>
-                </div>
-                <div class="stat-value" id="stat-transito">...</div>
-                <div class="stat-change change-up">
-                    <i class="fa-solid fa-arrow-trend-up"></i>
-                    <span>+4% esta semana</span>
-                </div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-header">
                     <span>Promedio Histórico</span>
                     <div class="stat-icon icon-green">
                         <i class="fa-solid fa-clock-rotate-left"></i>
@@ -1384,42 +1365,6 @@
             </button>
             <div class="collapsible-body">
         <div class="content-grid">
-            <!-- Nuevo Recuadro: Órdenes Especiales Consolidado (Movido a la Fila de Gráficos) -->
-            <div class="panel" id="ordenes-especiales-card" style="display: none; flex-direction: column;">
-                <div class="panel-header" style="margin-bottom: 1rem; flex-shrink: 0;">
-                    <span style="font-size: 1rem; font-weight: 600; color: var(--text-muted);">Órdenes de Atención
-                        Especial</span>
-                    <div class="stat-icon"
-                        style="background: rgba(239, 68, 68, 0.1); color: #ef4444; width: 32px; height: 32px; border-radius: 0.75rem; display: flex; align-items: center; justify-content: center;">
-                        <i class="fa-solid fa-fire"></i>
-                    </div>
-                </div>
-
-                <!-- Contenedor ampliado con Scroll vertical -->
-                <div
-                    style="flex: 1; min-height: 320px; max-height: 380px; overflow-y: auto; padding-right: 0.5rem; display: flex; flex-direction: column; gap: 10px;">
-                    <!-- JS inyectará aquí los divs 'HOY' -->
-                    <div id="pedidos-hoy-container"
-                        style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-                        <!-- Vacío por defecto -->
-                    </div>
-
-                    <!-- JS inyectará aquí los divs '7 DÍAS' -->
-                    <div id="pedidos-activos-container"
-                        style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-                        <!-- Vacío por defecto -->
-                    </div>
-                </div>
-                <!-- KPI resumen + enlace al módulo completo -->
-                <div id="ordenes-kpi-summary" style="display:none; margin-top:0.5rem; padding:0.5rem 0.75rem; background:var(--bg-dark); border-radius:0.5rem; border-top:1px solid var(--border-color);">
-                    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
-                        <span id="ordenes-summary-text" style="font-size:0.8rem; color:var(--text-muted);"></span>
-                        <a href="javascript:void(0)" onclick="switchView('ordenes')" style="font-size:0.8rem; color:#3b82f6; text-decoration:none; font-weight:600; white-space:nowrap;">
-                            Ver módulo completo <i class="fa-solid fa-arrow-right" style="font-size:0.7rem;"></i>
-                        </a>
-                    </div>
-                </div>
-            </div>
             <!-- Chart Panel (Anillo) -->
             <div class="panel">
                 <div class="panel-header">
@@ -1548,28 +1493,123 @@
                     </div>
                 </div> <!-- Se cierra adecuadamente .panel de Errores -->
 
-                <!-- Recent Activity Panel, por fuera de Errores -->
+                <!-- Módulo Órdenes de Atención Especial (integrado en dashboard) -->
                 <div class="panel" style="grid-column: 1 / -1;">
-                    <div class="panel-header">
-                        <h2 class="panel-title">Últimos Registros</h2>
+                    <div class="panel-header" style="margin-bottom: 0.75rem;">
+                        <h2 class="panel-title" style="display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fa-solid fa-fire" style="color: #ef4444;"></i> Órdenes de Atención Especial
+                        </h2>
                     </div>
-                    <div style="overflow-x: auto;">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>ID Palet</th>
-                                    <th>Destino</th>
-                                    <th>Estado</th>
-                                </tr>
-                            </thead>
-                            <tbody id="table-body">
-                                <tr>
-                                    <td colspan="3"
-                                        style="text-align: center; color: var(--text-muted); padding: 2rem;">
-                                        Cargando registros del SpreadSheet...</td>
-                                </tr>
-                            </tbody>
-                        </table>
+
+                    <!-- KPIs de órdenes -->
+                    <div class="stats-grid" id="ordenes-stats" style="margin-top: 0; margin-bottom: 1rem;">
+                        <div class="stat-card">
+                            <div class="stat-info">
+                                <span>Total Órdenes</span>
+                                <h2 id="ordenes-stat-total">0</h2>
+                            </div>
+                            <div class="stat-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
+                                <i class="fa-solid fa-fire"></i>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-info">
+                                <span>Pallets Hoy</span>
+                                <h2 id="ordenes-stat-hoy">0</h2>
+                            </div>
+                            <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                                <i class="fa-solid fa-calendar-day"></i>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-info">
+                                <span>Unidades Totales</span>
+                                <h2 id="ordenes-stat-unidades">0</h2>
+                            </div>
+                            <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
+                                <i class="fa-solid fa-cubes"></i>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-info">
+                                <span>Pedidos Únicos</span>
+                                <h2 id="ordenes-stat-pedidos">0</h2>
+                            </div>
+                            <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
+                                <i class="fa-solid fa-clipboard-list"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gráficos de órdenes -->
+                    <div class="ordenes-charts-grid" style="margin-bottom: 1rem;">
+                        <div class="ordenes-chart-card">
+                            <h3><i class="fa-solid fa-chart-bar" style="color: var(--accent-primary); margin-right: 0.5rem;"></i>Pallets por Pedido</h3>
+                            <div class="ordenes-chart-area">
+                                <canvas id="ordenes-chart-pedidos"></canvas>
+                            </div>
+                        </div>
+                        <div class="ordenes-chart-card">
+                            <h3><i class="fa-solid fa-chart-pie" style="color: #f59e0b; margin-right: 0.5rem;"></i>Distribución por Turno</h3>
+                            <div class="ordenes-chart-area">
+                                <canvas id="ordenes-chart-turno"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filtros -->
+                    <div class="palets-header" style="margin-bottom: 0.75rem;">
+                        <div class="palets-filters">
+                            <input type="text" id="ordenes-search" placeholder="Buscar por pedido o ID..." style="width: 200px;">
+                            <select id="ordenes-turno-filter">
+                                <option value="Todos">Todos los turnos</option>
+                                <option value="Día">Turno Día</option>
+                                <option value="Noche">Turno Noche</option>
+                            </select>
+                            <select id="ordenes-pedido-filter">
+                                <option value="Todos">Todos los pedidos</option>
+                            </select>
+                            <div class="ordenes-date-range">
+                                <input type="text" id="ordenes-fecha-desde" placeholder="Fecha desde" readonly>
+                                <span>a</span>
+                                <input type="text" id="ordenes-fecha-hasta" placeholder="Fecha hasta" readonly>
+                                <button type="button" id="ordenes-fecha-clear" title="Limpiar fechas" style="background:none; border:none; color: var(--text-muted); cursor:pointer; font-size: 0.9rem; padding: 0.3rem;"><i class="fa-solid fa-xmark"></i></button>
+                            </div>
+                            <button type="button" class="btn-export" onclick="exportOrdenesExcel()">
+                                <i class="fa-solid fa-file-excel"></i> Exportar Excel
+                            </button>
+                        </div>
+                        <span class="palets-count" id="ordenes-count">0 resultados</span>
+                    </div>
+
+                    <!-- Tabla desktop -->
+                    <div class="ordenes-table-wrapper">
+                        <div style="overflow-x: auto; max-height: 70vh; overflow-y: auto;">
+                            <table>
+                                <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
+                                    <tr>
+                                        <th style="text-align:center;">Pedido</th>
+                                        <th style="text-align:center;">Pallet ID</th>
+                                        <th style="text-align:center;">Cantidad</th>
+                                        <th style="text-align:center;">Condición</th>
+                                        <th style="text-align:center;">Destino</th>
+                                        <th style="text-align:center;">Fecha</th>
+                                        <th style="text-align:center;">Turno</th>
+                                        <th style="text-align:center;">Operador</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="ordenes-table-body">
+                                    <tr>
+                                        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                                            Cargando datos...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Cards mobile -->
+                    <div class="ordenes-card-list" id="ordenes-card-list" style="margin-top: 1rem;">
                     </div>
                 </div>
             </div>
@@ -1633,145 +1673,6 @@
                 </div>
             </div>
         </div><!-- /view-palets -->
-
-        <!-- Vista Órdenes Especiales -->
-        <div id="view-ordenes" style="display:none;">
-            <header>
-                <div class="page-title">
-                    <h1>Órdenes de Atención Especial</h1>
-                    <p>Registro completo de pallets con pedidos especiales</p>
-                </div>
-            </header>
-
-            <!-- KPIs de órdenes -->
-            <div class="collapsible-section">
-                <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
-                    <span><i class="fa-solid fa-chart-simple" style="margin-right: 0.5rem; color: #ef4444;"></i>Indicadores</span>
-                    <i class="fa-solid fa-chevron-down toggle-icon"></i>
-                </button>
-                <div class="collapsible-body">
-            <div class="stats-grid" id="ordenes-stats" style="margin-top: 0;">
-                <div class="stat-card">
-                    <div class="stat-info">
-                        <span>Total Órdenes</span>
-                        <h2 id="ordenes-stat-total">0</h2>
-                    </div>
-                    <div class="stat-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">
-                        <i class="fa-solid fa-fire"></i>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-info">
-                        <span>Pallets Hoy</span>
-                        <h2 id="ordenes-stat-hoy">0</h2>
-                    </div>
-                    <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
-                        <i class="fa-solid fa-calendar-day"></i>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-info">
-                        <span>Unidades Totales</span>
-                        <h2 id="ordenes-stat-unidades">0</h2>
-                    </div>
-                    <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">
-                        <i class="fa-solid fa-cubes"></i>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-info">
-                        <span>Pedidos Únicos</span>
-                        <h2 id="ordenes-stat-pedidos">0</h2>
-                    </div>
-                    <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">
-                        <i class="fa-solid fa-clipboard-list"></i>
-                    </div>
-                </div>
-            </div>
-
-                </div><!-- /collapsible-body ordenes stats -->
-            </div><!-- /collapsible-section ordenes stats -->
-
-            <!-- Dashboard de Órdenes: Gráficos -->
-            <div class="collapsible-section">
-                <button class="collapsible-toggle" onclick="toggleCollapsible(this)">
-                    <span><i class="fa-solid fa-chart-bar" style="margin-right: 0.5rem; color: #3b82f6;"></i>Gráficos</span>
-                    <i class="fa-solid fa-chevron-down toggle-icon"></i>
-                </button>
-                <div class="collapsible-body">
-            <div class="ordenes-charts-grid">
-                <div class="ordenes-chart-card">
-                    <h3><i class="fa-solid fa-chart-bar" style="color: var(--accent-primary); margin-right: 0.5rem;"></i>Pallets por Pedido</h3>
-                    <div class="ordenes-chart-area">
-                        <canvas id="ordenes-chart-pedidos"></canvas>
-                    </div>
-                </div>
-                <div class="ordenes-chart-card">
-                    <h3><i class="fa-solid fa-chart-pie" style="color: #f59e0b; margin-right: 0.5rem;"></i>Distribución por Turno</h3>
-                    <div class="ordenes-chart-area">
-                        <canvas id="ordenes-chart-turno"></canvas>
-                    </div>
-                </div>
-            </div>
-                </div><!-- /collapsible-body ordenes charts -->
-            </div><!-- /collapsible-section ordenes charts -->
-
-            <div class="palets-header" style="margin-top: 1rem;">
-                <div class="palets-filters">
-                    <input type="text" id="ordenes-search" placeholder="Buscar por pedido o ID..." style="width: 200px;">
-                    <select id="ordenes-turno-filter">
-                        <option value="Todos">Todos los turnos</option>
-                        <option value="Día">Turno Día</option>
-                        <option value="Noche">Turno Noche</option>
-                    </select>
-                    <select id="ordenes-pedido-filter">
-                        <option value="Todos">Todos los pedidos</option>
-                    </select>
-                    <div class="ordenes-date-range">
-                        <input type="text" id="ordenes-fecha-desde" placeholder="Fecha desde" readonly>
-                        <span>a</span>
-                        <input type="text" id="ordenes-fecha-hasta" placeholder="Fecha hasta" readonly>
-                        <button type="button" id="ordenes-fecha-clear" title="Limpiar fechas" style="background:none; border:none; color: var(--text-muted); cursor:pointer; font-size: 0.9rem; padding: 0.3rem;"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                    <button type="button" class="btn-export" onclick="exportOrdenesExcel()">
-                        <i class="fa-solid fa-file-excel"></i> Exportar Excel
-                    </button>
-                </div>
-                <span class="palets-count" id="ordenes-count">0 resultados</span>
-            </div>
-
-            <!-- Tabla desktop -->
-            <div class="panel ordenes-table-wrapper" style="margin-top: 1rem;">
-                <div style="overflow-x: auto; max-height: 70vh; overflow-y: auto;">
-                    <table>
-                        <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
-                            <tr>
-                                <th style="text-align:center;">Pedido</th>
-                                <th style="text-align:center;">Pallet ID</th>
-                                <th style="text-align:center;">Cantidad</th>
-                                <th style="text-align:center;">Condición</th>
-                                <th style="text-align:center;">Destino</th>
-                                <th style="text-align:center;">Fecha</th>
-                                <th style="text-align:center;">Turno</th>
-                                <th style="text-align:center;">Operador</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ordenes-table-body">
-                            <tr>
-                                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2rem;">
-                                    Cargando datos...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Cards mobile -->
-            <div class="ordenes-card-list" id="ordenes-card-list" style="margin-top: 1rem;">
-                <!-- JS inyecta las tarjetas aquí -->
-            </div>
-
-        </div><!-- /view-ordenes -->
 
         <!-- Vista Inventario -->
         <div id="view-formulario" style="display:none;">
@@ -2521,15 +2422,6 @@
                     }
                 }
 
-                // Generamos los Headers finales solo para las tablas del Dashboard (Últimos Registros)
-                let HTMLHeaders = window.displayIndices.map(i => `<th style="text-align: center;">${colHeaders[i]}</th>`).join('');
-                // Aplicar solo a la tabla que contiene #table-body (Últimos Registros del dashboard)
-                const dashboardTable = document.getElementById('table-body');
-                if (dashboardTable) {
-                    const headRow = dashboardTable.closest('table')?.querySelector('thead tr');
-                    if (headRow) headRow.innerHTML = HTMLHeaders;
-                }
-
                 // Mapear y procesar todos los datos iniciales
                 let rowIdx = 0;
                 response.table.rows.forEach(r => {
@@ -2705,32 +2597,17 @@
                     window.renderPaletsTable();
                 }
 
-                // Actualizar badge del sidebar de órdenes
-                updateOrdenesSidebarBadge();
-
-                // Si la vista Órdenes está activa, refrescar tabla
-                const ordenesView = document.getElementById('view-ordenes');
-                if (ordenesView && ordenesView.style.display !== 'none') {
-                    // Reset filtro pedido para repoblar
-                    const opSel = document.getElementById('ordenes-pedido-filter');
-                    if (opSel) {
-                        const saved = opSel.value;
-                        opSel.innerHTML = '<option value="Todos">Todos los pedidos</option>';
-                        opSel._savedVal = saved;
-                    }
-                    window.renderOrdenesTable();
+                // Refrescar tabla de órdenes (ahora integrada en el dashboard)
+                const opSel = document.getElementById('ordenes-pedido-filter');
+                if (opSel) {
+                    const saved = opSel.value;
+                    opSel.innerHTML = '<option value="Todos">Todos los pedidos</option>';
+                    opSel._savedVal = saved;
                 }
+                window.renderOrdenesTable();
 
             } catch (error) {
                 console.error('Error procesando datos del Spreadsheet', error);
-                document.getElementById('table-body').innerHTML = `
-                    <tr>
-                        <td colspan="3" style="text-align:center;color:#ef4444;">
-                            <i class="fa-solid fa-triangle-exclamation" style="font-size: 2rem; margin-bottom: 0.5rem;"></i><br>
-                            <strong>Hubo un problema procesando el documento.</strong>
-                        </td>
-                    </tr>
-                `;
             }
         };
 
@@ -2878,53 +2755,6 @@
                 }
             });
 
-            // RENDER -> Mini tarjetas para pedidos de HOY
-            const ordenesMacroCard = document.getElementById('ordenes-especiales-card');
-            const pedidosHoyContainer = document.getElementById('pedidos-hoy-container');
-            pedidosHoyContainer.innerHTML = '';
-
-            const pedidosHoyKeys = Object.keys(pedidosActivosHoyObj);
-            let hasOrdenes = false;
-
-            if (pedidosHoyKeys.length > 0) {
-                hasOrdenes = true;
-
-                // 1) Inyectar Título Separador "Realizados hoy"
-                const titleDiv = document.createElement('div');
-                titleDiv.style.cssText = `
-                    font-size: 0.8rem;
-                    text-transform: uppercase;
-                    color: var(--text-muted);
-                    font-weight: 600;
-                    margin-bottom: 4px;
-                    letter-spacing: 0.5px;
-                `;
-                titleDiv.textContent = "Realizados hoy";
-                pedidosHoyContainer.appendChild(titleDiv);
-
-                pedidosHoyKeys.forEach(pedidoName => {
-                    const data = pedidosActivosHoyObj[pedidoName];
-                    const div = document.createElement('div');
-                    div.style.cssText = `
-                        background: rgba(59, 130, 246, 0.15); /* Azul */
-                        border: 1px solid rgba(59, 130, 246, 0.4);
-                        border-left: 4px solid #3b82f6;
-                        padding: 0.75rem 1rem;
-                        border-radius: 0.5rem;
-                        display: flex;
-                        gap: 1rem;
-                        align-items: center;
-                    `;
-                    div.innerHTML = `
-                        <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">${pedidoName}</div>
-                        <div style="background: #3b82f6; color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 700;">
-                            ${data.pallets} plts | ${data.unidades.toLocaleString('es-MX')} uds
-                        </div>
-                    `;
-                    pedidosHoyContainer.appendChild(div);
-                });
-            }
-
             // RENDER -> Alertas de Duplicados
             const duplicadosWrapper = document.getElementById('alertas-duplicados-wrapper');
             const duplicadosContainer = document.getElementById('alertas-duplicados-container');
@@ -2959,79 +2789,8 @@
                 duplicadosWrapper.style.display = 'none';
             }
 
-            // RENDER -> Mini tarjetas para pedidos ÚLTIMOS 7 DÍAS
-
-            const pedidosContainer = document.getElementById('pedidos-activos-container');
-            pedidosContainer.innerHTML = '';
-
-            const pedidosKeys = Object.keys(pedidosActivosObj);
-
-            if (pedidosKeys.length > 0) {
-                hasOrdenes = true;
-
-                // 2) Inyectar Título Separador "Activos" (Solo si hay data de últimos 7 días)
-                const titleDiv = document.createElement('div');
-                titleDiv.style.cssText = `
-                    font-size: 0.8rem;
-                    text-transform: uppercase;
-                    color: var(--text-muted);
-                    font-weight: 600;
-                    margin-top: 8px;
-                    margin-bottom: 4px;
-                    letter-spacing: 0.5px;
-                `;
-                titleDiv.textContent = "Activos";
-                pedidosContainer.appendChild(titleDiv);
-
-                pedidosKeys.forEach(pedidoName => {
-                    const data = pedidosActivosObj[pedidoName];
-                    const div = document.createElement('div');
-                    div.style.cssText = `
-                        background: rgba(245, 158, 11, 0.15);
-                        border: 1px solid rgba(245, 158, 11, 0.4);
-                        border-left: 4px solid var(--accent-warning);
-                        padding: 0.75rem 1rem;
-                        border-radius: 0.5rem;
-                        display: flex;
-                        gap: 1rem;
-                        align-items: center;
-                    `;
-                    div.innerHTML = `
-                        <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">${pedidoName}</div>
-                        <div style="background: var(--accent-warning); color: #fff; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 700;">
-                            ${data.pallets} plts | ${data.unidades.toLocaleString('es-MX')} uds
-                        </div>
-                    `;
-                    pedidosContainer.appendChild(div);
-                });
-            }
-
-            // Manejo de la visibilidad de la macro-tarjeta de stats
-            if (hasOrdenes) {
-                ordenesMacroCard.style.display = 'flex';
-
-                // KPI summary: total pedidos, pallets, unidades (últimos 7 días)
-                const summaryEl = document.getElementById('ordenes-kpi-summary');
-                const summaryText = document.getElementById('ordenes-summary-text');
-                if (summaryEl && summaryText) {
-                    let totalPallets = 0, totalUnidades = 0;
-                    Object.values(pedidosActivosObj).forEach(d => { totalPallets += d.pallets; totalUnidades += d.unidades; });
-                    const totalPedidos = Object.keys(pedidosActivosObj).length;
-                    summaryText.textContent = `${totalPedidos} pedidos | ${totalPallets} pallets | ${totalUnidades.toLocaleString('es-MX')} uds (7 días)`;
-                    summaryEl.style.display = '';
-                }
-            } else {
-                ordenesMacroCard.style.display = 'none';
-                const summaryEl = document.getElementById('ordenes-kpi-summary');
-                if (summaryEl) summaryEl.style.display = 'none';
-            }
-
-            // Sidebar badge
-            updateOrdenesSidebarBadge();
-
             // Actualización de Stat Cards
             document.getElementById('stat-activos').innerText = allSheetData.length.toLocaleString(); // Histórico inamovible
-            document.getElementById('stat-transito').innerText = enTransitoCount.toLocaleString();
             document.getElementById('stat-filtros').innerText = validRowsCount.toLocaleString(); // Total resultante de los filtros
 
             const bgColorsPie = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#14b8a6', '#f97316'];
@@ -3073,37 +2832,8 @@
                 myBarChart.update();
             }
 
-            // 3) TABLA DINÁMICA DE "HOY" (Independiente del filtro del calendario)
-            const tableBody = document.getElementById('table-body');
-            tableBody.innerHTML = '';
-
-            const todayStrObj = new Date();
-            const todayStrDB = `${todayStrObj.getMonth() + 1}/${todayStrObj.getDate()}/${todayStrObj.getFullYear()}`;
-
-            const todaysRows = allSheetData.filter(row => row.fecha === todayStrDB);
-            const recentRows = todaysRows.slice(-50).reverse(); // Mostrar los ultimos 50 de hoy para no saturar
-
-            if (recentRows.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="100%" style="text-align:center; padding: 2rem; color: var(--text-muted);">No hay pallets cargados el día de hoy (${todayStrDB}).</td></tr>`;
-            } else {
-                recentRows.forEach(row => {
-                    const tr = document.createElement('tr');
-                    let htmlChunks = window.displayIndices.map((idx, arrIndex) => {
-                        let val = row.rowValues[idx] !== undefined ? row.rowValues[idx].toString() : '';
-
-                        // Recorte a 6 dígitos en caso de ser el ID
-                        if (arrIndex === 0 && val.length > 6) {
-                            val = val.substring(0, 6);
-                        }
-
-                        let displayVal = arrIndex === 0 ? `<strong>${val}</strong>` : val;
-                        // Centrado global de celdas según instrucción
-                        return `<td style="text-align: center;">${displayVal}</td>`;
-                    });
-                    tr.innerHTML = htmlChunks.join('');
-                    tableBody.appendChild(tr);
-                });
-            }
+            // 3) Renderizar módulo de Órdenes integrado en el dashboard
+            renderOrdenesTable();
         }
 
         // === MENÚ MÓVIL ===
@@ -3125,7 +2855,7 @@
             // Cerrar menú móvil al navegar
             document.getElementById('sidebar').classList.remove('open');
             document.querySelector('.mobile-menu-overlay').classList.remove('open');
-            const views = ['dashboard', 'palets', 'ordenes', 'formulario', 'configuracion'];
+            const views = ['dashboard', 'palets', 'formulario', 'configuracion'];
             views.forEach(v => {
                 const el = document.getElementById('view-' + v);
                 if (el) el.style.display = (v === viewName) ? (v === 'formulario' ? 'flex' : '') : 'none';
@@ -3147,10 +2877,6 @@
             // Renderizar tabla de palets al entrar a esa vista
             if (viewName === 'palets') {
                 renderPaletsTable();
-            }
-            // Renderizar tabla de órdenes especiales
-            if (viewName === 'ordenes') {
-                renderOrdenesTable();
             }
         };
 
@@ -3673,12 +3399,11 @@
             // --- KPIs Principales ---
             const kpis = [
                 { label: 'Pallets Historicos', value: document.getElementById('stat-activos')?.innerText || '0', color: accentBlue },
-                { label: 'Envios en Transito', value: document.getElementById('stat-transito')?.innerText || '0', color: accentYellow },
                 { label: 'Promedio Dia', value: document.getElementById('stat-promedio-day')?.innerText?.replace(/^.*?(\d)/, '$1') || '0', color: accentGreen },
                 { label: 'Pallets Seleccionados', value: document.getElementById('stat-filtros')?.innerText || '0', color: accentPurple }
             ];
 
-            const kpiW = (contentW - 6 * 3) / 4;
+            const kpiW = (contentW - 6 * 2) / 3;
             kpis.forEach((kpi, i) => {
                 const x = margin + i * (kpiW + 6);
                 doc.setFillColor(...lightGray);
@@ -3741,51 +3466,6 @@
             // ============================================================
             doc.addPage();
             y = 14;
-
-            // --- Tabla: Últimos Registros ---
-            const val = document.getElementById('dateFilter')?.value || '';
-            const selectedDates = val ? val.split(', ') : [];
-            let filteredRows = allSheetData;
-            if (selectedDates.length > 0 && selectedDates[0] !== '') {
-                filteredRows = allSheetData.filter(r => selectedDates.includes(r.fecha));
-            }
-            const recentRows = filteredRows.slice(-50).reverse();
-
-            if (recentRows.length > 0) {
-                sectionTitle('Ultimos Registros (' + recentRows.length + ' pallets)');
-
-                doc.autoTable({
-                    startY: y,
-                    head: [['Pallet ID', 'Cantidad', 'Destino', 'Condicion', 'Fecha', 'Turno']],
-                    body: recentRows.map(r => [
-                        r.id.length > 6 ? r.id.substring(0, 6) : r.id,
-                        r.cantidad,
-                        r.destinoOriginal || '-',
-                        r.condicion || '-',
-                        r.fecha,
-                        r.turno
-                    ]),
-                    margin: { left: margin, right: margin },
-                    styles: {
-                        fillColor: white,
-                        textColor: black,
-                        fontSize: 7,
-                        cellPadding: 2,
-                        lineColor: [220, 220, 220],
-                        lineWidth: 0.3
-                    },
-                    headStyles: {
-                        fillColor: headerBg,
-                        textColor: white,
-                        fontSize: 7,
-                        fontStyle: 'bold'
-                    },
-                    alternateRowStyles: {
-                        fillColor: lightGray
-                    }
-                });
-                y = doc.lastAutoTable.finalY + 8;
-            }
 
             // --- Tabla: Errores / Defectos ---
             if (typeof allErrorsData !== 'undefined' && allErrorsData.length > 0) {
@@ -4211,19 +3891,6 @@
                         }
                     }
                 });
-            }
-        }
-
-        // === SIDEBAR BADGE: ÓRDENES ESPECIALES ===
-        function updateOrdenesSidebarBadge() {
-            const badge = document.getElementById('sidebar-ordenes-badge');
-            if (!badge) return;
-            const ordenesData = allSheetData.filter(r => r.pedido && r.pedido.trim() !== '');
-            if (ordenesData.length > 0) {
-                badge.textContent = ordenesData.length;
-                badge.style.display = '';
-            } else {
-                badge.style.display = 'none';
             }
         }
 
