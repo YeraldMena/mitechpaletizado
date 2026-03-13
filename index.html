@@ -1523,11 +1523,6 @@
                         <span id="errorsTotalBadge" style="background: rgba(239,68,68,0.15); color: #ef4444; padding: 2px 10px; border-radius: 10px; font-weight: 600; white-space: nowrap;">0</span>
                     </div>
 
-                    <!-- Gráfica de barras: desglose por tipo de defecto -->
-                    <div class="chart-area" style="height: 130px; margin-top: 0.5rem;">
-                        <canvas id="errorsChart"></canvas>
-                    </div>
-
                     <!-- SECCIÓN DE PALLETS RECHAZADOS (ACORDEÓN) -->
                     <div
                         style="margin-top: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem; position: relative;">
@@ -2181,7 +2176,6 @@
 
         // ---- NUEVO SISTEMA (JSONP CON INTERCEPTOR) ----
         let allErrorsData = [];
-        let myErrorsChart = null;
         let myErrorsLineChart = null;
 
         // Al usar JSONP evitamos el bloqueo CORS para archivos locales.
@@ -2300,13 +2294,6 @@
 
             let labels = sortedErrors.map(item => item.label);
             let data = sortedErrors.map(item => item.count);
-
-            if (myErrorsChart) {
-                myErrorsChart.data.labels = labels.length > 0 ? labels : ["Sin Resultados"];
-                myErrorsChart.data.datasets[0].data = data.length > 0 ? data : [0];
-                myErrorsChart.data.datasets[0].backgroundColor = isFilterHVOn ? '#8b5cf6' : '#f59e0b';
-                myErrorsChart.update();
-            }
 
             // === RESUMEN: defecto top + total ===
             const topEl = document.getElementById('errorsTopDefect');
@@ -4544,40 +4531,6 @@
                         x: {
                             grid: { display: false },
                             ticks: { color: '#94a3b8' }
-                        }
-                    }
-                }
-            });
-
-            // Inicializar el Gráfico de Errores — Barras por tipo de defecto
-            const errorsCtx = document.getElementById('errorsChart').getContext('2d');
-            myErrorsChart = new Chart(errorsCtx, {
-                type: 'bar',
-                data: {
-                    labels: ['Sin conexión base'],
-                    datasets: [{
-                        label: 'Frecuencia',
-                        data: [0],
-                        backgroundColor: '#f59e0b',
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        x: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#94a3b8', stepSize: 1 }
-                        },
-                        y: {
-                            grid: { display: false },
-                            ticks: { color: '#94a3b8', font: { size: 10 } }
                         }
                     }
                 }
