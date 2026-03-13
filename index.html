@@ -948,6 +948,18 @@
                 grid-column: span 1 !important;
                 grid-template-columns: 1fr !important;
             }
+
+            /* Escaneadora: stack vertical en mobile */
+            #escaneadora-cards {
+                min-width: 0 !important;
+            }
+        }
+
+        @media (max-width: 700px) {
+            /* Escaneadora 2-col → 1-col en mobile */
+            .panel > div[style*="grid-template-columns: 280px"] {
+                grid-template-columns: 1fr !important;
+            }
         }
 
         /* Órdenes dashboard charts */
@@ -1519,23 +1531,28 @@
                         <span id="escaneadora-subtitle" style="font-size: 0.75rem; color: var(--text-muted); background: var(--bg-dark); padding: 2px 10px; border-radius: 10px;">Últimos 7 días</span>
                     </div>
 
-                    <!-- A) Tarjetas resumen por escaneadora -->
-                    <div id="escaneadora-cards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.6rem; margin-bottom: 1rem;">
-                        <div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">Cargando datos de escaneadoras...</div>
+                    <!-- Layout 2 columnas: tarjetas | gráfica -->
+                    <div style="display: grid; grid-template-columns: 280px 1fr; gap: 1rem; align-items: start;">
+                        <!-- Izq: Tarjetas compactas (max 5) -->
+                        <div id="escaneadora-cards" style="display: flex; flex-direction: column; gap: 0.4rem;">
+                            <div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">Cargando...</div>
+                        </div>
+                        <!-- Der: Gráfica barras agrupadas -->
+                        <div style="height: 260px;">
+                            <canvas id="escaneadora-chart-7d"></canvas>
+                        </div>
                     </div>
 
-                    <!-- B) Gráfica comparativa 7 días -->
-                    <div style="height: 220px; margin-bottom: 0.75rem;">
-                        <canvas id="escaneadora-chart-7d"></canvas>
-                    </div>
+                    <!-- Mini resumen: última actividad por escaneadora -->
+                    <div id="escaneadora-last-activity" style="display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-top: 0.6rem; padding: 0.4rem 0.5rem; background: var(--bg-dark); border-radius: 0.4rem; font-size: 0.7rem; color: var(--text-muted);"></div>
 
-                    <!-- C) Detalle expandible al hacer clic -->
+                    <!-- Detalle expandible al hacer clic -->
                     <div id="escaneadora-detail" style="display: none; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.75rem; margin-top: 0.5rem;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                             <h3 id="escaneadora-detail-title" style="font-size: 0.9rem; font-weight: 600; color: var(--text-main); margin: 0;"></h3>
                             <button onclick="document.getElementById('escaneadora-detail').style.display='none'" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; padding: 0.2rem 0.4rem;"><i class="fa-solid fa-xmark"></i></button>
                         </div>
-                        <div id="escaneadora-detail-body" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem;"></div>
+                        <div id="escaneadora-detail-body" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;"></div>
                         <div id="escaneadora-detail-errors" style="margin-top: 0.5rem;"></div>
                     </div>
                 </div>
@@ -4026,39 +4043,32 @@
             const sorted = Object.entries(escMap).sort((a, b) => b[1].sem - a[1].sem);
 
             if (sorted.length === 0) {
-                cardsContainer.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">No hay datos de escaneadoras.</div>';
+                cardsContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">No hay datos de escaneadoras.</div>';
                 return;
             }
 
-            // A) Tarjetas resumen
-            const escColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#f97316', '#14b8a6'];
-            cardsContainer.innerHTML = sorted.map(([name, data], i) => {
+            // A) Tarjetas compactas (máx 5)
+            const escColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#06b6d4'];
+            const top5 = sorted.slice(0, 5);
+
+            cardsContainer.innerHTML = top5.map(([name, data], i) => {
                 const color = escColors[i % escColors.length];
-                let lastAct = '—';
-                if (data.lastTs) {
-                    const diffMin = Math.floor((now - data.lastTs) / 60000);
-                    if (diffMin < 1) lastAct = 'ahora';
-                    else if (diffMin < 60) lastAct = `hace ${diffMin} min`;
-                    else if (diffMin < 1440) lastAct = `hace ${Math.floor(diffMin / 60)}h`;
-                    else lastAct = `hace ${Math.floor(diffMin / 1440)}d`;
-                }
-                return `<div onclick="showEscaneadoraDetail('${name.replace(/'/g, "\\'")}')" style="background: var(--bg-dark); border-left: 3px solid ${color}; border-radius: 0.5rem; padding: 0.6rem 0.75rem; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-                        <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${name}"><i class="fa-solid fa-barcode" style="color: ${color}; margin-right: 0.3rem; font-size: 0.7rem;"></i>${name}</span>
-                        ${data.errores > 0 ? `<span style="background: rgba(239,68,68,0.15); color: #ef4444; font-size: 0.6rem; padding: 1px 6px; border-radius: 8px; font-weight: 600;">${data.errores} err</span>` : ''}
+                const firstName = name.split(' ')[0]; // Nombre corto para display compacto
+                return `<div onclick="showEscaneadoraDetail('${name.replace(/'/g, "\\'")}')" style="background: var(--bg-dark); border-left: 3px solid ${color}; border-radius: 0.4rem; padding: 0.4rem 0.6rem; cursor: pointer; transition: background 0.15s;" onmouseenter="this.style.background='var(--border-color)'" onmouseleave="this.style.background='var(--bg-dark)'">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight: 600; font-size: 0.8rem; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px;" title="${name}">${firstName}</span>
+                        ${data.errores > 0 ? `<span style="background: rgba(239,68,68,0.15); color: #ef4444; font-size: 0.55rem; padding: 1px 5px; border-radius: 6px; font-weight: 600;">${data.errores} err</span>` : ''}
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; font-size: 0.75rem;">
-                        <div style="color: var(--text-muted);">Hoy: <strong style="color: var(--text-main);">${data.hoy}</strong></div>
-                        <div style="color: var(--text-muted);">7 días: <strong style="color: var(--text-main);">${data.sem}</strong></div>
+                    <div style="display: flex; gap: 0.6rem; font-size: 0.7rem; margin-top: 0.15rem;">
+                        <span style="color: var(--text-muted);">Hoy <strong style="color: ${color};">${data.hoy}</strong></span>
+                        <span style="color: var(--text-muted);">7d <strong style="color: var(--text-main);">${data.sem}</strong></span>
                     </div>
-                    <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 0.25rem; opacity: 0.7;"><i class="fa-solid fa-clock" style="margin-right: 3px;"></i>${lastAct}</div>
                 </div>`;
             }).join('');
 
-            // B) Gráfica comparativa 7 días (barras agrupadas por día)
+            // B) Gráfica comparativa 7 días (barras agrupadas, sin leyenda redundante)
             const ctx = document.getElementById('escaneadora-chart-7d');
             if (ctx) {
-                // Obtener últimos 7 días con datos
                 const allDates = new Set();
                 withOp.forEach(r => {
                     const parts = (r.fecha || '').split('/');
@@ -4072,21 +4082,20 @@
                     return new Date(+pa[2], +pa[0]-1, +pa[1]) - new Date(+pb[2], +pb[0]-1, +pb[1]);
                 }).slice(-7);
 
-                // Top 6 escaneadoras para el gráfico
-                const topEsc = sorted.slice(0, 6).map(e => e[0]);
+                const topEsc = top5.map(e => e[0]);
                 const datasets = topEsc.map((name, i) => {
                     const color = escColors[i % escColors.length];
                     const counts = dateLabels.map(d => escMap[name].rows.filter(r => r.fecha === d).length);
                     return {
-                        label: name,
+                        label: name.split(' ')[0],
                         data: counts,
                         backgroundColor: color,
                         borderRadius: 3,
-                        barPercentage: 0.8
+                        barPercentage: 0.75,
+                        categoryPercentage: 0.85
                     };
                 });
 
-                // Formatear labels a dd/mm
                 const shortLabels = dateLabels.map(d => {
                     const p = d.split('/');
                     return `${p[1]}/${p[0]}`;
@@ -4100,10 +4109,7 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         plugins: {
-                            legend: {
-                                position: 'top',
-                                labels: { color: '#94a3b8', font: { size: 10 }, padding: 8, boxWidth: 12 }
-                            },
+                            legend: { display: false },
                             tooltip: {
                                 callbacks: { label: c => `${c.dataset.label}: ${c.raw} pallets` }
                             }
@@ -4111,16 +4117,36 @@
                         scales: {
                             x: {
                                 ticks: { color: '#94a3b8', font: { size: 10 } },
-                                grid: { color: 'rgba(148,163,184,0.08)' }
+                                grid: { display: false }
                             },
                             y: {
                                 beginAtZero: true,
                                 ticks: { color: '#94a3b8', font: { size: 10 }, precision: 0 },
-                                grid: { color: 'rgba(148,163,184,0.08)' }
+                                grid: { color: 'rgba(148,163,184,0.06)' }
                             }
                         }
                     }
                 });
+            }
+
+            // C) Mini resumen: última actividad por escaneadora
+            const lastActContainer = document.getElementById('escaneadora-last-activity');
+            if (lastActContainer) {
+                lastActContainer.innerHTML = '<span style="font-weight: 600; color: var(--text-muted); margin-right: 0.2rem;"><i class="fa-solid fa-signal" style="margin-right: 3px;"></i>Estado:</span>' +
+                    top5.map(([name, data], i) => {
+                        const color = escColors[i % escColors.length];
+                        let t = '—';
+                        if (data.lastTs) {
+                            const dm = Math.floor((now - data.lastTs) / 60000);
+                            if (dm < 1) t = 'ahora';
+                            else if (dm < 60) t = `${dm}min`;
+                            else if (dm < 1440) t = `${Math.floor(dm/60)}h`;
+                            else t = `${Math.floor(dm/1440)}d`;
+                        }
+                        const isActive = data.lastTs && (now - data.lastTs) < 3600000; // <1h = activo
+                        const dot = isActive ? '#10b981' : '#ef4444';
+                        return `<span><span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:${dot}; margin-right:3px;"></span><strong style="color:${color};">${name.split(' ')[0]}</strong> → ${t}</span>`;
+                    }).join('');
             }
         }
 
