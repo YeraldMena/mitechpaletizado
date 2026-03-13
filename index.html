@@ -2391,10 +2391,12 @@
             window._pendingFallback = true;
             const oldScript = document.getElementById('jsonp-fallback-script');
             if (oldScript) oldScript.remove();
-            // Pedir las últimas N filas (cubriendo las que tienen null dates)
-            const bufferRows = Math.min(nullDateIds.size + 50, 500);
-            const startRow = Math.max(2, totalRows - bufferRows + 2); // +2: 1 por header, 1 por 1-index
-            const endRow = totalRows + 200; // margen extra por si hay filas nuevas
+            // Pedir SOLO las filas con fecha-texto (al final del sheet).
+            // Con headers=0 y un rango que NO incluya filas con Date nativo,
+            // gviz infiere tipo "string" y devuelve los valores texto.
+            // Las filas con fecha-texto están al final: totalRows - nullDateIds.size en adelante.
+            const startRow = Math.max(2, totalRows - nullDateIds.size + 2); // justo donde empiezan los null
+            const endRow = totalRows + 500; // margen amplio para filas nuevas no detectadas
             const script = document.createElement('script');
             script.id = 'jsonp-fallback-script';
             script.src = `https://docs.google.com/spreadsheets/d/1Su-CGdOPU-etXKoVXAKYx6qKhN92RFBiH-gLeN_XElk/gviz/tq?tqx=responseHandler:window.processFallbackDates;out:json&gid=530597405&range=A${startRow}:N${endRow}&headers=0&_=${Date.now()}`;
