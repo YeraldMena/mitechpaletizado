@@ -2190,30 +2190,36 @@
 
                 allErrorsData = []; // Vaciamos para re-poblar los conjuntos
 
-                // Regla del usuario: Busca en la columna J (c[9]) el primer dato. Juntalo con Col D (c[3]), Col L (c[11]), Col B (c[1]).
+                // Columnas: J(c[9])=Defectos, D(c[3])=PalletID, B(c[1])=Fecha, L(c[11])=Tipo, H(c[7])=Estado, I(c[8])=CantDefectos
                 response.table.rows.forEach(r => {
                     let c = r.c;
-                    // J = c[9] (Defectos)
                     if (!c || !c[9] || c[9].v === null) return;
 
                     let desc = c[9].v.toString().trim();
-                    if (desc !== "" && desc !== "-") {
-                        // B (c[1]) = Fecha 
-                        let dateVal = c[1] && c[1].f ? c[1].f.split(' ')[0] : (c[1] && c[1].v ? c[1].v : 'N/A');
+                    if (desc === '' || desc === '-') return;
 
-                        // D (c[3]) = Pallet ID
-                        let idVal = c[3] && c[3].v ? c[3].v.toString().trim() : 'N/A';
+                    // Solo contar pallets RECHAZADOS (los ACEPTADOS con defecto menor no son errores reales)
+                    let estado = c[7] && c[7].v ? c[7].v.toString().trim().toUpperCase() : '';
+                    if (estado !== 'RECHAZADO') return;
 
-                        // L (c[11]) = Tipo de pallet
-                        let tipoVal = c[11] && c[11].v ? c[11].v.toString().trim() : '';
+                    let dateVal = c[1] && c[1].f ? c[1].f.split(' ')[0] : (c[1] && c[1].v ? c[1].v : 'N/A');
+                    let idVal = c[3] && c[3].v ? c[3].v.toString().trim() : 'N/A';
+                    let tipoVal = c[11] && c[11].v ? c[11].v.toString().trim() : '';
+                    let cantDefectos = c[8] && c[8].v != null ? Number(c[8].v) : 0;
 
+                    // Separar defectos múltiples en una celda (ej: "Defecto A, Defecto B")
+                    let defectos = desc.split(',').map(d => d.trim()).filter(d => d.length > 0);
+
+                    defectos.forEach(defecto => {
                         allErrorsData.push({
-                            defecto: desc,
+                            defecto,
                             palletId: idVal,
                             tipo: tipoVal,
-                            fecha: dateVal
+                            fecha: dateVal,
+                            estado,
+                            cantDefectos
                         });
-                    }
+                    });
                 });
 
                 // Llamar a re-dibujar la gráfica con los filtros actuales
