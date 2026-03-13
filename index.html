@@ -1508,30 +1508,35 @@
                     </div>
                 </div> <!-- Se cierra adecuadamente .panel de Errores -->
 
-                <!-- Rendimiento por Operador (Top 5 hoy) -->
-                <div class="panel" style="grid-column: 1 / -1;">
-                    <div class="panel-header" style="margin-bottom: 0.5rem;">
-                        <h2 class="panel-title" style="font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
-                            <i class="fa-solid fa-users" style="color: #8b5cf6;"></i> Rendimiento por Operador
-                        </h2>
-                        <span id="operador-turno-label" style="font-size: 0.75rem; color: var(--text-muted); background: var(--bg-dark); padding: 2px 10px; border-radius: 10px;">Hoy</span>
-                    </div>
-                    <div id="operador-ranking-container" style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        <div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">Cargando datos...</div>
-                    </div>
-                </div>
             </div><!-- /contenedor 50/50 -->
 
-                <!-- Actividad Reciente -->
+                <!-- Actividad por Escaneadora -->
                 <div class="panel" style="grid-column: 1 / -1;">
-                    <div class="panel-header" style="margin-bottom: 0.5rem;">
+                    <div class="panel-header" style="margin-bottom: 0.75rem;">
                         <h2 class="panel-title" style="font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
-                            <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> Actividad Reciente
+                            <i class="fa-solid fa-barcode" style="color: #8b5cf6;"></i> Actividad por Escaneadora
                         </h2>
-                        <span id="actividad-time-label" style="font-size: 0.75rem; color: var(--text-muted);"></span>
+                        <span id="escaneadora-subtitle" style="font-size: 0.75rem; color: var(--text-muted); background: var(--bg-dark); padding: 2px 10px; border-radius: 10px;">Últimos 7 días</span>
                     </div>
-                    <div id="actividad-reciente-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.5rem;">
-                        <div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">Cargando registros...</div>
+
+                    <!-- A) Tarjetas resumen por escaneadora -->
+                    <div id="escaneadora-cards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.6rem; margin-bottom: 1rem;">
+                        <div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">Cargando datos de escaneadoras...</div>
+                    </div>
+
+                    <!-- B) Gráfica comparativa 7 días -->
+                    <div style="height: 220px; margin-bottom: 0.75rem;">
+                        <canvas id="escaneadora-chart-7d"></canvas>
+                    </div>
+
+                    <!-- C) Detalle expandible al hacer clic -->
+                    <div id="escaneadora-detail" style="display: none; background: var(--bg-dark); border: 1px solid var(--border-color); border-radius: 0.5rem; padding: 0.75rem; margin-top: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <h3 id="escaneadora-detail-title" style="font-size: 0.9rem; font-weight: 600; color: var(--text-main); margin: 0;"></h3>
+                            <button onclick="document.getElementById('escaneadora-detail').style.display='none'" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; padding: 0.2rem 0.4rem;"><i class="fa-solid fa-xmark"></i></button>
+                        </div>
+                        <div id="escaneadora-detail-body" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.5rem;"></div>
+                        <div id="escaneadora-detail-errors" style="margin-top: 0.5rem;"></div>
                     </div>
                 </div>
 
@@ -2903,96 +2908,8 @@
                 }
             }
 
-            // 5) ACTIVIDAD RECIENTE (últimos 8 registros)
-            {
-                const container = document.getElementById('actividad-reciente-container');
-                const timeLabel = document.getElementById('actividad-time-label');
-                if (container) {
-                    // Tomar los últimos 8 con timestamp válido
-                    const recientes = allSheetData
-                        .filter(r => r.timestamp instanceof Date && !isNaN(r.timestamp))
-                        .slice(-8).reverse();
-
-                    if (recientes.length === 0) {
-                        container.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">No hay registros recientes.</div>';
-                    } else {
-                        const now = new Date();
-                        container.innerHTML = recientes.map(r => {
-                            const idShort = r.id.length > 6 ? r.id.substring(0, 6) : r.id;
-                            const destino = r.destinoOriginal || 'Sin destino';
-                            const isNoche = r.turno.includes('Noche') || r.turno.toLowerCase().includes('night');
-                            const borderColor = isNoche ? '#8b5cf6' : '#3b82f6';
-                            const turnoIcon = isNoche ? 'fa-moon' : 'fa-sun';
-                            const turnoColor = isNoche ? '#8b5cf6' : '#f59e0b';
-                            const isRechazado = (r.condicion || '').toUpperCase().includes('RECHAZADO');
-
-                            // Tiempo relativo
-                            let tiempoRel = '';
-                            if (r.timestamp) {
-                                const diffMs = now - r.timestamp;
-                                const diffMin = Math.floor(diffMs / 60000);
-                                if (diffMin < 1) tiempoRel = 'ahora';
-                                else if (diffMin < 60) tiempoRel = `hace ${diffMin} min`;
-                                else if (diffMin < 1440) tiempoRel = `hace ${Math.floor(diffMin/60)}h`;
-                                else tiempoRel = `hace ${Math.floor(diffMin/1440)}d`;
-                            }
-
-                            return `<div style="background: var(--bg-dark); border-left: 3px solid ${borderColor}; border-radius: 0.4rem; padding: 0.5rem 0.65rem; display: flex; flex-direction: column; gap: 0.25rem; min-width: 0;">
-                                <div style="display: flex; align-items: center; gap: 0.4rem; justify-content: space-between;">
-                                    <span style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">#${idShort}</span>
-                                    ${isRechazado ? '<span style="background: rgba(239,68,68,0.15); color: #ef4444; font-size: 0.6rem; padding: 1px 5px; border-radius: 6px; font-weight: 600;">RECHAZADO</span>' : ''}
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.7rem; color: var(--text-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
-                                    <i class="fa-solid ${turnoIcon}" style="color: ${turnoColor}; font-size: 0.6rem;"></i>
-                                    <span style="overflow: hidden; text-overflow: ellipsis;">${destino}</span>
-                                </div>
-                                <div style="font-size: 0.65rem; color: var(--text-muted); opacity: 0.7;">${tiempoRel}</div>
-                            </div>`;
-                        }).join('');
-
-                        if (timeLabel && recientes[0]?.timestamp) {
-                            const diffMin = Math.floor((now - recientes[0].timestamp) / 60000);
-                            timeLabel.textContent = diffMin < 1 ? 'Último: ahora' : `Último: hace ${diffMin < 60 ? diffMin + ' min' : Math.floor(diffMin/60) + 'h'}`;
-                        }
-                    }
-                }
-            }
-
-            // 6) RENDIMIENTO POR OPERADOR (Top 5 del día)
-            {
-                const container = document.getElementById('operador-ranking-container');
-                if (container) {
-                    const todayObj = new Date();
-                    const todayStr = `${todayObj.getMonth()+1}/${todayObj.getDate()}/${todayObj.getFullYear()}`;
-                    const hoyRows = allSheetData.filter(r => r.fecha === todayStr && r.operador && r.operador.trim() !== '');
-
-                    if (hoyRows.length === 0) {
-                        container.innerHTML = '<div style="text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">No hay registros de operadores hoy.</div>';
-                    } else {
-                        const opCount = {};
-                        hoyRows.forEach(r => {
-                            const op = r.operador.trim();
-                            opCount[op] = (opCount[op] || 0) + 1;
-                        });
-
-                        const sorted = Object.entries(opCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
-                        const maxVal = sorted[0][1];
-                        const barColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#06b6d4'];
-
-                        container.innerHTML = sorted.map(([op, count], i) => {
-                            const pct = Math.round(count / maxVal * 100);
-                            const color = barColors[i % barColors.length];
-                            return `<div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <div style="width: 100px; font-size: 0.8rem; color: var(--text-main); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0;" title="${op}">${op}</div>
-                                <div style="flex: 1; height: 20px; background: var(--bg-dark); border-radius: 4px; overflow: hidden;">
-                                    <div style="height: 100%; width: ${pct}%; background: ${color}; border-radius: 4px; transition: width 0.5s ease;"></div>
-                                </div>
-                                <div style="width: 60px; text-align: right; font-size: 0.8rem; font-weight: 600; color: ${color}; flex-shrink: 0;">${count} plts</div>
-                            </div>`;
-                        }).join('');
-                    }
-                }
-            }
+            // 5) ACTIVIDAD POR ESCANEADORA
+            renderEscaneadoraPanel();
         }
 
         // === MENÚ MÓVIL ===
@@ -4052,6 +3969,237 @@
                 });
             }
         }
+
+        // === ACTIVIDAD POR ESCANEADORA ===
+        let escaneadoraChart7d = null;
+
+        function renderEscaneadoraPanel() {
+            const cardsContainer = document.getElementById('escaneadora-cards');
+            if (!cardsContainer || allSheetData.length === 0) return;
+
+            const now = new Date();
+            const todayStr = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
+
+            // Calcular fecha límite 7 días atrás
+            const sevenAgo = new Date(now);
+            sevenAgo.setDate(sevenAgo.getDate() - 7);
+            sevenAgo.setHours(0, 0, 0, 0);
+
+            // Filtrar rows con operador válido
+            const withOp = allSheetData.filter(r => r.operador && r.operador.trim() !== '');
+
+            // Agrupar por escaneadora
+            const escMap = {};
+            withOp.forEach(r => {
+                const name = r.operador.trim();
+                if (!escMap[name]) escMap[name] = { rows: [], hoy: 0, sem: 0, lastTs: null, errores: 0 };
+                escMap[name].rows.push(r);
+                if (r.fecha === todayStr) escMap[name].hoy++;
+
+                // Check if within 7 days
+                const parts = (r.fecha || '').split('/');
+                if (parts.length === 3) {
+                    const rd = new Date(+parts[2], +parts[0] - 1, +parts[1]);
+                    if (rd >= sevenAgo) escMap[name].sem++;
+                }
+
+                if (r.timestamp && (!escMap[name].lastTs || r.timestamp > escMap[name].lastTs)) {
+                    escMap[name].lastTs = r.timestamp;
+                }
+            });
+
+            // Cruzar errores: mapear palletId → escaneadora
+            const idToEsc = {};
+            withOp.forEach(r => {
+                const shortId = r.id.length > 6 ? r.id.substring(0, 6) : r.id;
+                if (!idToEsc[shortId]) idToEsc[shortId] = r.operador.trim();
+            });
+            if (typeof allErrorsData !== 'undefined') {
+                allErrorsData.forEach(e => {
+                    const eid = e.palletId ? (e.palletId.length > 6 ? e.palletId.substring(0, 6) : e.palletId) : '';
+                    const esc = idToEsc[eid];
+                    if (esc && escMap[esc]) escMap[esc].errores++;
+                });
+            }
+
+            // Ordenar por actividad semanal desc
+            const sorted = Object.entries(escMap).sort((a, b) => b[1].sem - a[1].sem);
+
+            if (sorted.length === 0) {
+                cardsContainer.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); font-size: 0.8rem; padding: 1rem;">No hay datos de escaneadoras.</div>';
+                return;
+            }
+
+            // A) Tarjetas resumen
+            const escColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#f97316', '#14b8a6'];
+            cardsContainer.innerHTML = sorted.map(([name, data], i) => {
+                const color = escColors[i % escColors.length];
+                let lastAct = '—';
+                if (data.lastTs) {
+                    const diffMin = Math.floor((now - data.lastTs) / 60000);
+                    if (diffMin < 1) lastAct = 'ahora';
+                    else if (diffMin < 60) lastAct = `hace ${diffMin} min`;
+                    else if (diffMin < 1440) lastAct = `hace ${Math.floor(diffMin / 60)}h`;
+                    else lastAct = `hace ${Math.floor(diffMin / 1440)}d`;
+                }
+                return `<div onclick="showEscaneadoraDetail('${name.replace(/'/g, "\\'")}')" style="background: var(--bg-dark); border-left: 3px solid ${color}; border-radius: 0.5rem; padding: 0.6rem 0.75rem; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;" onmouseenter="this.style.transform='translateY(-1px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                        <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${name}"><i class="fa-solid fa-barcode" style="color: ${color}; margin-right: 0.3rem; font-size: 0.7rem;"></i>${name}</span>
+                        ${data.errores > 0 ? `<span style="background: rgba(239,68,68,0.15); color: #ef4444; font-size: 0.6rem; padding: 1px 6px; border-radius: 8px; font-weight: 600;">${data.errores} err</span>` : ''}
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem; font-size: 0.75rem;">
+                        <div style="color: var(--text-muted);">Hoy: <strong style="color: var(--text-main);">${data.hoy}</strong></div>
+                        <div style="color: var(--text-muted);">7 días: <strong style="color: var(--text-main);">${data.sem}</strong></div>
+                    </div>
+                    <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 0.25rem; opacity: 0.7;"><i class="fa-solid fa-clock" style="margin-right: 3px;"></i>${lastAct}</div>
+                </div>`;
+            }).join('');
+
+            // B) Gráfica comparativa 7 días (barras agrupadas por día)
+            const ctx = document.getElementById('escaneadora-chart-7d');
+            if (ctx) {
+                // Obtener últimos 7 días con datos
+                const allDates = new Set();
+                withOp.forEach(r => {
+                    const parts = (r.fecha || '').split('/');
+                    if (parts.length === 3) {
+                        const rd = new Date(+parts[2], +parts[0] - 1, +parts[1]);
+                        if (rd >= sevenAgo) allDates.add(r.fecha);
+                    }
+                });
+                const dateLabels = Array.from(allDates).sort((a, b) => {
+                    const pa = a.split('/'), pb = b.split('/');
+                    return new Date(+pa[2], +pa[0]-1, +pa[1]) - new Date(+pb[2], +pb[0]-1, +pb[1]);
+                }).slice(-7);
+
+                // Top 6 escaneadoras para el gráfico
+                const topEsc = sorted.slice(0, 6).map(e => e[0]);
+                const datasets = topEsc.map((name, i) => {
+                    const color = escColors[i % escColors.length];
+                    const counts = dateLabels.map(d => escMap[name].rows.filter(r => r.fecha === d).length);
+                    return {
+                        label: name,
+                        data: counts,
+                        backgroundColor: color,
+                        borderRadius: 3,
+                        barPercentage: 0.8
+                    };
+                });
+
+                // Formatear labels a dd/mm
+                const shortLabels = dateLabels.map(d => {
+                    const p = d.split('/');
+                    return `${p[1]}/${p[0]}`;
+                });
+
+                if (escaneadoraChart7d) escaneadoraChart7d.destroy();
+                escaneadoraChart7d = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: shortLabels, datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: { color: '#94a3b8', font: { size: 10 }, padding: 8, boxWidth: 12 }
+                            },
+                            tooltip: {
+                                callbacks: { label: c => `${c.dataset.label}: ${c.raw} pallets` }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#94a3b8', font: { size: 10 } },
+                                grid: { color: 'rgba(148,163,184,0.08)' }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: '#94a3b8', font: { size: 10 }, precision: 0 },
+                                grid: { color: 'rgba(148,163,184,0.08)' }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // C) Detalle al hacer clic en escaneadora
+        window.showEscaneadoraDetail = function(name) {
+            const panel = document.getElementById('escaneadora-detail');
+            const title = document.getElementById('escaneadora-detail-title');
+            const body = document.getElementById('escaneadora-detail-body');
+            const errDiv = document.getElementById('escaneadora-detail-errors');
+            if (!panel || !body) return;
+
+            const now = new Date();
+            const rows = allSheetData.filter(r => (r.operador || '').trim() === name);
+            const todayStr = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
+            const hoyCount = rows.filter(r => r.fecha === todayStr).length;
+            const totalUnidades = rows.reduce((s, r) => s + r.cantidad, 0);
+
+            // Fechas activas
+            const fechasSet = new Set(rows.map(r => r.fecha).filter(f => f !== 'N/A'));
+            const fechasSorted = Array.from(fechasSet).sort((a, b) => {
+                const pa = a.split('/'), pb = b.split('/');
+                return new Date(+pb[2], +pb[0]-1, +pb[1]) - new Date(+pa[2], +pa[0]-1, +pa[1]);
+            });
+
+            // Última actividad
+            let lastTs = null;
+            rows.forEach(r => { if (r.timestamp && (!lastTs || r.timestamp > lastTs)) lastTs = r.timestamp; });
+            let lastActStr = '—';
+            if (lastTs) {
+                const diffMin = Math.floor((now - lastTs) / 60000);
+                if (diffMin < 1) lastActStr = 'Ahora mismo';
+                else if (diffMin < 60) lastActStr = `Hace ${diffMin} min`;
+                else if (diffMin < 1440) lastActStr = `Hace ${Math.floor(diffMin/60)}h`;
+                else lastActStr = `Hace ${Math.floor(diffMin/1440)} días`;
+            }
+
+            // Errores vinculados
+            const shortIds = new Set(rows.map(r => r.id.length > 6 ? r.id.substring(0, 6) : r.id));
+            let erroresVinc = [];
+            if (typeof allErrorsData !== 'undefined') {
+                erroresVinc = allErrorsData.filter(e => {
+                    const eid = e.palletId ? (e.palletId.length > 6 ? e.palletId.substring(0, 6) : e.palletId) : '';
+                    return shortIds.has(eid);
+                });
+            }
+
+            // Tipos de error
+            const errorTypes = {};
+            erroresVinc.forEach(e => { errorTypes[e.defecto] = (errorTypes[e.defecto] || 0) + 1; });
+
+            title.innerHTML = `<i class="fa-solid fa-barcode" style="color: #8b5cf6; margin-right: 0.4rem;"></i>${name}`;
+
+            const statStyle = 'background: var(--bg-card); border-radius: 0.4rem; padding: 0.5rem 0.6rem; text-align: center;';
+            body.innerHTML = `
+                <div style="${statStyle}"><div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Total registros</div><div style="font-size: 1.1rem; font-weight: 700; color: #3b82f6;">${rows.length.toLocaleString()}</div></div>
+                <div style="${statStyle}"><div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Pallets hoy</div><div style="font-size: 1.1rem; font-weight: 700; color: #10b981;">${hoyCount}</div></div>
+                <div style="${statStyle}"><div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Unidades total</div><div style="font-size: 1.1rem; font-weight: 700; color: #f59e0b;">${totalUnidades.toLocaleString('es-MX')}</div></div>
+                <div style="${statStyle}"><div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Días activos</div><div style="font-size: 1.1rem; font-weight: 700; color: #8b5cf6;">${fechasSet.size}</div></div>
+                <div style="${statStyle}"><div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Errores</div><div style="font-size: 1.1rem; font-weight: 700; color: ${erroresVinc.length > 0 ? '#ef4444' : '#10b981'};">${erroresVinc.length}</div></div>
+                <div style="${statStyle}"><div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Última actividad</div><div style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">${lastActStr}</div></div>
+            `;
+
+            // Errores detallados
+            if (erroresVinc.length > 0) {
+                const sortedErr = Object.entries(errorTypes).sort((a, b) => b[1] - a[1]);
+                errDiv.innerHTML = `
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.3rem; font-weight: 600;">Tipos de error:</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.3rem;">
+                        ${sortedErr.map(([tipo, cnt]) => `<span style="background: rgba(239,68,68,0.1); color: #ef4444; font-size: 0.7rem; padding: 2px 8px; border-radius: 8px; font-weight: 500;">${tipo} (${cnt})</span>`).join('')}
+                    </div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.3rem;">Fechas recientes: ${fechasSorted.slice(0, 5).join(', ')}</div>
+                `;
+            } else {
+                errDiv.innerHTML = `<div style="font-size: 0.7rem; color: #10b981;"><i class="fa-solid fa-check-circle" style="margin-right: 4px;"></i>Sin errores registrados. Fechas recientes: ${fechasSorted.slice(0, 5).join(', ')}</div>`;
+            }
+
+            panel.style.display = '';
+            panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        };
 
         function populateOrdenesPedidoFilter(ordenesData) {
             const sel = document.getElementById('ordenes-pedido-filter');
