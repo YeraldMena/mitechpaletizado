@@ -4046,7 +4046,7 @@
                 });
             }
 
-            // Top 4 por actividad semanal
+            // Ordenar por actividad semanal desc
             const sorted = Object.entries(escMap).sort((a, b) => b[1].sem - a[1].sem);
 
             if (sorted.length === 0) {
@@ -4054,14 +4054,25 @@
                 return;
             }
 
-            const escColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b'];
-            const top4 = sorted.slice(0, 4);
+            // Regla dinámica: ≤6 → mostrar todas, ≥7 → top 5 + "Otros"
+            const MAX_INDIVIDUAL = 6;
+            const escColors = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#06b6d4', '#ec4899'];
+            const needsGrouping = sorted.length > MAX_INDIVIDUAL;
+            const displayed = needsGrouping ? sorted.slice(0, 5) : sorted;
+            const rest = needsGrouping ? sorted.slice(5) : [];
+
+            // Construir dataset "Otros" si es necesario
+            let otrosData = null;
+            if (rest.length > 0) {
+                const otrosRows = rest.flatMap(([, d]) => d.rows);
+                otrosData = { rows: otrosRows, sem: rest.reduce((s, [, d]) => s + d.sem, 0), lastTs: null, errores: 0, count: rest.length };
+            }
 
             // Gráfica barras agrupadas — 7 días completos, 0 si no hay datos
             const ctx = document.getElementById('escaneadora-chart-7d');
             if (ctx) {
-                const datasets = top4.map(([name, data], i) => {
-                    const color = escColors[i];
+                const datasets = displayed.map(([name, data], i) => {
+                    const color = escColors[i % escColors.length];
                     const counts = allDateLabels.map(d => data.rows.filter(r => r.fecha === d).length);
                     return {
                         label: name,
@@ -4072,6 +4083,19 @@
                         categoryPercentage: 0.8
                     };
                 });
+
+                // Agregar "Otros" si existe
+                if (otrosData) {
+                    const counts = allDateLabels.map(d => otrosData.rows.filter(r => r.fecha === d).length);
+                    datasets.push({
+                        label: `Otros (${otrosData.count})`,
+                        data: counts,
+                        backgroundColor: '#64748b',
+                        borderRadius: 3,
+                        barPercentage: 0.7,
+                        categoryPercentage: 0.8
+                    });
+                }
 
                 const shortLabels = allDateLabels.map(d => {
                     const p = d.split('/');
@@ -4111,20 +4135,23 @@
                         onClick: (evt, elements) => {
                             if (elements.length > 0) {
                                 const dsIdx = elements[0].datasetIndex;
-                                const name = top4[dsIdx][0];
-                                showEscaneadoraDetail(name);
+                                // No abrir detalle para "Otros"
+                                if (dsIdx < displayed.length) {
+                                    showEscaneadoraDetail(displayed[dsIdx][0]);
+                                }
                             }
                         }
                     }
                 });
             }
 
-            // Mini resumen: última actividad
+            // Mini resumen: última actividad (solo escaneadoras individuales, no "Otros")
             const lastActContainer = document.getElementById('escaneadora-last-activity');
             if (lastActContainer) {
+                const allIndividual = sorted; // Mostrar estado de TODAS las escaneadoras reales
                 lastActContainer.innerHTML = '<span style="font-weight: 600; color: var(--text-muted); margin-right: 0.2rem;"><i class="fa-solid fa-signal" style="margin-right: 3px;"></i>Estado:</span>' +
-                    top4.map(([name, data], i) => {
-                        const color = escColors[i];
+                    allIndividual.map(([name, data], i) => {
+                        const color = i < escColors.length ? escColors[i] : '#94a3b8';
                         let t = '—';
                         if (data.lastTs) {
                             const dm = Math.floor((now - data.lastTs) / 60000);
