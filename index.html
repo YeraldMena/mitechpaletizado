@@ -1381,7 +1381,10 @@
             </button>
             <div class="collapsible-body">
         <div class="content-grid">
-            <!-- Chart Panel (Anillo) -->
+            <!-- Grid 2x2: Inventario, Turno, Errores Hoy, Movimientos HV -->
+            <div style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem;">
+
+            <!-- 1) Estado de Inventario -->
             <div class="panel">
                 <div class="panel-header">
                     <h2 class="panel-title">Estado de Inventario</h2>
@@ -1392,8 +1395,8 @@
                 </div>
             </div>
 
-            <!-- Chart Panel (Barras) -->
-            <div class="panel" style="grid-column: span 1;">
+            <!-- 2) Envíos por Turno -->
+            <div class="panel">
                 <div class="panel-header">
                     <h2 class="panel-title">Envíos por Turno</h2>
                 </div>
@@ -1433,6 +1436,34 @@
                     </div>
                 </div>
             </div>
+
+            <!-- 3) Errores Hoy -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title" style="font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444;"></i> Errores Hoy
+                    </h2>
+                    <span id="errores-hoy-count" style="font-size: 0.75rem; color: var(--text-muted); background: var(--bg-dark); padding: 2px 10px; border-radius: 10px;">0</span>
+                </div>
+                <div id="errores-hoy-body" style="min-height: 120px; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: var(--text-muted); font-size: 0.8rem;">Cargando...</span>
+                </div>
+            </div>
+
+            <!-- 4) Movimientos HV Hoy -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2 class="panel-title" style="font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fa-solid fa-star" style="color: #f59e0b;"></i> Movimientos HV Hoy
+                    </h2>
+                    <span id="hv-hoy-count" style="font-size: 0.75rem; color: var(--text-muted); background: var(--bg-dark); padding: 2px 10px; border-radius: 10px;">0</span>
+                </div>
+                <div id="hv-hoy-body" style="min-height: 120px; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: var(--text-muted); font-size: 0.8rem;">Cargando...</span>
+                </div>
+            </div>
+
+            </div><!-- /grid 2x2 -->
 
             <!-- CONTENEDOR 50/50 PARA PRODUCCIÓN Y ERRORES -->
             <div
@@ -2906,6 +2937,12 @@
 
             // 5) ACTIVIDAD POR ESCANEADORA
             renderEscaneadoraPanel();
+
+            // 6) ERRORES HOY
+            renderErroresHoy();
+
+            // 7) MOVIMIENTOS HV HOY
+            renderMovimientosHV();
         }
 
         // === MENÚ MÓVIL ===
@@ -3964,6 +4001,113 @@
                     }
                 });
             }
+        }
+
+        // === ERRORES HOY ===
+        function renderErroresHoy() {
+            const body = document.getElementById('errores-hoy-body');
+            const countBadge = document.getElementById('errores-hoy-count');
+            if (!body) return;
+
+            const now = new Date();
+            const todayStr = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
+
+            // Filtrar errores de hoy
+            const todayErrors = (typeof allErrorsData !== 'undefined' ? allErrorsData : []).filter(e => {
+                if (!e.fecha) return false;
+                const parts = (e.fecha || '').split('/');
+                if (parts.length === 3) {
+                    const ed = `${+parts[0]}/${+parts[1]}/${+parts[2]}`;
+                    return ed === todayStr;
+                }
+                return e.fecha === todayStr;
+            });
+
+            if (countBadge) countBadge.textContent = todayErrors.length;
+
+            if (todayErrors.length === 0) {
+                body.innerHTML = '<div style="text-align: center; padding: 1.5rem;"><i class="fa-solid fa-check-circle" style="font-size: 1.5rem; color: #10b981; margin-bottom: 0.5rem; display: block;"></i><span style="color: #10b981; font-size: 0.85rem; font-weight: 600;">Sin errores hoy</span></div>';
+                return;
+            }
+
+            // Agrupar por tipo de defecto
+            const byType = {};
+            todayErrors.forEach(e => {
+                const tipo = e.defecto || 'Sin clasificar';
+                if (!byType[tipo]) byType[tipo] = 0;
+                byType[tipo]++;
+            });
+
+            const sortedTypes = Object.entries(byType).sort((a, b) => b[1] - a[1]);
+            const typeColors = { 'Dañado': '#ef4444', 'Faltante': '#f59e0b', 'Excedente': '#3b82f6', 'Etiqueta': '#8b5cf6', 'Contaminado': '#ec4899' };
+
+            body.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                    ${sortedTypes.map(([tipo, cnt]) => {
+                        const pct = Math.round((cnt / todayErrors.length) * 100);
+                        const color = typeColors[tipo] || '#64748b';
+                        return `<div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="font-size: 0.75rem; color: var(--text-main); min-width: 100px; font-weight: 500;">${tipo}</span>
+                            <div style="flex: 1; background: var(--bg-dark); border-radius: 4px; height: 18px; overflow: hidden;">
+                                <div style="width: ${pct}%; min-width: 18px; background: ${color}; height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; transition: width 0.3s;">
+                                    <span style="font-size: 0.65rem; color: #fff; font-weight: 600;">${cnt}</span>
+                                </div>
+                            </div>
+                            <span style="font-size: 0.65rem; color: var(--text-muted); min-width: 30px; text-align: right;">${pct}%</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        // === MOVIMIENTOS HV HOY ===
+        function renderMovimientosHV() {
+            const body = document.getElementById('hv-hoy-body');
+            const countBadge = document.getElementById('hv-hoy-count');
+            if (!body) return;
+
+            const now = new Date();
+            const todayStr = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
+
+            // Filtrar pallets HV de hoy
+            const hvToday = allSheetData.filter(r => {
+                const isHV = (r.condicion || '').toUpperCase().includes('HV') ||
+                             (r.condicion || '').toUpperCase().includes('HIGH') ||
+                             (r.destinoOriginal || '').toUpperCase().includes('HV');
+                return isHV && r.fecha === todayStr;
+            });
+
+            if (countBadge) countBadge.textContent = hvToday.length;
+
+            if (hvToday.length === 0) {
+                body.innerHTML = '<div style="text-align: center; padding: 1.5rem;"><i class="fa-solid fa-moon" style="font-size: 1.5rem; color: var(--text-muted); margin-bottom: 0.5rem; display: block; opacity: 0.5;"></i><span style="color: var(--text-muted); font-size: 0.85rem;">Sin movimientos HV hoy</span></div>';
+                return;
+            }
+
+            // Separar por turno
+            const dia = hvToday.filter(r => (r.turno || '').toString().toUpperCase().includes('DI') || (r.turno || '').toString() === '1' || (r.turno || '').toString().toUpperCase().includes('DAY'));
+            const noche = hvToday.filter(r => (r.turno || '').toString().toUpperCase().includes('NO') || (r.turno || '').toString() === '2' || (r.turno || '').toString().toUpperCase().includes('NIGHT'));
+            const sinTurno = hvToday.length - dia.length - noche.length;
+
+            const totalUnidades = hvToday.reduce((s, r) => s + r.cantidad, 0);
+
+            body.innerHTML = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <div style="background: var(--bg-dark); border-radius: 0.4rem; padding: 0.6rem; text-align: center;">
+                        <div style="font-size: 0.65rem; color: var(--text-muted); margin-bottom: 2px;"><i class="fa-solid fa-sun" style="color: #f59e0b; margin-right: 3px;"></i>Turno Día</div>
+                        <div style="font-size: 1.2rem; font-weight: 700; color: #f59e0b;">${dia.length}</div>
+                    </div>
+                    <div style="background: var(--bg-dark); border-radius: 0.4rem; padding: 0.6rem; text-align: center;">
+                        <div style="font-size: 0.65rem; color: var(--text-muted); margin-bottom: 2px;"><i class="fa-solid fa-moon" style="color: #8b5cf6; margin-right: 3px;"></i>Turno Noche</div>
+                        <div style="font-size: 1.2rem; font-weight: 700; color: #8b5cf6;">${noche.length}</div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.3rem 0.4rem; font-size: 0.7rem; color: var(--text-muted); border-top: 1px solid var(--border-color);">
+                    <span>Total: <strong style="color: var(--text-main);">${hvToday.length} pallets</strong></span>
+                    <span>Unidades: <strong style="color: var(--text-main);">${totalUnidades.toLocaleString('es-MX')}</strong></span>
+                    ${sinTurno > 0 ? `<span>Sin turno: <strong>${sinTurno}</strong></span>` : ''}
+                </div>
+            `;
         }
 
         // === ACTIVIDAD POR ESCANEADORA ===
