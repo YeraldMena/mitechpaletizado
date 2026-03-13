@@ -2381,6 +2381,119 @@
             document.body.appendChild(script);
         }
 
+        // --- FALLBACK: recuperar fechas texto que gviz devuelve como null ---
+        // Cuando las fechas en Google Sheets están como texto plano (no Date nativo),
+        // el motor gviz las devuelve como null en columnas tipadas datetime/date.
+        // Esta función hace un segundo fetch con range+headers=0, que fuerza tipo string.
+        window._pendingFallback = false;
+        function fetchFallbackDates(nullDateIds, totalRows) {
+            if (window._pendingFallback || nullDateIds.size === 0) return;
+            window._pendingFallback = true;
+            const oldScript = document.getElementById('jsonp-fallback-script');
+            if (oldScript) oldScript.remove();
+            // Pedir las últimas N filas (cubriendo las que tienen null dates)
+            const bufferRows = Math.min(nullDateIds.size + 50, 500);
+            const startRow = Math.max(2, totalRows - bufferRows + 2); // +2: 1 por header, 1 por 1-index
+            const endRow = totalRows + 200; // margen extra por si hay filas nuevas
+            const script = document.createElement('script');
+            script.id = 'jsonp-fallback-script';
+            script.src = `https://docs.google.com/spreadsheets/d/1Su-CGdOPU-etXKoVXAKYx6qKhN92RFBiH-gLeN_XElk/gviz/tq?tqx=responseHandler:window.processFallbackDates;out:json&gid=530597405&range=A${startRow}:N${endRow}&headers=0&_=${Date.now()}`;
+            document.body.appendChild(script);
+        }
+        window.processFallbackDates = function(response) {
+            window._pendingFallback = false;
+            try {
+                if (!response || !response.table || !response.table.rows) return;
+                // Construir mapa palletId → {fecha, timestamp} desde la respuesta string-typed
+                const fallbackMap = {};
+                response.table.rows.forEach(r => {
+                    const c = r.c;
+                    if (!c) return;
+                    // Col B (index 1) = pallet ID, Col A (index 0) = timestamp, Col F (index 5) = fecha
+                    const palletId = (c[1] && c[1].v != null) ? String(c[1].v).split('.')[0].split('-')[0].trim() : null;
+                    if (!palletId) return;
+                    const tsText = (c[0] && c[0].v != null) ? String(c[0].v) : null;
+                    const fechaText = (c[5] && c[5].v != null) ? String(c[5].v).split(' ')[0] : null;
+                    if (tsText || fechaText) {
+                        fallbackMap[palletId] = { tsText, fechaText };
+                    }
+                });
+                // Actualizar allSheetData con las fechas recuperadas
+                let updated = 0;
+                const uniqueDates = new Set();
+                const uniqueMonths = new Set();
+                // Recoger fechas existentes
+                allSheetData.forEach(row => {
+                    if (row.fecha && row.fecha !== 'N/A') {
+                        uniqueDates.add(row.fecha);
+                        const parts = row.fecha.split('/');
+                        if (parts.length >= 3) uniqueMonths.add(`${parts[0]}/${parts[2]}`);
+                    }
+                });
+                allSheetData.forEach(row => {
+                    if (row.fecha !== 'N/A') return; // ya tiene fecha
+                    const fb = fallbackMap[row.id];
+                    if (!fb) return;
+                    // Recuperar fecha
+                    if (fb.fechaText) {
+                        row.fecha = fb.fechaText;
+                        row.rowValues[4] = fb.fechaText; // index 4 en rawValues = Fecha (col F, offset 1-6 → idx 4)
+                        uniqueDates.add(fb.fechaText);
+                        const parts = fb.fechaText.split('/');
+                        if (parts.length >= 3) uniqueMonths.add(`${parts[0]}/${parts[2]}`);
+                    }
+                    // Recuperar timestamp
+                    if (fb.tsText && !row.timestamp) {
+                        const d = new Date(fb.tsText);
+                        if (!isNaN(d.getTime())) {
+                            row.timestamp = d;
+                        }
+                    }
+                    updated++;
+                });
+                if (updated > 0) {
+                    console.log(`🔄 Fallback: ${updated} filas recuperadas con fechas texto`);
+                    // Re-sort
+                    allSheetData.sort((a, b) => {
+                        if (!a.timestamp && !b.timestamp) return a._rowIdx - b._rowIdx;
+                        if (!a.timestamp) return 1;
+                        if (!b.timestamp) return -1;
+                        return a.timestamp - b.timestamp;
+                    });
+                    // Actualizar availableDates y calendario
+                    availableDates = Array.from(uniqueDates);
+                    if (flatpickrInstance) {
+                        const prevSel = flatpickrInstance.selectedDates.map(d =>
+                            `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`
+                        );
+                        flatpickrInstance.set('enable', availableDates);
+                        if (prevSel.length > 0) flatpickrInstance.setDate(prevSel, false);
+                    }
+                    // Regenerar pills de mes
+                    const monthNames = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+                    const pillsContainer = document.getElementById('month-pills');
+                    if (pillsContainer) {
+                        pillsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">Meses:</span>';
+                        Array.from(uniqueMonths).sort().forEach(m => {
+                            const [monthNum, yearNum] = m.split('/');
+                            const btn = document.createElement('button');
+                            btn.className = 'month-pill';
+                            btn.setAttribute('data-month', m);
+                            btn.innerText = `${monthNames[parseInt(monthNum)-1]} ${yearNum}`;
+                            btn.onclick = () => window.toggleMonth(m);
+                            pillsContainer.appendChild(btn);
+                        });
+                    }
+                    // Re-render
+                    window.renderLineChart();
+                    renderDashboard([]);
+                    window.syncMonthPills();
+                }
+            } catch(e) {
+                console.warn('Fallback fetch error:', e);
+            }
+        };
+
         // Esta función será ejecutada automáticamente por el <script> insertado cuando Google responde
         window.processSheetData = function (response) {
             try {
@@ -2500,6 +2613,18 @@
                     return a.timestamp - b.timestamp;
                 });
                 console.log(`📊 Datos cargados: ${allSheetData.length} registros. Con timestamp: ${allSheetData.filter(r => r.timestamp).length}, sin: ${allSheetData.filter(r => !r.timestamp).length}`);
+
+                // [FIX] Detectar filas con fecha null (texto plano en Sheets) y lanzar fallback
+                const nullDateIds = new Set();
+                allSheetData.forEach(row => {
+                    if (row.fecha === 'N/A' && row.id !== 'Sin ID') {
+                        nullDateIds.add(row.id);
+                    }
+                });
+                if (nullDateIds.size > 0) {
+                    console.log(`⚠ ${nullDateIds.size} filas sin fecha detectadas, lanzando fallback...`);
+                    fetchFallbackDates(nullDateIds, response.table.rows.length);
+                }
 
                 // [FIX] Guardar selección actual del calendario para restaurarla después del refresh
                 let previousSelectedStrs = [];
