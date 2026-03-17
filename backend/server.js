@@ -15,6 +15,22 @@ app.use(express.static(path.join(__dirname, '..')));
 // Pool de conexiones MySQL
 const pool = mysql.createPool(config.db);
 
+// ── Auto-create mobile tables ──
+async function ensureMobileTables() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS pallet_items (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            pallet_ref_id INT,
+            pallet_id VARCHAR(50) NOT NULL,
+            sku VARCHAR(100) NOT NULL,
+            cantidad INT DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_pallet_id (pallet_id),
+            INDEX idx_pallet_ref (pallet_ref_id)
+        )
+    `);
+}
+
 // =============================================
 // ENDPOINTS - PALLETS
 // =============================================
@@ -372,6 +388,145 @@ app.post('/api/errores/bulk', async (req, res) => {
 });
 
 // =============================================
+// ENDPOINTS - MOBILE APP
+// =============================================
+
+// GET /api/mobile/check/:palletId - Fast duplicate check
+app.get('/api/mobile/check/:palletId', async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            'SELECT id, fecha, turno FROM pallets WHERE pallet_id = ? ORDER BY id DESC LIMIT 1',
+            [req.params.palletId]
+        );
+        res.json({ exists: rows.length > 0, data: rows[0] || null });
+    } catch (error) {
+        res.status(500).json({ exists: false, error: error.message });
+    }
+});
+
+// POST /api/mobile/register - Register pallet with optional SKU items
+app.post('/api/mobile/register', async (req, res) => {
+    try {
+        const { pallet_id, cantidad, destino, fecha, turno, condicion, operador, pedido, items } = req.body;
+
+        if (!pallet_id || !destino || !fecha || !turno) {
+            return res.status(400).json({ success: false, error: 'Campos requeridos: pallet_id, destino, fecha, turno' });
+        }
+
+        // Calculate total qty from items if provided
+        const totalQty = (items && items.length > 0)
+            ? items.reduce((sum, i) => sum + (i.cantidad || 1), 0)
+            : (cantidad || 0);
+
+        // Insert into pallets table (compatible with existing system)
+        const skuSummary = (items && items.length > 0)
+            ? items.map(i => `${i.sku}(${i.cantidad || 1})`).join(', ')
+            : null;
+
+        const [result] = await pool.query(
+            'INSERT INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [pallet_id, totalQty, skuSummary, destino, fecha, turno, condicion || null, pedido || operador || null]
+        );
+
+        const palletRefId = result.insertId;
+
+        // Insert items if provided
+        if (items && items.length > 0) {
+            const values = items.map(i => [palletRefId, pallet_id, i.sku, i.cantidad || 1]);
+            await pool.query(
+                'INSERT INTO pallet_items (pallet_ref_id, pallet_id, sku, cantidad) VALUES ?',
+                [values]
+            );
+        }
+
+        res.json({
+            success: true,
+            id: palletRefId,
+            total_qty: totalQty,
+            items_count: items ? items.length : 0,
+            message: 'Pallet registrado desde app movil'
+        });
+    } catch (error) {
+        console.error('Error POST /api/mobile/register:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET /api/mobile/recent - Recent pallets with items for the mobile app
+app.get('/api/mobile/recent', async (req, res) => {
+    try {
+        const { operador, limit } = req.query;
+        const lim = parseInt(limit) || 50;
+
+        let sql = 'SELECT * FROM pallets WHERE 1=1';
+        const params = [];
+
+        if (operador) {
+            sql += ' AND (observaciones LIKE ? OR observaciones = ?)';
+            params.push(`%${operador}%`, operador);
+        }
+
+        sql += ' ORDER BY id DESC LIMIT ?';
+        params.push(lim);
+
+        const [pallets] = await pool.query(sql, params);
+
+        // Fetch items for these pallets
+        if (pallets.length > 0) {
+            const ids = pallets.map(p => p.id);
+            const [items] = await pool.query(
+                'SELECT * FROM pallet_items WHERE pallet_ref_id IN (?)',
+                [ids]
+            );
+
+            // Attach items to pallets
+            const itemMap = {};
+            for (const item of items) {
+                if (!itemMap[item.pallet_ref_id]) itemMap[item.pallet_ref_id] = [];
+                itemMap[item.pallet_ref_id].push(item);
+            }
+            for (const p of pallets) {
+                p.items = itemMap[p.id] || [];
+            }
+        }
+
+        res.json({ success: true, data: pallets, total: pallets.length });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// GET /api/mobile/stats - Quick stats for the operator's session
+app.get('/api/mobile/stats', async (req, res) => {
+    try {
+        const today = new Date();
+        const mm = today.getMonth() + 1;
+        const dd = today.getDate();
+        const yyyy = today.getFullYear();
+        const fechaHoy = `${mm}/${dd}/${yyyy}`;
+
+        const [todayCount] = await pool.query(
+            'SELECT COUNT(*) as total FROM pallets WHERE fecha = ?', [fechaHoy]
+        );
+        const [lastPallet] = await pool.query(
+            'SELECT pallet_id, destino, fecha, turno FROM pallets ORDER BY id DESC LIMIT 1'
+        );
+        const [destinoCounts] = await pool.query(
+            `SELECT destino, COUNT(*) as total FROM pallets WHERE fecha = ? GROUP BY destino`, [fechaHoy]
+        );
+
+        res.json({
+            success: true,
+            today: todayCount[0].total,
+            last: lastPallet[0] || null,
+            byDestino: destinoCounts
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// =============================================
 // HEALTH CHECK
 // =============================================
 app.get('/api/health', async (req, res) => {
@@ -500,6 +655,10 @@ app.listen(config.port, async () => {
     console.log('');
     console.log(`  Sync Google Sheets -> MySQL cada ${SYNC_INTERVAL}s`);
     console.log('');
+
+    // Create mobile tables if needed
+    await ensureMobileTables();
+    console.log('  Mobile tables verified.');
 
     // Primera sync al arrancar
     console.log('  Sincronizando datos iniciales...');
