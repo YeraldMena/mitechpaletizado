@@ -6,7 +6,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, RADIUS } from '../theme';
 import { getOperatorTurno } from '../config';
-import { clearOperator } from '../storage';
+import { clearOperator, getTodayCount } from '../storage';
 import { fetchStats } from '../api';
 
 export default function HomeScreen({ navigation, route }) {
@@ -16,11 +16,26 @@ export default function HomeScreen({ navigation, route }) {
   const turnoIcon = turno === 'Day' ? 'sunny' : 'moon';
   const turnoColor = turno === 'Day' ? C.yellow : C.purple;
 
-  const [stats, setStats] = useState({ today: 0, byDestino: [] });
+  const [todayCount, setTodayCount] = useState(0);
+  const [byDestino, setByDestino] = useState([]);
 
   useFocusEffect(
     useCallback(() => {
-      fetchStats(operator).then(setStats);
+      // Primary source: local counter (always works, even offline)
+      getTodayCount(operator).then((localCount) => {
+        setTodayCount(localCount);
+      });
+
+      // Secondary source: backend stats (may fail if server unreachable)
+      fetchStats(operator).then((s) => {
+        if (s && s.today > 0) {
+          // Use the higher of local or backend count
+          setTodayCount((prev) => Math.max(prev, s.today));
+        }
+        if (s && s.byDestino && s.byDestino.length > 0) {
+          setByDestino(s.byDestino);
+        }
+      });
     }, [operator])
   );
 
@@ -56,11 +71,11 @@ export default function HomeScreen({ navigation, route }) {
       <View style={s.body}>
         {/* Today counter */}
         <View style={s.counterCard}>
-          <Text style={s.counterNum}>{stats.today}</Text>
+          <Text style={s.counterNum}>{todayCount}</Text>
           <Text style={s.counterLabel}>pallets registrados hoy</Text>
-          {stats.byDestino && stats.byDestino.length > 0 && (
+          {byDestino.length > 0 && (
             <View style={s.destRow}>
-              {stats.byDestino.map((d, i) => (
+              {byDestino.map((d, i) => (
                 <View key={i} style={s.destChip}>
                   <Text style={s.destTxt}>{d.destino}: {d.total}</Text>
                 </View>

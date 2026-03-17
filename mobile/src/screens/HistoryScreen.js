@@ -7,6 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, RADIUS, RADIUS_SM } from '../theme';
 import { fetchRecent } from '../api';
+import { getRecentPallets } from '../storage';
 
 export default function HistoryScreen({ navigation, route }) {
   const operator = route.params?.operator;
@@ -15,8 +16,26 @@ export default function HistoryScreen({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const data = await fetchRecent(operator, 100);
-    setPallets(data);
+    // Primary: local history (always works, filtered by operator + today)
+    const local = await getRecentPallets(operator);
+
+    // Secondary: try backend
+    let remote = [];
+    try {
+      remote = await fetchRecent(operator, 100);
+    } catch { /* backend may be offline */ }
+
+    // Merge: show local entries first (most reliable), then add any backend
+    // entries not already in local (by pallet_id + timestamp dedup)
+    const localIds = new Set(local.map((p) => p.pallet_id));
+    const merged = [...local];
+    for (const r of remote) {
+      if (!localIds.has(r.pallet_id)) {
+        merged.push(r);
+      }
+    }
+
+    setPallets(merged);
     setLoading(false);
     setRefreshing(false);
   }, [operator]);
@@ -62,7 +81,7 @@ export default function HistoryScreen({ navigation, route }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
           <Ionicons name="arrow-back" size={22} color={C.text} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Historial</Text>
+        <Text style={s.headerTitle}>Historial de hoy</Text>
         <View style={s.countBadge}>
           <Text style={s.countTxt}>{pallets.length}</Text>
         </View>
@@ -75,12 +94,12 @@ export default function HistoryScreen({ navigation, route }) {
       ) : pallets.length === 0 ? (
         <View style={s.center}>
           <Ionicons name="cube-outline" size={56} color={C.textMuted} />
-          <Text style={s.emptyTxt}>Sin registros recientes</Text>
+          <Text style={s.emptyTxt}>Sin registros hoy</Text>
         </View>
       ) : (
         <FlatList
           data={pallets}
-          keyExtractor={(p) => String(p.id)}
+          keyExtractor={(p, i) => `${p.pallet_id}-${p.id || i}`}
           renderItem={renderItem}
           contentContainerStyle={s.list}
           refreshControl={

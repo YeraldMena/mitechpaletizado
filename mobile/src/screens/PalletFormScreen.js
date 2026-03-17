@@ -8,9 +8,9 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, RADIUS, RADIUS_SM } from '../theme';
-import { CONDITIONS, DESTINATIONS, BARCODE_TYPES, DEFAULT_CONDITION, DEFAULT_DESTINO } from '../config';
+import { CONDITIONS, DESTINATIONS, BARCODE_TYPES, DEFAULT_CONDITION, DEFAULT_DESTINO, nowTimestamp } from '../config';
 import { registerPallet } from '../api';
-import { getLastDestino, setLastDestino } from '../storage';
+import { getLastDestino, setLastDestino, incrementTodayCount, addRecentPallet } from '../storage';
 
 export default function PalletFormScreen({ navigation, route }) {
   const { palletId: initId, operator, turno, scanned } = route.params;
@@ -43,6 +43,18 @@ export default function PalletFormScreen({ navigation, route }) {
   useEffect(() => {
     getLastDestino().then((v) => setDestino(v || DEFAULT_DESTINO));
   }, []);
+
+  // Auto-open SKU scanner when arriving from pallet scan
+  // This is the key: scan pallet → immediately scan SKUs → then confirm
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (scanned && !autoOpenedRef.current) {
+      autoOpenedRef.current = true;
+      // Small delay to let the screen mount and camera permissions load
+      const t = setTimeout(() => setSkuModal(true), 400);
+      return () => clearTimeout(t);
+    }
+  }, [scanned]);
 
   // ═══════════════════════════════════════
   // SKU DUPLICATE CHECK — STRICT BLOCK
@@ -201,12 +213,32 @@ export default function PalletFormScreen({ navigation, route }) {
       });
 
       await setLastDestino(destino);
+
+      // Local counter + history (works even if backend is offline)
+      const newCount = await incrementTodayCount(operator);
+      const todayKeyStr = (() => {
+        const d = new Date();
+        return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+      })();
+      await addRecentPallet({
+        _day: todayKeyStr,
+        id: Date.now(),
+        pallet_id: palletId.trim(),
+        cantidad: qty,
+        destino,
+        condicion: conditions.join(', '),
+        turno: turno === 'Day' ? 'Day (día)' : 'Night (noche)',
+        operator,
+        fecha: nowTimestamp(),
+        items: items.map((i) => ({ sku: i.sku, cantidad: i.qty })),
+      });
+
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Vibration.vibrate(200);
 
       Alert.alert(
         'Registrado',
-        `${palletId} · ${qty} uds · ${destino}`,
+        `${palletId} · ${qty} uds · ${destino}\nHoy: ${newCount} pallets`,
         [{ text: 'Siguiente', onPress: () => navigation.popToTop() }],
       );
     } catch {
