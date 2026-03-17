@@ -34,9 +34,8 @@ Lee `index.html` completo y ejecuta las siguientes verificaciones:
 - [ ] El event listener de `input` está conectado al campo `inv-pallet`
 
 ### 4. Envío de Datos
-- [ ] La URL de Apps Script (`APPS_SCRIPT_URL`) está definida y es válida (comienza con `https://script.google.com/macros/s/`)
-- [ ] El fetch usa `method: 'POST'` y `mode: 'no-cors'`
-- [ ] El body del JSON incluye todos los campos: pallet, qty, condicion, destino, pedido, turno, escaneadora
+- [ ] El fetch usa `method: 'POST'` hacia `/api/pallets`
+- [ ] El body del JSON incluye todos los campos: pallet_id, cantidad, destino, fecha, turno, condicion, operador, pedido
 - [ ] En éxito: muestra mensaje, resetea form, llama `fetchSheetData()` para refrescar datos
 - [ ] En error: muestra mensaje de error al usuario
 - [ ] El botón se deshabilita durante el envío y se rehabilita en `finally`

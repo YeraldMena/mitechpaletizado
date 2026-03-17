@@ -6,12 +6,8 @@
 // CAMBIAR a la IP real del servidor en la red local
 export const API_BASE = 'http://192.168.1.100:3009';
 
-// Google Apps Script (escritura primaria — igual que formulario web)
-export const GOOGLE_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbydPLwlIU8R6aDZlKKYg8waA2WhcfV2ftqFdy0m3bIoIM3b_SfyuNN0bdm7cSKq09q4dw/exec';
-
 // ═══════════════════════════════════════════════════
-// ESCANEADORAS (nombres reales del Google Sheet)
+// ESCANEADORAS (operadores registrados)
 // turno: 'Day' = día (6am-6pm), 'Night' = noche (6pm-6am)
 // Para cambiar nombres o turno: editar esta lista
 // ═══════════════════════════════════════════════════
@@ -43,10 +39,10 @@ export const CONDITIONS = [
   { code: 'DMA', label: 'DMA', color: '#F43F5E' },
 ];
 
-// Default: GRB es la condición más frecuente en el Sheet
+// Default: GRB es la condición más frecuente
 export const DEFAULT_CONDITION = 'GRB';
 
-// ── Destinations (valores reales del Google Sheet) ──
+// ── Destinations ──
 export const DESTINATIONS = [
   { value: 'Almacén',          label: 'Almacén',   icon: 'cube' },
   { value: 'TRG',              label: 'TRG',       icon: 'arrow-forward-circle' },
@@ -54,7 +50,7 @@ export const DESTINATIONS = [
   { value: 'BOX',              label: 'BOX',       icon: 'archive' },
 ];
 
-// Default: Almacén es el destino más frecuente en el Sheet
+// Default: Almacén es el destino más frecuente
 export const DEFAULT_DESTINO = 'Almacén';
 
 // ── Auto-detect shift ──
