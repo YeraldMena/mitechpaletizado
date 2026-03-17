@@ -16,68 +16,71 @@ export async function checkDuplicate(palletId) {
     const j = await r.json();
     return j.exists ? j.data : null;
   } catch {
-    return null; // If API unreachable, allow registration (offline-tolerant)
+    return null;
   }
 }
 
 // ═══════════════════════════════════════
 // REGISTER PALLET — dual write
+// Escribe al Google Sheet (primario) y al backend MySQL (respaldo)
 // ═══════════════════════════════════════
-export async function registerPallet({ palletId, items, condicion, destino, turno, operador, pedido }) {
+export async function registerPallet({ palletId, cantidad, condicion, destino, turno, operador, pedido, items }) {
   const timestamp = nowTimestamp();
   const fecha = todayStr();
-  const totalQty = items.reduce((s, i) => s + (i.qty || 1), 0);
 
-  // 1. Google Apps Script — fire-and-forget (primary store)
+  // Formato de turno que usa el Google Sheet: "Day (día)" / "Night (noche)"
+  const turnoSheet = turno === 'Day' ? 'Day (día)' : 'Night (noche)';
+
+  // ──────────────────────────────────────
+  // 1. GOOGLE SHEETS — JSON POST, mode no-cors
+  //    Campos EXACTOS que espera el Apps Script
+  //    (mismo formato que el formulario web)
+  // ──────────────────────────────────────
   try {
-    const form = new URLSearchParams();
-    form.append('timestamp', timestamp);
-    form.append('pallet_id', palletId);
-    form.append('cantidad', String(totalQty));
-    form.append('condicion', condicion.join(', '));
-    form.append('destino', destino);
-    form.append('fecha', fecha);
-    form.append('turno', turno);
-    form.append('escaneadora', operador);
-    form.append('pedido', pedido || '');
-
-    // If multi-SKU, append summary
-    if (items.length > 0) {
-      const skuStr = items.map(i => `${i.sku}:${i.qty}`).join(' | ');
-      form.append('contenido', skuStr);
-    }
-
     fetch(GOOGLE_SCRIPT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: form.toString(),
-    }).catch(() => {}); // No-cors, fire-and-forget
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        timestamp:   timestamp,
+        pallet:      palletId,
+        qty:         String(cantidad),
+        condicion:   condicion.join(', '),
+        destino:     destino,
+        turno:       turnoSheet,
+        escaneadora: operador,
+        pedido:      pedido || '',
+      }),
+    }).catch(() => {});
+    // no-cors: no se puede leer la respuesta, pero el dato SÍ se escribe
   } catch {
-    // Expected: CORS may block response but data is written
+    // fire-and-forget
   }
 
-  // 2. Express API — structured write with items
+  // ──────────────────────────────────────
+  // 2. EXPRESS API — MySQL backup con detalle de items
+  // ──────────────────────────────────────
   try {
     const r = await fetchWithTimeout(`${API_BASE}/api/mobile/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         pallet_id: palletId,
-        cantidad: totalQty,
+        cantidad,
         destino,
         fecha,
-        turno,
+        turno: turnoSheet,
         condicion: condicion.join(', '),
         operador,
         pedido: pedido || null,
-        items: items.map(i => ({ sku: i.sku, cantidad: i.qty || 1 })),
+        items: items.map(i => ({ sku: i.sku, cantidad: i.qty })),
       }),
     }, 8000);
     const j = await r.json();
-    return { success: j.success, id: j.id };
+    return { success: j.success, id: j.id, googleSent: true };
   } catch {
-    // API might be down but Google Sheets write already happened
-    return { success: true, id: null, offline: true };
+    // API caída pero Google Sheets ya se mandó
+    return { success: true, id: null, googleSent: true, offline: true };
   }
 }
 

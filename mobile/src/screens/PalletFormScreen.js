@@ -18,6 +18,7 @@ export default function PalletFormScreen({ navigation, route }) {
   // ── State ──
   const [palletId, setPalletId] = useState(initId || '');
   const [items, setItems] = useState([]);           // { id, sku, qty }
+  const [cantidad, setCantidad] = useState('');      // cantidad total obligatoria
   const [conditions, setConditions] = useState([]);
   const [destino, setDestino] = useState('');
   const [pedido, setPedido] = useState('');
@@ -39,18 +40,33 @@ export default function PalletFormScreen({ navigation, route }) {
     getLastDestino().then((v) => { if (v) setDestino(v); });
   }, []);
 
-  // ── SKU handling ──
+  // ═══════════════════════════════════════
+  // SKU DUPLICATE BLOCK + ADD
+  // ═══════════════════════════════════════
   const addSku = (sku, qty) => {
     const q = parseInt(qty, 10) || 1;
-    // Check if SKU already in list — if so, add qty
+    if (q < 1) {
+      Alert.alert('Error', 'La cantidad debe ser al menos 1');
+      return false;
+    }
+
+    // BLOQUEAR SKU duplicado en este pallet
     const existing = items.find((i) => i.sku === sku);
     if (existing) {
-      setItems((prev) => prev.map((i) => i.sku === sku ? { ...i, qty: i.qty + q } : i));
-    } else {
-      setItems((prev) => [...prev, { id: itemIdRef.current++, sku, qty: q }]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Vibration.vibrate([0, 100, 50, 100]);
+      Alert.alert(
+        'SKU duplicado',
+        `"${sku}" ya fue escaneado en este pallet (×${existing.qty}).\n\nNo se puede agregar dos veces.`,
+        [{ text: 'Entendido' }]
+      );
+      return false;
     }
+
+    setItems((prev) => [...prev, { id: itemIdRef.current++, sku, qty: q }]);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Vibration.vibrate(50);
+    return true;
   };
 
   const removeSku = (id) => {
@@ -72,12 +88,26 @@ export default function PalletFormScreen({ navigation, route }) {
     if (skuScanned || data === skuLastRef.current) return;
     setSkuScanned(true);
     skuLastRef.current = data;
+
+    // Check duplicate BEFORE opening qty input
+    const existing = items.find((i) => i.sku === data);
+    if (existing) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Vibration.vibrate([0, 100, 50, 100]);
+      Alert.alert(
+        'SKU duplicado',
+        `"${data}" ya fue escaneado en este pallet (×${existing.qty}).`,
+        [{ text: 'Entendido', onPress: () => { setSkuScanned(false); skuLastRef.current = ''; } }]
+      );
+      return;
+    }
+
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Vibration.vibrate(80);
 
-    // Show the scanned SKU with qty input
+    // Show qty input for this SKU
     setSkuInput(data);
-    setSkuManual(true); // Switch to manual mode to confirm qty
+    setSkuManual(true);
 
     setTimeout(() => { setSkuScanned(false); skuLastRef.current = ''; }, 1200);
   };
@@ -85,11 +115,16 @@ export default function PalletFormScreen({ navigation, route }) {
   const confirmSkuAdd = () => {
     const sku = skuInput.trim();
     if (!sku) { Alert.alert('Error', 'Ingresa un SKU'); return; }
-    addSku(sku, skuQty);
-    setSkuInput('');
-    setSkuQty('1');
-    setSkuManual(false);
-    // Stay in modal for next scan
+    const q = parseInt(skuQty, 10);
+    if (!q || q < 1) { Alert.alert('Error', 'La cantidad debe ser al menos 1'); return; }
+
+    const added = addSku(sku, skuQty);
+    if (added) {
+      setSkuInput('');
+      setSkuQty('1');
+      setSkuManual(false);
+      // Stay in modal for next scan
+    }
   };
 
   const closeSkuModal = () => {
@@ -115,29 +150,48 @@ export default function PalletFormScreen({ navigation, route }) {
     setDestino(val);
   };
 
-  // ── Submit ──
+  // ── Adjust cantidad ──
+  const adjustCantidad = (delta) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const n = Math.max(1, (parseInt(cantidad, 10) || 0) + delta);
+    setCantidad(String(n));
+  };
+
+  // ═══════════════════════════════════════
+  // SUBMIT — all validations
+  // ═══════════════════════════════════════
   const handleSubmit = async () => {
-    if (!palletId || palletId.length < 4) {
-      Alert.alert('Error', 'El ID del pallet debe tener al menos 4 caracteres');
+    // Validación: Pallet ID
+    if (!palletId || palletId.trim().length < 4) {
+      Alert.alert('Falta pallet ID', 'El ID del pallet debe tener al menos 4 caracteres');
       return;
     }
+
+    // Validación: Cantidad obligatoria
+    const qty = parseInt(cantidad, 10);
+    if (!qty || qty < 1) {
+      Alert.alert('Falta cantidad', 'Ingresa la cantidad total del pallet');
+      return;
+    }
+
+    // Validación: Condición
     if (conditions.length === 0) {
-      Alert.alert('Error', 'Selecciona al menos una condición');
+      Alert.alert('Falta condición', 'Selecciona al menos una condición');
       return;
     }
+
+    // Validación: Destino
     if (!destino) {
-      Alert.alert('Error', 'Selecciona un destino');
+      Alert.alert('Falta destino', 'Selecciona un destino');
       return;
     }
 
     setLoading(true);
     try {
-      // If no items added, create a default item with the pallet ID as SKU
-      const finalItems = items.length > 0 ? items : [{ sku: palletId, qty: 1 }];
-
       const result = await registerPallet({
-        palletId,
-        items: finalItems,
+        palletId: palletId.trim(),
+        cantidad: qty,
+        items,
         condicion: conditions,
         destino,
         turno,
@@ -149,9 +203,18 @@ export default function PalletFormScreen({ navigation, route }) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Vibration.vibrate(200);
 
-      // Go back to home
-      navigation.goBack();
-      navigation.goBack(); // Pop scan screen too if we came from there
+      // Confirmación visual
+      Alert.alert(
+        'Pallet registrado',
+        `${palletId} · ${qty} uds · ${destino}${result.offline ? '\n(Sin conexión al servidor, guardado en Google Sheets)' : ''}`,
+        [{
+          text: 'Siguiente pallet',
+          onPress: () => {
+            // Go back to home
+            navigation.popToTop();
+          },
+        }]
+      );
     } catch (err) {
       Alert.alert('Error', 'No se pudo registrar. Intenta de nuevo.');
     } finally {
@@ -159,8 +222,8 @@ export default function PalletFormScreen({ navigation, route }) {
     }
   };
 
-  // ── Total qty ──
-  const totalQty = items.reduce((s, i) => s + i.qty, 0);
+  // ── Computed ──
+  const skuTotalQty = items.reduce((s, i) => s + i.qty, 0);
 
   return (
     <SafeAreaView style={s.safe}>
@@ -204,12 +267,79 @@ export default function PalletFormScreen({ navigation, route }) {
             )}
           </View>
 
-          {/* ── Contenido / SKUs ── */}
+          {/* ── CANTIDAD (OBLIGATORIA) ── */}
+          <View style={s.section}>
+            <Text style={s.label}>CANTIDAD (QTY) *</Text>
+            <View style={s.qtyRow}>
+              <TouchableOpacity style={s.qtyBtnBig} onPress={() => adjustCantidad(-1)}>
+                <Ionicons name="remove" size={24} color={C.text} />
+              </TouchableOpacity>
+              <TextInput
+                style={s.qtyInputBig}
+                value={cantidad}
+                onChangeText={setCantidad}
+                keyboardType="number-pad"
+                textAlign="center"
+                placeholder="0"
+                placeholderTextColor={C.textMuted}
+              />
+              <TouchableOpacity style={s.qtyBtnBig} onPress={() => adjustCantidad(1)}>
+                <Ionicons name="add" size={24} color={C.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* ── Condición ── */}
+          <View style={s.section}>
+            <Text style={s.label}>CONDICIÓN *</Text>
+            <View style={s.chipGrid}>
+              {CONDITIONS.map((c) => {
+                const active = conditions.includes(c.code);
+                return (
+                  <TouchableOpacity
+                    key={c.code}
+                    style={[s.condChip, active && { backgroundColor: c.color, borderColor: c.color }]}
+                    onPress={() => toggleCond(c.code)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[s.condTxt, active && { color: '#FFF' }]}>{c.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* ── Destino ── */}
+          <View style={s.section}>
+            <Text style={s.label}>DESTINO *</Text>
+            <View style={s.destGrid}>
+              {DESTINATIONS.map((d) => {
+                const active = destino === d.value;
+                return (
+                  <TouchableOpacity
+                    key={d.value}
+                    style={[s.destBtn, active && s.destBtnActive]}
+                    onPress={() => pickDestino(d.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={d.icon}
+                      size={20}
+                      color={active ? '#FFF' : C.textMuted}
+                    />
+                    <Text style={[s.destTxt, active && { color: '#FFF' }]}>{d.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* ── Contenido / SKUs (opcional pero validado) ── */}
           <View style={s.section}>
             <View style={s.labelRow}>
               <Text style={s.label}>CONTENIDO DEL PALLET</Text>
               {items.length > 0 && (
-                <Text style={s.labelBadge}>{items.length} SKU · {totalQty} uds</Text>
+                <Text style={s.labelBadge}>{items.length} SKU · {skuTotalQty} uds</Text>
               )}
             </View>
 
@@ -254,54 +384,9 @@ export default function PalletFormScreen({ navigation, route }) {
 
             {items.length === 0 && (
               <Text style={s.hint}>
-                Opcional: agrega SKUs del contenido. Si no agregas nada, se registra el pallet sin detalle de contenido.
+                Opcional: escanea los SKUs del contenido del pallet.
               </Text>
             )}
-          </View>
-
-          {/* ── Condición ── */}
-          <View style={s.section}>
-            <Text style={s.label}>CONDICIÓN</Text>
-            <View style={s.chipGrid}>
-              {CONDITIONS.map((c) => {
-                const active = conditions.includes(c.code);
-                return (
-                  <TouchableOpacity
-                    key={c.code}
-                    style={[s.condChip, active && { backgroundColor: c.color, borderColor: c.color }]}
-                    onPress={() => toggleCond(c.code)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[s.condTxt, active && { color: '#FFF' }]}>{c.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* ── Destino ── */}
-          <View style={s.section}>
-            <Text style={s.label}>DESTINO</Text>
-            <View style={s.destGrid}>
-              {DESTINATIONS.map((d) => {
-                const active = destino === d.value;
-                return (
-                  <TouchableOpacity
-                    key={d.value}
-                    style={[s.destBtn, active && s.destBtnActive]}
-                    onPress={() => pickDestino(d.value)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={d.icon}
-                      size={20}
-                      color={active ? '#FFF' : C.textMuted}
-                    />
-                    <Text style={[s.destTxt, active && { color: '#FFF' }]}>{d.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
           </View>
 
           {/* ── Pedido (opcional) ── */}
@@ -316,11 +401,19 @@ export default function PalletFormScreen({ navigation, route }) {
             />
           </View>
 
-          {/* ── Operador info ── */}
+          {/* ── Auto-filled info ── */}
           <View style={s.infoBar}>
             <View style={s.chip}>
               <Ionicons name="person" size={12} color={C.blue} />
               <Text style={s.chipTxt}>{operator}</Text>
+            </View>
+            <View style={s.chip}>
+              <Ionicons name={turno === 'Day' ? 'sunny' : 'moon'} size={12} color={turno === 'Day' ? C.yellow : C.purple} />
+              <Text style={s.chipTxt}>{turno === 'Day' ? 'Día' : 'Noche'}</Text>
+            </View>
+            <View style={s.chip}>
+              <Ionicons name="calendar" size={12} color={C.textMuted} />
+              <Text style={s.chipTxt}>Auto</Text>
             </View>
           </View>
 
@@ -368,7 +461,7 @@ export default function PalletFormScreen({ navigation, route }) {
                 placeholderTextColor={C.textMuted}
                 autoFocus
               />
-              <Text style={[s.label, { marginTop: 16 }]}>CANTIDAD</Text>
+              <Text style={[s.label, { marginTop: 16 }]}>CANTIDAD *</Text>
               <View style={s.modalQtyRow}>
                 <TouchableOpacity
                   style={s.modalQtyBtn}
@@ -441,7 +534,7 @@ export default function PalletFormScreen({ navigation, route }) {
           {/* Items added so far */}
           {items.length > 0 && (
             <View style={s.modalItemList}>
-              <Text style={s.modalItemTitle}>En este pallet ({items.length}):</Text>
+              <Text style={s.modalItemTitle}>En este pallet ({items.length} SKUs):</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {items.map((item) => (
                   <View key={item.id} style={s.modalItemChip}>
@@ -501,6 +594,18 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(34,197,94,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4,
   },
 
+  // Cantidad grande
+  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  qtyBtnBig: {
+    width: 56, height: 56, borderRadius: RADIUS,
+    backgroundColor: C.card, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: C.border,
+  },
+  qtyInputBig: {
+    flex: 1, backgroundColor: C.input, borderWidth: 1, borderColor: C.inputBorder,
+    borderRadius: RADIUS, paddingVertical: 14, fontSize: 32, fontWeight: '800', color: C.text,
+  },
+
   // Items
   itemRow: {
     flexDirection: 'row', alignItems: 'center',
@@ -547,7 +652,7 @@ const s = StyleSheet.create({
   destBtnActive: { backgroundColor: C.blue, borderColor: C.blue },
   destTxt: { fontSize: 13, fontWeight: '600', color: C.textSec },
 
-  infoBar: { flexDirection: 'row', marginBottom: 20 },
+  infoBar: { flexDirection: 'row', gap: 8, marginBottom: 20, flexWrap: 'wrap' },
 
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
