@@ -5,13 +5,13 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { C, RADIUS } from '../theme';
-import { detectShift } from '../config';
+import { getOperatorTurno } from '../config';
 import { clearOperator } from '../storage';
 import { fetchStats } from '../api';
 
 export default function HomeScreen({ navigation, route }) {
   const operator = route.params?.operator || 'Operador';
-  const turno = detectShift();
+  const turno = route.params?.turno || getOperatorTurno(operator);
   const turnoLabel = turno === 'Day' ? 'Turno día' : 'Turno noche';
   const turnoIcon = turno === 'Day' ? 'sunny' : 'moon';
   const turnoColor = turno === 'Day' ? C.yellow : C.purple;
@@ -20,8 +20,8 @@ export default function HomeScreen({ navigation, route }) {
 
   useFocusEffect(
     useCallback(() => {
-      fetchStats().then(setStats);
-    }, [])
+      fetchStats(operator).then(setStats);
+    }, [operator])
   );
 
   const changeOperator = async () => {

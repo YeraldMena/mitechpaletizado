@@ -15,11 +15,11 @@ export default function HistoryScreen({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const data = await fetchRecent(null, 100); // all operators, most recent
+    const data = await fetchRecent(operator, 100);
     setPallets(data);
     setLoading(false);
     setRefreshing(false);
-  }, []);
+  }, [operator]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 

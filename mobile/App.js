@@ -9,6 +9,7 @@ import ScanScreen from './src/screens/ScanScreen';
 import PalletFormScreen from './src/screens/PalletFormScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import { getOperator } from './src/storage';
+import { getOperatorTurno } from './src/config';
 import { C } from './src/theme';
 
 const Stack = createNativeStackNavigator();
@@ -23,7 +24,7 @@ export default function App() {
       const stored = await getOperator();
       if (stored) {
         setInitRoute('Home');
-        setInitParams({ operator: stored });
+        setInitParams({ operator: stored, turno: getOperatorTurno(stored) });
       }
       setReady(true);
     })();

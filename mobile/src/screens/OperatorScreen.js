@@ -10,7 +10,7 @@ import { setOperator } from '../storage';
 export default function OperatorScreen({ navigation }) {
   const pick = async (op) => {
     await setOperator(op.name);
-    navigation.replace('Home', { operator: op.name });
+    navigation.replace('Home', { operator: op.name, turno: op.turno });
   };
 
   return (

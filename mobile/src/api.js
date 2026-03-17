@@ -71,7 +71,7 @@ export async function registerPallet({ palletId, cantidad, condicion, destino, t
         fecha,
         turno: turnoSheet,
         condicion: condicion.join(', '),
-        operador,
+        operador: operador,
         pedido: pedido || null,
         items: items.map(i => ({ sku: i.sku, cantidad: i.qty })),
       }),
@@ -100,11 +100,13 @@ export async function fetchRecent(operador, limit = 50) {
 }
 
 // ═══════════════════════════════════════
-// TODAY STATS
+// TODAY STATS (filtered by operator)
 // ═══════════════════════════════════════
-export async function fetchStats() {
+export async function fetchStats(operador) {
   try {
-    const r = await fetchWithTimeout(`${API_BASE}/api/mobile/stats`);
+    const params = new URLSearchParams();
+    if (operador) params.append('operador', operador);
+    const r = await fetchWithTimeout(`${API_BASE}/api/mobile/stats?${params}`);
     const j = await r.json();
     return j.success ? j : { today: 0, last: null, byDestino: [] };
   } catch {

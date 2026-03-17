@@ -12,14 +12,21 @@ export const GOOGLE_SCRIPT_URL =
 
 // ═══════════════════════════════════════════════════
 // ESCANEADORAS (nombres reales del Google Sheet)
-// Para cambiar nombres: editar esta lista
+// turno: 'Day' = día (6am-6pm), 'Night' = noche (6pm-6am)
+// Para cambiar nombres o turno: editar esta lista
 // ═══════════════════════════════════════════════════
 export const OPERATORS = [
-  { id: 'angelica',  name: 'Angélica Alemán' },
-  { id: 'nathalie',  name: 'Nathalie López' },
-  { id: 'yusley',    name: 'Yusley Montes' },
-  { id: 'cecilia',   name: 'Cecilia Pérez' },
+  { id: 'angelica',  name: 'Angélica Alemán', turno: 'Day' },
+  { id: 'nathalie',  name: 'Nathalie López',  turno: 'Day' },
+  { id: 'yusley',    name: 'Yusley Montes',   turno: 'Day' },
+  { id: 'cecilia',   name: 'Cecilia Pérez',   turno: 'Night' },
 ];
+
+// Buscar turno fijo de un operador por nombre
+export function getOperatorTurno(name) {
+  const op = OPERATORS.find((o) => o.name === name);
+  return op ? op.turno : detectShift();
+}
 
 // ── Condition codes ──
 export const CONDITIONS = [

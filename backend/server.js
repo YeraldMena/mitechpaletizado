@@ -275,12 +275,17 @@ app.get('/api/dashboard/fechas', async (req, res) => {
 // GET /api/dashboard/hoy - Datos de hoy para las tarjetas
 app.get('/api/dashboard/hoy', async (req, res) => {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date();
+        const todayISO = today.toISOString().split('T')[0];
+        const mm = today.getMonth() + 1;
+        const dd = today.getDate();
+        const yyyy = today.getFullYear();
+        const todayMobile = `${mm}/${dd}/${yyyy}`;
         const [pallets] = await pool.query(
-            'SELECT * FROM pallets WHERE fecha = ? ORDER BY id DESC', [today]
+            'SELECT * FROM pallets WHERE (fecha = ? OR fecha = ?) ORDER BY id DESC', [todayISO, todayMobile]
         );
         const [errores] = await pool.query(
-            'SELECT * FROM errores_pallet WHERE fecha = ? ORDER BY id DESC', [today]
+            'SELECT * FROM errores_pallet WHERE (fecha = ? OR fecha = ?) ORDER BY id DESC', [todayISO, todayMobile]
         );
         res.json({
             success: true,
@@ -423,9 +428,14 @@ app.post('/api/mobile/register', async (req, res) => {
             ? items.map(i => `${i.sku}(${i.cantidad || 1})`).join(', ')
             : null;
 
+        // Siempre guardar operador en observaciones (no perderlo cuando hay pedido)
+        const obsValue = pedido
+            ? `${operador || ''} | Pedido: ${pedido}`
+            : (operador || null);
+
         const [result] = await pool.query(
             'INSERT INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [pallet_id, totalQty, skuSummary, destino, fecha, turno, condicion || null, pedido || operador || null]
+            [pallet_id, totalQty, skuSummary, destino, fecha, turno, condicion || null, obsValue]
         );
 
         const palletRefId = result.insertId;
@@ -499,20 +509,50 @@ app.get('/api/mobile/recent', async (req, res) => {
 // GET /api/mobile/stats - Quick stats for the operator's session
 app.get('/api/mobile/stats', async (req, res) => {
     try {
+        const { operador } = req.query;
         const today = new Date();
         const mm = today.getMonth() + 1;
         const dd = today.getDate();
         const yyyy = today.getFullYear();
-        const fechaHoy = `${mm}/${dd}/${yyyy}`;
+
+        // Ambos formatos de fecha posibles en la tabla:
+        // - M/D/YYYY (registrado desde mobile)
+        // - YYYY-MM-DD (sincronizado desde Google Sheets)
+        const fechaMobile = `${mm}/${dd}/${yyyy}`;
+        const fechaISO = `${yyyy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+
+        // Base WHERE: match today in either format
+        let whereDate = '(fecha = ? OR fecha = ?)';
+        let params = [fechaMobile, fechaISO];
+
+        // Filtrar por operador si se proporciona
+        let whereOp = '';
+        if (operador) {
+            whereOp = ' AND observaciones LIKE ?';
+            params.push(`%${operador}%`);
+        }
 
         const [todayCount] = await pool.query(
-            'SELECT COUNT(*) as total FROM pallets WHERE fecha = ?', [fechaHoy]
+            `SELECT COUNT(*) as total FROM pallets WHERE ${whereDate}${whereOp}`, params
         );
+
+        // Last pallet for this operator
+        let lastParams = [];
+        let lastWhere = '';
+        if (operador) {
+            lastWhere = ' WHERE observaciones LIKE ?';
+            lastParams.push(`%${operador}%`);
+        }
         const [lastPallet] = await pool.query(
-            'SELECT pallet_id, destino, fecha, turno FROM pallets ORDER BY id DESC LIMIT 1'
+            `SELECT pallet_id, destino, fecha, turno FROM pallets${lastWhere} ORDER BY id DESC LIMIT 1`, lastParams
         );
+
+        // Destino breakdown for today + operator (same params as count query)
+        const destinoParams = [fechaMobile, fechaISO];
+        if (operador) destinoParams.push(`%${operador}%`);
         const [destinoCounts] = await pool.query(
-            `SELECT destino, COUNT(*) as total FROM pallets WHERE fecha = ? GROUP BY destino`, [fechaHoy]
+            `SELECT destino, COUNT(*) as total FROM pallets WHERE ${whereDate}${whereOp} GROUP BY destino`,
+            destinoParams
         );
 
         res.json({
@@ -522,6 +562,7 @@ app.get('/api/mobile/stats', async (req, res) => {
             byDestino: destinoCounts
         });
     } catch (error) {
+        console.error('Error GET /api/mobile/stats:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
