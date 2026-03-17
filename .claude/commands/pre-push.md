@@ -41,7 +41,7 @@ grep -c "view-dashboard\|view-palets\|view-ordenes\|view-formulario\|view-config
 
 # Verificar CDNs y URLs críticas
 grep -c "chart.js\|flatpickr\|font-awesome" index.html  # debe ser > 0
-grep -c "/api/pallets" index.html                          # debe ser > 0
+grep -c "APPS_SCRIPT_URL" index.html                      # debe ser > 0
 
 # Backend: verificar integridad
 grep -c "app.listen(config.port" backend/server.js         # debe ser 1

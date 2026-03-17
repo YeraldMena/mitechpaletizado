@@ -1,6 +1,7 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
+const https = require('https');
 const path = require('path');
 const config = require('./config');
 
@@ -14,43 +15,8 @@ app.use(express.static(path.join(__dirname, '..')));
 // Pool de conexiones MySQL
 const pool = mysql.createPool(config.db);
 
-// ── Auto-create tables if not exist ──
-async function ensureTables() {
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS pallets (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            pallet_id VARCHAR(50) NOT NULL,
-            cantidad INT DEFAULT 1,
-            producto VARCHAR(255) DEFAULT NULL,
-            destino VARCHAR(100) NOT NULL,
-            fecha DATE NOT NULL,
-            turno VARCHAR(50) DEFAULT NULL,
-            condicion VARCHAR(100) DEFAULT NULL,
-            operador VARCHAR(100) DEFAULT NULL,
-            pedido VARCHAR(100) DEFAULT NULL,
-            observaciones VARCHAR(500) DEFAULT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_pallet_id (pallet_id),
-            INDEX idx_fecha (fecha),
-            INDEX idx_operador (operador),
-            INDEX idx_turno (turno)
-        )
-    `);
-
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS errores_pallet (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            pallet_id VARCHAR(50) NOT NULL,
-            fecha DATE NOT NULL,
-            defecto VARCHAR(255) NOT NULL,
-            tipo VARCHAR(100) DEFAULT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_pallet_id (pallet_id),
-            INDEX idx_fecha (fecha)
-        )
-    `);
-
+// ── Auto-create mobile tables ──
+async function ensureMobileTables() {
     await pool.query(`
         CREATE TABLE IF NOT EXISTS pallet_items (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -63,35 +29,6 @@ async function ensureTables() {
             INDEX idx_pallet_ref (pallet_ref_id)
         )
     `);
-
-    // Add columns if they don't exist (safe migration for existing tables)
-    const safeAddColumn = async (table, col, def) => {
-        try {
-            const [cols] = await pool.query(`SHOW COLUMNS FROM ${table} LIKE ?`, [col]);
-            if (cols.length === 0) {
-                await pool.query(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
-                console.log(`  + Added column ${table}.${col}`);
-            }
-        } catch { /* table may not exist yet */ }
-    };
-
-    await safeAddColumn('pallets', 'operador', "VARCHAR(100) DEFAULT NULL AFTER condicion");
-    await safeAddColumn('pallets', 'pedido', "VARCHAR(100) DEFAULT NULL AFTER operador");
-    await safeAddColumn('pallets', 'updated_at', "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
-}
-
-// ── Helper: today as ISO string ──
-function todayISO() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-// ── Helper: normalize old M/D/YYYY dates for queries ──
-function todayFormats() {
-    const d = new Date();
-    const iso = todayISO();
-    const mobile = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
-    return { iso, mobile };
 }
 
 // =============================================
@@ -101,7 +38,7 @@ function todayFormats() {
 // GET /api/pallets - Todos los pallets (con filtros opcionales)
 app.get('/api/pallets', async (req, res) => {
     try {
-        const { fecha, turno, destino, operador, fecha_inicio, fecha_fin } = req.query;
+        const { fecha, turno, destino, fecha_inicio, fecha_fin } = req.query;
         let sql = 'SELECT * FROM pallets WHERE 1=1';
         const params = [];
 
@@ -121,12 +58,8 @@ app.get('/api/pallets', async (req, res) => {
             sql += ' AND destino LIKE ?';
             params.push(`%${destino}%`);
         }
-        if (operador) {
-            sql += ' AND (operador LIKE ? OR observaciones LIKE ?)';
-            params.push(`%${operador}%`, `%${operador}%`);
-        }
 
-        sql += ' ORDER BY id DESC';
+        sql += ' ORDER BY fecha DESC, id DESC';
 
         const [rows] = await pool.query(sql, params);
         res.json({ success: true, data: rows, total: rows.length });
@@ -136,59 +69,28 @@ app.get('/api/pallets', async (req, res) => {
     }
 });
 
-// GET /api/pallets/today - Pallets de hoy
-app.get('/api/pallets/today', async (req, res) => {
-    try {
-        const { iso, mobile } = todayFormats();
-        const [rows] = await pool.query(
-            'SELECT * FROM pallets WHERE (fecha = ? OR fecha = ?) ORDER BY id DESC',
-            [iso, mobile]
-        );
-        res.json({ success: true, data: rows, total: rows.length });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// GET /api/pallets/by-user/:user - Pallets por usuario
-app.get('/api/pallets/by-user/:user', async (req, res) => {
-    try {
-        const user = req.params.user;
-        const [rows] = await pool.query(
-            'SELECT * FROM pallets WHERE (operador LIKE ? OR observaciones LIKE ?) ORDER BY id DESC LIMIT 200',
-            [`%${user}%`, `%${user}%`]
-        );
-        res.json({ success: true, data: rows, total: rows.length });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
 // POST /api/pallets - Crear un pallet
 app.post('/api/pallets', async (req, res) => {
     try {
-        const { pallet_id, cantidad, producto, destino, fecha, turno, condicion, operador, pedido, observaciones } = req.body;
+        const { pallet_id, cantidad, producto, destino, fecha, turno, condicion, observaciones } = req.body;
 
-        if (!pallet_id || !destino) {
-            return res.status(400).json({ success: false, error: 'Campos requeridos: pallet_id, destino' });
+        if (!pallet_id || !destino || !fecha || !turno) {
+            return res.status(400).json({ success: false, error: 'Campos requeridos: pallet_id, destino, fecha, turno' });
         }
 
-        const finalFecha = fecha || todayISO();
-        const finalTurno = turno || 'N/A';
-
         const [result] = await pool.query(
-            'INSERT INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, operador, pedido, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [pallet_id, cantidad || 0, producto || null, destino, finalFecha, finalTurno, condicion || null, operador || null, pedido || null, observaciones || null]
+            'INSERT INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [pallet_id, cantidad || 0, producto || null, destino, fecha, turno, condicion || null, observaciones || null]
         );
 
-        res.json({ success: true, id: result.insertId, message: 'Pallet registrado' });
+        res.json({ success: true, id: result.insertId, message: 'Pallet creado' });
     } catch (error) {
         console.error('Error POST /api/pallets:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// POST /api/pallets/bulk - Insertar múltiples pallets
+// POST /api/pallets/bulk - Insertar múltiples pallets (para carga masiva)
 app.post('/api/pallets/bulk', async (req, res) => {
     try {
         const { pallets } = req.body;
@@ -198,12 +100,11 @@ app.post('/api/pallets/bulk', async (req, res) => {
 
         const values = pallets.map(p => [
             p.pallet_id, p.cantidad || 0, p.producto || null,
-            p.destino, p.fecha || todayISO(), p.turno || 'N/A',
-            p.condicion || null, p.operador || null, p.pedido || null, p.observaciones || null
+            p.destino, p.fecha, p.turno, p.condicion || null, p.observaciones || null
         ]);
 
         const [result] = await pool.query(
-            'INSERT INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, operador, pedido, observaciones) VALUES ?',
+            'INSERT INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, observaciones) VALUES ?',
             [values]
         );
 
@@ -214,7 +115,7 @@ app.post('/api/pallets/bulk', async (req, res) => {
     }
 });
 
-// DELETE /api/pallets/:id
+// DELETE /api/pallets/:id - Eliminar un pallet
 app.delete('/api/pallets/:id', async (req, res) => {
     try {
         const [result] = await pool.query('DELETE FROM pallets WHERE id = ?', [req.params.id]);
@@ -223,64 +124,40 @@ app.delete('/api/pallets/:id', async (req, res) => {
         }
         res.json({ success: true, message: 'Pallet eliminado' });
     } catch (error) {
+        console.error('Error DELETE /api/pallets:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
 // =============================================
-// ENDPOINTS - DASHBOARD
+// ENDPOINTS - VISTAS DEL DASHBOARD
 // =============================================
 
-// GET /api/dashboard - Stats generales
-app.get('/api/dashboard', async (req, res) => {
-    try {
-        const { iso, mobile } = todayFormats();
-        const dateWhere = '(fecha = ? OR fecha = ?)';
-        const dateParams = [iso, mobile];
-
-        const [[todayRow]] = await pool.query(`SELECT COUNT(*) as total, COALESCE(SUM(cantidad),0) as unidades FROM pallets WHERE ${dateWhere}`, dateParams);
-        const [[totalRow]] = await pool.query('SELECT COUNT(*) as total FROM pallets');
-        const [[errorRow]] = await pool.query(`SELECT COUNT(*) as total FROM errores_pallet WHERE ${dateWhere}`, dateParams);
-
-        const [byDestino] = await pool.query(`SELECT destino, COUNT(*) as total FROM pallets WHERE ${dateWhere} GROUP BY destino`, dateParams);
-        const [byTurno] = await pool.query(`SELECT turno, COUNT(*) as total FROM pallets WHERE ${dateWhere} GROUP BY turno`, dateParams);
-        const [byOperador] = await pool.query(`SELECT operador, COUNT(*) as total FROM pallets WHERE ${dateWhere} AND operador IS NOT NULL GROUP BY operador`, dateParams);
-        const [last5] = await pool.query('SELECT * FROM pallets ORDER BY id DESC LIMIT 5');
-
-        res.json({
-            success: true,
-            today: {
-                pallets: todayRow.total,
-                unidades: todayRow.unidades,
-                errores: errorRow.total,
-            },
-            allTime: { pallets: totalRow.total },
-            byDestino,
-            byTurno,
-            byOperador,
-            recent: last5,
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-    }
-});
-
-// GET /api/dashboard/resumen-destino
+// GET /api/dashboard/resumen-destino - Para gráfico de anillo
 app.get('/api/dashboard/resumen-destino', async (req, res) => {
     try {
-        const { fechas } = req.query;
+        const { fechas } = req.query; // fechas separadas por coma: "3/1/2026,3/2/2026"
         let sql, params = [];
 
         if (fechas) {
             const fechaList = fechas.split(',').map(f => f.trim());
             const placeholders = fechaList.map(() => '?').join(',');
-            sql = `SELECT destino, COUNT(*) AS total_pallets, SUM(cantidad) AS total_unidades
-                   FROM pallets WHERE fecha IN (${placeholders}) GROUP BY destino`;
+            sql = `SELECT
+                CASE
+                    WHEN destino REGEXP 'pedido' THEN 'TRG'
+                    WHEN destino REGEXP '[0-9]' THEN 'Almacén'
+                    WHEN LOWER(destino) = 'trg' THEN 'TRG'
+                    WHEN LOWER(destino) LIKE '%hv%' THEN 'HV (High Value)'
+                    ELSE CONCAT(UPPER(LEFT(destino, 1)), LOWER(SUBSTRING(destino, 2)))
+                END AS destino_normalizado,
+                COUNT(*) AS total_pallets,
+                SUM(cantidad) AS total_unidades
+            FROM pallets
+            WHERE fecha IN (${placeholders})
+            GROUP BY destino_normalizado`;
             params = fechaList;
         } else {
-            const { iso, mobile } = todayFormats();
-            sql = 'SELECT destino, COUNT(*) AS total_pallets, SUM(cantidad) AS total_unidades FROM pallets WHERE (fecha = ? OR fecha = ?) GROUP BY destino';
-            params = [iso, mobile];
+            sql = 'SELECT * FROM v_resumen_destino';
         }
 
         const [rows] = await pool.query(sql, params);
@@ -290,7 +167,7 @@ app.get('/api/dashboard/resumen-destino', async (req, res) => {
     }
 });
 
-// GET /api/dashboard/turno-destino
+// GET /api/dashboard/turno-destino - Para gráfico de barras
 app.get('/api/dashboard/turno-destino', async (req, res) => {
     try {
         const { fechas } = req.query;
@@ -299,12 +176,26 @@ app.get('/api/dashboard/turno-destino', async (req, res) => {
         if (fechas) {
             const fechaList = fechas.split(',').map(f => f.trim());
             const placeholders = fechaList.map(() => '?').join(',');
-            sql = `SELECT turno, destino, COUNT(*) AS total_pallets FROM pallets WHERE fecha IN (${placeholders}) GROUP BY turno, destino`;
+            sql = `SELECT
+                CASE
+                    WHEN turno LIKE '%Noche%' OR LOWER(turno) LIKE '%night%' THEN 'Noche'
+                    WHEN turno LIKE '%día%' OR turno LIKE '%Dia%' OR LOWER(turno) LIKE '%day%' THEN 'Día'
+                    ELSE turno
+                END AS turno_normalizado,
+                CASE
+                    WHEN destino REGEXP 'pedido' THEN 'TRG'
+                    WHEN destino REGEXP '[0-9]' THEN 'Almacén'
+                    WHEN LOWER(destino) = 'trg' THEN 'TRG'
+                    WHEN LOWER(destino) LIKE '%hv%' THEN 'HV (High Value)'
+                    ELSE CONCAT(UPPER(LEFT(destino, 1)), LOWER(SUBSTRING(destino, 2)))
+                END AS destino_normalizado,
+                COUNT(*) AS total_pallets
+            FROM pallets
+            WHERE fecha IN (${placeholders})
+            GROUP BY turno_normalizado, destino_normalizado`;
             params = fechaList;
         } else {
-            const { iso, mobile } = todayFormats();
-            sql = 'SELECT turno, destino, COUNT(*) AS total_pallets FROM pallets WHERE (fecha = ? OR fecha = ?) GROUP BY turno, destino';
-            params = [iso, mobile];
+            sql = 'SELECT * FROM v_turno_destino';
         }
 
         const [rows] = await pool.query(sql, params);
@@ -314,22 +205,33 @@ app.get('/api/dashboard/turno-destino', async (req, res) => {
     }
 });
 
-// GET /api/dashboard/diarios
+// GET /api/dashboard/diarios - Conteo diario (para gráfico de línea 7 días)
 app.get('/api/dashboard/diarios', async (req, res) => {
     try {
         const { turno, dias } = req.query;
         const limitDays = parseInt(dias) || 7;
 
-        let sql = 'SELECT fecha, turno, COUNT(*) AS total_pallets FROM pallets WHERE 1=1';
+        let sql = `SELECT fecha,
+            CASE
+                WHEN turno LIKE '%Noche%' OR LOWER(turno) LIKE '%night%' THEN 'Noche'
+                WHEN turno LIKE '%día%' OR turno LIKE '%Dia%' OR LOWER(turno) LIKE '%day%' THEN 'Día'
+                ELSE turno
+            END AS turno_normalizado,
+            COUNT(*) AS total_pallets
+        FROM pallets WHERE 1=1`;
         const params = [];
 
         if (turno && turno !== 'Completo') {
-            sql += ' AND turno LIKE ?';
-            params.push(`%${turno}%`);
+            sql += ' AND (turno LIKE ? OR LOWER(turno) LIKE ?)';
+            if (turno === 'Noche') {
+                params.push('%Noche%', '%night%');
+            } else {
+                params.push('%día%', '%day%');
+            }
         }
 
-        sql += ' GROUP BY fecha, turno ORDER BY fecha DESC LIMIT ?';
-        params.push(limitDays * 2);
+        sql += ` GROUP BY fecha, turno_normalizado ORDER BY fecha DESC LIMIT ?`;
+        params.push(limitDays * 2); // *2 por si hay 2 turnos por día
 
         const [rows] = await pool.query(sql, params);
         res.json({ success: true, data: rows });
@@ -338,14 +240,21 @@ app.get('/api/dashboard/diarios', async (req, res) => {
     }
 });
 
-// GET /api/dashboard/promedios
+// GET /api/dashboard/promedios - Promedios por turno
 app.get('/api/dashboard/promedios', async (req, res) => {
     try {
         const [rows] = await pool.query(`
-            SELECT turno, COUNT(*) AS total_pallets,
-                   COUNT(DISTINCT fecha) AS total_dias,
-                   ROUND(COUNT(*) / GREATEST(COUNT(DISTINCT fecha), 1), 1) AS promedio
-            FROM pallets GROUP BY turno
+            SELECT
+                CASE
+                    WHEN turno LIKE '%Noche%' OR LOWER(turno) LIKE '%night%' THEN 'Noche'
+                    WHEN turno LIKE '%día%' OR turno LIKE '%Dia%' OR LOWER(turno) LIKE '%day%' THEN 'Día'
+                    ELSE 'Otro'
+                END AS turno_normalizado,
+                COUNT(*) AS total_pallets,
+                COUNT(DISTINCT fecha) AS total_dias,
+                ROUND(COUNT(*) / COUNT(DISTINCT fecha), 1) AS promedio
+            FROM pallets
+            GROUP BY turno_normalizado
         `);
         res.json({ success: true, data: rows });
     } catch (error) {
@@ -353,25 +262,34 @@ app.get('/api/dashboard/promedios', async (req, res) => {
     }
 });
 
-// GET /api/dashboard/fechas
+// GET /api/dashboard/fechas - Todas las fechas disponibles (para calendario)
 app.get('/api/dashboard/fechas', async (req, res) => {
     try {
-        const [rows] = await pool.query('SELECT DISTINCT fecha FROM pallets ORDER BY fecha DESC');
+        const [rows] = await pool.query('SELECT DISTINCT fecha FROM pallets ORDER BY fecha');
         res.json({ success: true, data: rows.map(r => r.fecha) });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// GET /api/dashboard/hoy
+// GET /api/dashboard/hoy - Datos de hoy para las tarjetas
 app.get('/api/dashboard/hoy', async (req, res) => {
     try {
-        const { iso, mobile } = todayFormats();
-        const [pallets] = await pool.query('SELECT * FROM pallets WHERE (fecha = ? OR fecha = ?) ORDER BY id DESC', [iso, mobile]);
-        const [errores] = await pool.query('SELECT * FROM errores_pallet WHERE (fecha = ? OR fecha = ?) ORDER BY id DESC', [iso, mobile]);
+        const today = new Date();
+        const todayISO = today.toISOString().split('T')[0];
+        const mm = today.getMonth() + 1;
+        const dd = today.getDate();
+        const yyyy = today.getFullYear();
+        const todayMobile = `${mm}/${dd}/${yyyy}`;
+        const [pallets] = await pool.query(
+            'SELECT * FROM pallets WHERE (fecha = ? OR fecha = ?) ORDER BY id DESC', [todayISO, todayMobile]
+        );
+        const [errores] = await pool.query(
+            'SELECT * FROM errores_pallet WHERE (fecha = ? OR fecha = ?) ORDER BY id DESC', [todayISO, todayMobile]
+        );
         res.json({
             success: true,
-            fecha: new Date(),
+            fecha: today,
             pallets: { data: pallets, total: pallets.length },
             errores: { data: errores, total: errores.length }
         });
@@ -384,6 +302,7 @@ app.get('/api/dashboard/hoy', async (req, res) => {
 // ENDPOINTS - ERRORES
 // =============================================
 
+// GET /api/errores - Todos los errores
 app.get('/api/errores', async (req, res) => {
     try {
         const { fecha, tipo, hoy } = req.query;
@@ -391,9 +310,7 @@ app.get('/api/errores', async (req, res) => {
         const params = [];
 
         if (hoy === 'true') {
-            const { iso, mobile } = todayFormats();
-            sql += ' AND (fecha = ? OR fecha = ?)';
-            params.push(iso, mobile);
+            sql += ' AND fecha = CURDATE()';
         } else if (fecha) {
             sql += ' AND fecha = ?';
             params.push(fecha);
@@ -403,7 +320,7 @@ app.get('/api/errores', async (req, res) => {
             params.push(`%${tipo}%`);
         }
 
-        sql += ' ORDER BY id DESC';
+        sql += ' ORDER BY fecha DESC, id DESC';
         const [rows] = await pool.query(sql, params);
         res.json({ success: true, data: rows, total: rows.length });
     } catch (error) {
@@ -411,6 +328,7 @@ app.get('/api/errores', async (req, res) => {
     }
 });
 
+// GET /api/errores/top - Top defectos (para gráfico de errores)
 app.get('/api/errores/top', async (req, res) => {
     try {
         const { hoy, tipo } = req.query;
@@ -418,13 +336,11 @@ app.get('/api/errores/top', async (req, res) => {
         const params = [];
 
         if (hoy === 'true') {
-            const { iso, mobile } = todayFormats();
-            sql += ' AND (fecha = ? OR fecha = ?)';
-            params.push(iso, mobile);
+            sql += ' AND fecha = CURDATE()';
         }
         if (tipo) {
-            sql += ' AND tipo LIKE ?';
-            params.push(`%${tipo}%`);
+            sql += ' AND LOWER(tipo) LIKE ?';
+            params.push(`%${tipo.toLowerCase()}%`);
         }
 
         sql += ' GROUP BY defecto, tipo ORDER BY total DESC';
@@ -435,32 +351,43 @@ app.get('/api/errores/top', async (req, res) => {
     }
 });
 
+// POST /api/errores - Crear un error
 app.post('/api/errores', async (req, res) => {
     try {
         const { pallet_id, fecha, defecto, tipo } = req.body;
-        if (!pallet_id || !defecto) {
-            return res.status(400).json({ success: false, error: 'Campos requeridos: pallet_id, defecto' });
+        if (!pallet_id || !fecha || !defecto) {
+            return res.status(400).json({ success: false, error: 'Campos requeridos: pallet_id, fecha, defecto' });
         }
+
         const [result] = await pool.query(
             'INSERT INTO errores_pallet (pallet_id, fecha, defecto, tipo) VALUES (?, ?, ?, ?)',
-            [pallet_id, fecha || todayISO(), defecto, tipo || null]
+            [pallet_id, fecha, defecto, tipo || null]
         );
-        res.json({ success: true, id: result.insertId });
+
+        res.json({ success: true, id: result.insertId, message: 'Error registrado' });
     } catch (error) {
+        console.error('Error POST /api/errores:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
+// POST /api/errores/bulk - Insertar múltiples errores
 app.post('/api/errores/bulk', async (req, res) => {
     try {
         const { errores } = req.body;
         if (!errores || !Array.isArray(errores) || errores.length === 0) {
             return res.status(400).json({ success: false, error: 'Se requiere un array de errores' });
         }
-        const values = errores.map(e => [e.pallet_id, e.fecha || todayISO(), e.defecto, e.tipo || null]);
-        const [result] = await pool.query('INSERT INTO errores_pallet (pallet_id, fecha, defecto, tipo) VALUES ?', [values]);
-        res.json({ success: true, inserted: result.affectedRows });
+
+        const values = errores.map(e => [e.pallet_id, e.fecha, e.defecto, e.tipo || null]);
+        const [result] = await pool.query(
+            'INSERT INTO errores_pallet (pallet_id, fecha, defecto, tipo) VALUES ?',
+            [values]
+        );
+
+        res.json({ success: true, inserted: result.affectedRows, message: `${result.affectedRows} errores insertados` });
     } catch (error) {
+        console.error('Error POST /api/errores/bulk:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -469,7 +396,7 @@ app.post('/api/errores/bulk', async (req, res) => {
 // ENDPOINTS - MOBILE APP
 // =============================================
 
-// GET /api/mobile/check/:palletId
+// GET /api/mobile/check/:palletId - Fast duplicate check
 app.get('/api/mobile/check/:palletId', async (req, res) => {
     try {
         const [rows] = await pool.query(
@@ -482,42 +409,52 @@ app.get('/api/mobile/check/:palletId', async (req, res) => {
     }
 });
 
-// POST /api/mobile/register — SINGLE SOURCE OF TRUTH for pallet registration
+// POST /api/mobile/register - Register pallet with optional SKU items
 app.post('/api/mobile/register', async (req, res) => {
     try {
-        const { pallet_id, cantidad, producto, destino, fecha, turno, condicion, operador, pedido, items } = req.body;
+        const { pallet_id, cantidad, destino, fecha, turno, condicion, operador, pedido, items } = req.body;
 
-        if (!pallet_id || !destino) {
-            return res.status(400).json({ success: false, error: 'Campos requeridos: pallet_id, destino' });
+        if (!pallet_id || !destino || !fecha || !turno) {
+            return res.status(400).json({ success: false, error: 'Campos requeridos: pallet_id, destino, fecha, turno' });
         }
 
+        // Calculate total qty from items if provided
         const totalQty = (items && items.length > 0)
             ? items.reduce((sum, i) => sum + (i.cantidad || 1), 0)
             : (cantidad || 0);
 
+        // Insert into pallets table (compatible with existing system)
         const skuSummary = (items && items.length > 0)
             ? items.map(i => `${i.sku}(${i.cantidad || 1})`).join(', ')
-            : (producto || null);
+            : null;
 
-        const finalFecha = fecha || todayISO();
+        // Siempre guardar operador en observaciones (no perderlo cuando hay pedido)
+        const obsValue = pedido
+            ? `${operador || ''} | Pedido: ${pedido}`
+            : (operador || null);
 
         const [result] = await pool.query(
-            'INSERT INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, operador, pedido, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [pallet_id, totalQty, skuSummary, destino, finalFecha, turno || 'N/A', condicion || null, operador || null, pedido || null, operador || null]
+            'INSERT INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, observaciones) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [pallet_id, totalQty, skuSummary, destino, fecha, turno, condicion || null, obsValue]
         );
 
         const palletRefId = result.insertId;
 
+        // Insert items if provided
         if (items && items.length > 0) {
             const values = items.map(i => [palletRefId, pallet_id, i.sku, i.cantidad || 1]);
-            await pool.query('INSERT INTO pallet_items (pallet_ref_id, pallet_id, sku, cantidad) VALUES ?', [values]);
+            await pool.query(
+                'INSERT INTO pallet_items (pallet_ref_id, pallet_id, sku, cantidad) VALUES ?',
+                [values]
+            );
         }
 
         res.json({
             success: true,
             id: palletRefId,
             total_qty: totalQty,
-            message: 'Pallet registrado'
+            items_count: items ? items.length : 0,
+            message: 'Pallet registrado desde app movil'
         });
     } catch (error) {
         console.error('Error POST /api/mobile/register:', error);
@@ -525,7 +462,7 @@ app.post('/api/mobile/register', async (req, res) => {
     }
 });
 
-// GET /api/mobile/recent
+// GET /api/mobile/recent - Recent pallets with items for the mobile app
 app.get('/api/mobile/recent', async (req, res) => {
     try {
         const { operador, limit } = req.query;
@@ -535,8 +472,8 @@ app.get('/api/mobile/recent', async (req, res) => {
         const params = [];
 
         if (operador) {
-            sql += ' AND (operador LIKE ? OR observaciones LIKE ?)';
-            params.push(`%${operador}%`, `%${operador}%`);
+            sql += ' AND (observaciones LIKE ? OR observaciones = ?)';
+            params.push(`%${operador}%`, operador);
         }
 
         sql += ' ORDER BY id DESC LIMIT ?';
@@ -544,9 +481,15 @@ app.get('/api/mobile/recent', async (req, res) => {
 
         const [pallets] = await pool.query(sql, params);
 
+        // Fetch items for these pallets
         if (pallets.length > 0) {
             const ids = pallets.map(p => p.id);
-            const [items] = await pool.query('SELECT * FROM pallet_items WHERE pallet_ref_id IN (?)', [ids]);
+            const [items] = await pool.query(
+                'SELECT * FROM pallet_items WHERE pallet_ref_id IN (?)',
+                [ids]
+            );
+
+            // Attach items to pallets
             const itemMap = {};
             for (const item of items) {
                 if (!itemMap[item.pallet_ref_id]) itemMap[item.pallet_ref_id] = [];
@@ -563,39 +506,50 @@ app.get('/api/mobile/recent', async (req, res) => {
     }
 });
 
-// GET /api/mobile/stats
+// GET /api/mobile/stats - Quick stats for the operator's session
 app.get('/api/mobile/stats', async (req, res) => {
     try {
         const { operador } = req.query;
-        const { iso, mobile } = todayFormats();
+        const today = new Date();
+        const mm = today.getMonth() + 1;
+        const dd = today.getDate();
+        const yyyy = today.getFullYear();
 
+        // Ambos formatos de fecha posibles en la tabla:
+        // - M/D/YYYY (registrado desde mobile)
+        // - YYYY-MM-DD (sincronizado desde Google Sheets)
+        const fechaMobile = `${mm}/${dd}/${yyyy}`;
+        const fechaISO = `${yyyy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+
+        // Base WHERE: match today in either format
         let whereDate = '(fecha = ? OR fecha = ?)';
-        let params = [iso, mobile];
+        let params = [fechaMobile, fechaISO];
 
+        // Filtrar por operador si se proporciona
         let whereOp = '';
         if (operador) {
-            whereOp = ' AND (operador LIKE ? OR observaciones LIKE ?)';
-            params.push(`%${operador}%`, `%${operador}%`);
+            whereOp = ' AND observaciones LIKE ?';
+            params.push(`%${operador}%`);
         }
 
         const [todayCount] = await pool.query(
             `SELECT COUNT(*) as total FROM pallets WHERE ${whereDate}${whereOp}`, params
         );
 
+        // Last pallet for this operator
         let lastParams = [];
         let lastWhere = '';
         if (operador) {
-            lastWhere = ' WHERE (operador LIKE ? OR observaciones LIKE ?)';
-            lastParams.push(`%${operador}%`, `%${operador}%`);
+            lastWhere = ' WHERE observaciones LIKE ?';
+            lastParams.push(`%${operador}%`);
         }
         const [lastPallet] = await pool.query(
             `SELECT pallet_id, destino, fecha, turno FROM pallets${lastWhere} ORDER BY id DESC LIMIT 1`, lastParams
         );
 
-        const destinoParams = [iso, mobile];
-        if (operador) {
-            destinoParams.push(`%${operador}%`, `%${operador}%`);
-        }
+        // Destino breakdown for today + operator (same params as count query)
+        const destinoParams = [fechaMobile, fechaISO];
+        if (operador) destinoParams.push(`%${operador}%`);
         const [destinoCounts] = await pool.query(
             `SELECT destino, COUNT(*) as total FROM pallets WHERE ${whereDate}${whereOp} GROUP BY destino`,
             destinoParams
@@ -608,6 +562,7 @@ app.get('/api/mobile/stats', async (req, res) => {
             byDestino: destinoCounts
         });
     } catch (error) {
+        console.error('Error GET /api/mobile/stats:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -617,15 +572,15 @@ app.get('/api/mobile/stats', async (req, res) => {
 // =============================================
 app.get('/api/health', async (req, res) => {
     try {
-        await pool.query('SELECT 1');
-        const [[palletCount]] = await pool.query('SELECT COUNT(*) as total FROM pallets');
-        const [[errorCount]] = await pool.query('SELECT COUNT(*) as total FROM errores_pallet');
+        const [rows] = await pool.query('SELECT 1');
+        const [palletCount] = await pool.query('SELECT COUNT(*) as total FROM pallets');
+        const [errorCount] = await pool.query('SELECT COUNT(*) as total FROM errores_pallet');
         res.json({
             success: true,
             status: 'OK',
-            database: config.db.database,
-            pallets: palletCount.total,
-            errores: errorCount.total,
+            database: 'paletizado_db',
+            pallets: palletCount[0].total,
+            errores: errorCount[0].total,
             timestamp: new Date().toISOString()
         });
     } catch (error) {
@@ -634,24 +589,127 @@ app.get('/api/health', async (req, res) => {
 });
 
 // =============================================
-// INICIAR SERVIDOR
+// SYNC AUTOMÁTICO: Google Sheets → MySQL
+// =============================================
+const SHEET_PALLETS = 'https://docs.google.com/spreadsheets/d/1eTZKzt00TGHzVHhcIpf6-_IGF6y4jwhc/gviz/tq?tqx=out:json&gid=1543653429';
+const SHEET_ERRORES = 'https://docs.google.com/spreadsheets/d/1FjVHlUNzu0gqhBunDNXKD5GUpcKGviLrFdJJAZG5qhg/gviz/tq?tqx=out:json&sheet=Liberaci%C3%B3n%20de%20Pallet';
+const SYNC_INTERVAL = 30; // segundos
+
+function fetchSheet(url) {
+    return new Promise((resolve, reject) => {
+        https.get(url, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const start = data.indexOf('(');
+                    const end = data.lastIndexOf(')');
+                    if (start === -1 || end === -1) throw new Error('JSONP inválido');
+                    resolve(JSON.parse(data.substring(start + 1, end)));
+                } catch (e) { reject(e); }
+            });
+            res.on('error', reject);
+        }).on('error', reject);
+    });
+}
+
+function parseGoogleDate(cell) {
+    if (!cell) return null;
+    if (cell.f) {
+        const parts = cell.f.split(' ')[0].split('/');
+        if (parts.length === 3) return `${parts[2]}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
+    }
+    if (cell.v && typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
+        const m = cell.v.match(/Date\((\d+),(\d+),(\d+)/);
+        if (m) return `${m[1]}-${(parseInt(m[2])+1).toString().padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    }
+    return null;
+}
+
+async function syncFromSheets() {
+    const ts = new Date().toLocaleString('es-MX');
+    try {
+        // Sync pallets
+        const pResp = await fetchSheet(SHEET_PALLETS);
+        let pNew = 0;
+        if (pResp && pResp.table && pResp.table.rows) {
+            for (const r of pResp.table.rows) {
+                const c = r.c;
+                if (!c || !c[4] || c[4].v === null) continue;
+                const pid = (c[1] && c[1].v != null) ? c[1].v.toString().trim() : null;
+                const fecha = parseGoogleDate(c[5]);
+                if (!pid || !fecha) continue;
+                const [res] = await pool.query(
+                    'INSERT IGNORE INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, observaciones) VALUES (?,?,?,?,?,?,?,?)',
+                    [pid,
+                     (c[2] && c[2].v != null) ? parseFloat(c[2].v.toString().replace(/,/g,'')) || 0 : 0,
+                     (c[3] && c[3].v != null) ? c[3].v.toString().trim() : null,
+                     (c[4] && c[4].v != null) ? c[4].v.toString().trim() : '',
+                     fecha,
+                     (c[6] && c[6].v != null) ? c[6].v.toString().trim() : 'N/A',
+                     (c[7] && c[7].v != null) ? c[7].v.toString().trim() : null,
+                     (c[8] && c[8].v != null) ? c[8].v.toString().trim() : null]
+                );
+                if (res.affectedRows > 0) pNew++;
+            }
+        }
+
+        // Sync errores
+        const eResp = await fetchSheet(SHEET_ERRORES);
+        let eNew = 0;
+        if (eResp && eResp.table && eResp.table.rows) {
+            for (const r of eResp.table.rows) {
+                const c = r.c;
+                if (!c || !c[9] || c[9].v === null) continue;
+                const def = c[9].v.toString().trim();
+                if (def === '' || def === '-') continue;
+                const fecha = parseGoogleDate(c[1]);
+                if (!fecha) continue;
+                const [res] = await pool.query(
+                    'INSERT IGNORE INTO errores_pallet (pallet_id, fecha, defecto, tipo) VALUES (?,?,?,?)',
+                    [(c[3] && c[3].v != null) ? c[3].v.toString().trim() : 'N/A',
+                     fecha, def,
+                     (c[11] && c[11].v != null) ? c[11].v.toString().trim() : null]
+                );
+                if (res.affectedRows > 0) eNew++;
+            }
+        }
+
+        if (pNew > 0 || eNew > 0) {
+            console.log(`  [SYNC ${ts}] +${pNew} pallets, +${eNew} errores nuevos`);
+        }
+    } catch (err) {
+        console.error(`  [SYNC ${ts}] Error: ${err.message}`);
+    }
+}
+
+// =============================================
+// INICIAR SERVIDOR + SYNC AUTOMÁTICO
 // =============================================
 app.listen(config.port, async () => {
     console.log('');
     console.log('===========================================');
-    console.log('  MI-TECH Paletizado - API REST (MySQL)');
+    console.log('  MI-TECH Paletizado - API REST');
     console.log(`  http://localhost:${config.port}`);
     console.log(`  Dashboard: http://localhost:${config.port}/index.html`);
     console.log('===========================================');
     console.log('');
-    console.log(`  Base de datos: ${config.db.database}@${config.db.host}`);
-
-    await ensureTables();
-    console.log('  Tablas verificadas.');
-
-    const [[pc]] = await pool.query('SELECT COUNT(*) as t FROM pallets');
-    const [[ec]] = await pool.query('SELECT COUNT(*) as t FROM errores_pallet');
-    console.log(`  MySQL listo: ${pc.t} pallets, ${ec.t} errores`);
-    console.log('  Servidor listo.');
+    console.log(`  Sync Google Sheets -> MySQL cada ${SYNC_INTERVAL}s`);
     console.log('');
+
+    // Create mobile tables if needed
+    await ensureMobileTables();
+    console.log('  Mobile tables verified.');
+
+    // Primera sync al arrancar
+    console.log('  Sincronizando datos iniciales...');
+    await syncFromSheets();
+    const [pc] = await pool.query('SELECT COUNT(*) as t FROM pallets');
+    const [ec] = await pool.query('SELECT COUNT(*) as t FROM errores_pallet');
+    console.log(`  MySQL listo: ${pc[0].t} pallets, ${ec[0].t} errores`);
+    console.log('  Servidor listo. Sync automático activado.');
+    console.log('');
+
+    // Sync cada 30 segundos
+    setInterval(syncFromSheets, SYNC_INTERVAL * 1000);
 });

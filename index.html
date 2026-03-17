@@ -747,7 +747,7 @@
                 padding-bottom: 0;
             }
 
-            /* Responsive: formulario en móvil */
+            /* Responsive: formulario Google Forms en móvil */
             #view-formulario {
                 padding: 0.75rem 0.5rem 2rem;
             }
@@ -971,7 +971,7 @@
             position: relative;
         }
 
-        /* === FORMULARIO INVENTARIO (Cards Scroll) === */
+        /* === FORMULARIO INVENTARIO — Google Forms Style (Cards Scroll) === */
         #view-formulario {
             display: flex;
             flex-direction: column;
@@ -1085,7 +1085,7 @@
             color: #475569;
         }
 
-        /* Grupo de checkboxes */
+        /* Grupo de checkboxes estilo Google Forms */
         .inv-checkbox-group {
             display: flex;
             flex-direction: column;
@@ -1843,7 +1843,7 @@
                 <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                     <div>
                         <h3 style="margin-bottom: 0.5rem; color: var(--text-main);">Sincronización</h3>
-                        <p style="color: var(--text-muted); font-size: 0.9rem;">Los datos se leen directamente de MySQL y se refrescan cada 60 segundos.</p>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Los datos se sincronizan automáticamente desde Google Sheets cada 30 segundos.</p>
                     </div>
                     <div>
                         <h3 style="margin-bottom: 0.5rem; color: var(--text-main);">Servidor</h3>
@@ -2080,38 +2080,47 @@
             flatpickrInstance.setDate(currentSelectedStrs, true);
         };
 
-        // ---- SISTEMA DE DATOS (MySQL API) ----
+        // ---- NUEVO SISTEMA (JSONP CON INTERCEPTOR) ----
         let allErrorsData = [];
         let myErrorsLineChart = null;
 
-        window.processErrorsData = function (rows) {
-            try {
-                if (!rows || !Array.isArray(rows)) return;
-
-                allErrorsData = [];
-
-                // Helper: convertir fecha MySQL a M/D/YYYY
-                function toMDY(f) {
-                    if (!f) return 'N/A';
-                    const s = f.toString();
-                    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
-                    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-                    if (isoMatch) return `${parseInt(isoMatch[2])}/${parseInt(isoMatch[3])}/${isoMatch[1]}`;
-                    const d = new Date(s);
-                    if (isNaN(d.getTime())) return s;
-                    return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+        // Al usar JSONP evitamos el bloqueo CORS para archivos locales.
+        // Google Visualization API siempre devuelve: google.visualization.Query.setResponse(...)
+        // Por lo tanto, creamos un falso objeto 'google' para atrapar su respuesta.
+        window.google = {
+            visualization: {
+                Query: {
+                    setResponse: function (response) {
+                        window.processSheetData(response);
+                    }
                 }
+            }
+        };
 
-                rows.forEach(r => {
-                    if (!r.defecto) return;
-                    let desc = r.defecto.toString().trim();
+        window.processErrorsData = function (response) {
+            try {
+                if (!response || !response.table || !response.table.rows) return;
+
+                allErrorsData = []; // Vaciamos para re-poblar los conjuntos
+
+                // Columnas: J(c[9])=Defectos, D(c[3])=PalletID, B(c[1])=Fecha, L(c[11])=Tipo, H(c[7])=Estado, I(c[8])=CantDefectos
+                response.table.rows.forEach(r => {
+                    let c = r.c;
+                    if (!c || !c[9] || c[9].v === null) return;
+
+                    let desc = c[9].v.toString().trim();
                     if (desc === '' || desc === '-') return;
 
-                    let dateVal = toMDY(r.fecha);
-                    let idVal = r.pallet_id ? r.pallet_id.toString().trim() : 'N/A';
-                    let tipoVal = r.tipo ? r.tipo.toString().trim() : '';
+                    // Solo contar pallets RECHAZADOS (los ACEPTADOS con defecto menor no son errores reales)
+                    let estado = c[7] && c[7].v ? c[7].v.toString().trim().toUpperCase() : '';
+                    if (estado !== 'RECHAZADO') return;
 
-                    // Separar defectos múltiples
+                    let dateVal = c[1] && c[1].f ? c[1].f.split(' ')[0] : (c[1] && c[1].v ? c[1].v : 'N/A');
+                    let idVal = c[3] && c[3].v ? c[3].v.toString().trim() : 'N/A';
+                    let tipoVal = c[11] && c[11].v ? c[11].v.toString().trim() : '';
+                    let cantDefectos = c[8] && c[8].v != null ? Number(c[8].v) : 0;
+
+                    // Separar defectos múltiples en una celda (ej: "Defecto A, Defecto B")
                     let defectos = desc.split(',').map(d => d.trim()).filter(d => d.length > 0);
 
                     defectos.forEach(defecto => {
@@ -2120,12 +2129,13 @@
                             palletId: idVal,
                             tipo: tipoVal,
                             fecha: dateVal,
-                            estado: 'RECHAZADO',
-                            cantDefectos: 1
+                            estado,
+                            cantDefectos
                         });
                     });
                 });
 
+                // Llamar a re-dibujar la gráfica con los filtros actuales
                 window.renderErrorsChart();
 
             } catch (error) {
@@ -2300,127 +2310,264 @@
             }
         };
 
-        // ── Fetch pallets desde MySQL API ──
         function fetchSheetData() {
-            fetch('/api/pallets')
-                .then(r => {
-                    if (!r.ok) throw new Error('API respondió ' + r.status);
-                    return r.json();
-                })
-                .then(j => {
-                    if (j.success && j.data) {
-                        window.processSheetData(j.data);
-                    } else {
-                        console.warn('API /api/pallets sin datos:', j);
-                    }
-                })
-                .catch(err => {
-                    console.error('Error cargando pallets:', err);
-                    // Mostrar mensaje en las tablas
-                    const tbody = document.getElementById('palets-table-body');
-                    if (tbody && allSheetData.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:2rem; color:#ef4444;">Error al conectar con la API. Verifica que el servidor esté corriendo.</td></tr>';
+            const oldScript = document.getElementById('jsonp-script');
+            if (oldScript) oldScript.remove(); // Limpiar el anterior 
+
+            const script = document.createElement('script');
+            script.id = 'jsonp-script';
+            script.src = `https://docs.google.com/spreadsheets/d/1eTZKzt00TGHzVHhcIpf6-_IGF6y4jwhc/gviz/tq?tqx=out:json&gid=1543653429&_=${new Date().getTime()}`;
+            document.body.appendChild(script);
+        }
+
+        function fetchErrorsData() {
+            // SOLICITUD DEL USUARIO (25/02/2026): DESVINCULAR DATOS
+            const oldScript = document.getElementById('jsonp-errors-script');
+            if (oldScript) oldScript.remove();
+
+            const script = document.createElement('script');
+            script.id = 'jsonp-errors-script';
+            script.src = `https://docs.google.com/spreadsheets/d/1FjVHlUNzu0gqhBunDNXKD5GUpcKGviLrFdJJAZG5qhg/gviz/tq?tqx=responseHandler:window.processErrorsData;out:json&sheet=Liberación%20de%20Pallet&_=${new Date().getTime()}`;
+            document.body.appendChild(script);
+        }
+
+        // --- FALLBACK: recuperar fechas texto que gviz devuelve como null ---
+        // Cuando las fechas en Google Sheets están como texto plano (no Date nativo),
+        // el motor gviz las devuelve como null en columnas tipadas datetime/date.
+        // Esta función hace un segundo fetch con range+headers=0, que fuerza tipo string.
+        window._pendingFallback = false;
+        function fetchFallbackDates(nullDateIds, totalRows) {
+            if (window._pendingFallback || nullDateIds.size === 0) return;
+            window._pendingFallback = true;
+            const oldScript = document.getElementById('jsonp-fallback-script');
+            if (oldScript) oldScript.remove();
+            // Pedir SOLO las filas con fecha-texto (al final del sheet).
+            // Con headers=0 y un rango que NO incluya filas con Date nativo,
+            // gviz infiere tipo "string" y devuelve los valores texto.
+            // Las filas con fecha-texto están al final: totalRows - nullDateIds.size en adelante.
+            const startRow = Math.max(2, totalRows - nullDateIds.size + 2); // justo donde empiezan los null
+            const endRow = totalRows + 500; // margen amplio para filas nuevas no detectadas
+            const script = document.createElement('script');
+            script.id = 'jsonp-fallback-script';
+            script.src = `https://docs.google.com/spreadsheets/d/1eTZKzt00TGHzVHhcIpf6-_IGF6y4jwhc/gviz/tq?tqx=responseHandler:window.processFallbackDates;out:json&gid=1543653429&range=A${startRow}:N${endRow}&headers=0&_=${Date.now()}`;
+            document.body.appendChild(script);
+        }
+        window.processFallbackDates = function(response) {
+            window._pendingFallback = false;
+            try {
+                if (!response || !response.table || !response.table.rows) return;
+                // Construir mapa palletId → {fecha, timestamp} desde la respuesta string-typed
+                const fallbackMap = {};
+                response.table.rows.forEach(r => {
+                    const c = r.c;
+                    if (!c) return;
+                    // Col B (index 1) = pallet ID, Col A (index 0) = timestamp, Col F (index 5) = fecha
+                    const palletId = (c[1] && c[1].v != null) ? String(c[1].v).split('.')[0].split('-')[0].trim() : null;
+                    if (!palletId) return;
+                    const tsText = (c[0] && c[0].v != null) ? String(c[0].v) : null;
+                    const fechaText = (c[5] && c[5].v != null) ? String(c[5].v).split(' ')[0] : null;
+                    if (tsText || fechaText) {
+                        fallbackMap[palletId] = { tsText, fechaText };
                     }
                 });
-        }
-
-        // ── Fetch errores desde MySQL API ──
-        function fetchErrorsData() {
-            fetch('/api/errores')
-                .then(r => {
-                    if (!r.ok) throw new Error('API respondió ' + r.status);
-                    return r.json();
-                })
-                .then(j => {
-                    if (j.success && j.data) {
-                        window.processErrorsData(j.data);
+                // Actualizar allSheetData con las fechas recuperadas
+                let updated = 0;
+                const uniqueDates = new Set();
+                const uniqueMonths = new Set();
+                // Recoger fechas existentes
+                allSheetData.forEach(row => {
+                    if (row.fecha && row.fecha !== 'N/A') {
+                        uniqueDates.add(row.fecha);
+                        const parts = row.fecha.split('/');
+                        if (parts.length >= 3) uniqueMonths.add(`${parts[0]}/${parts[2]}`);
                     }
-                })
-                .catch(err => console.error('Error cargando errores:', err));
-        }
+                });
+                allSheetData.forEach(row => {
+                    if (row.fecha !== 'N/A') return; // ya tiene fecha
+                    const fb = fallbackMap[row.id];
+                    if (!fb) return;
+                    // Recuperar fecha
+                    if (fb.fechaText) {
+                        row.fecha = fb.fechaText;
+                        row.rowValues[4] = fb.fechaText; // index 4 en rawValues = Fecha (col F, offset 1-6 → idx 4)
+                        uniqueDates.add(fb.fechaText);
+                        const parts = fb.fechaText.split('/');
+                        if (parts.length >= 3) uniqueMonths.add(`${parts[0]}/${parts[2]}`);
+                    }
+                    // Recuperar timestamp
+                    if (fb.tsText && !row.timestamp) {
+                        const d = new Date(fb.tsText);
+                        if (!isNaN(d.getTime())) {
+                            row.timestamp = d;
+                        }
+                    }
+                    updated++;
+                });
+                if (updated > 0) {
+                    console.log(`🔄 Fallback: ${updated} filas recuperadas con fechas texto`);
+                    // Re-sort
+                    allSheetData.sort((a, b) => {
+                        if (!a.timestamp && !b.timestamp) return a._rowIdx - b._rowIdx;
+                        if (!a.timestamp) return 1;
+                        if (!b.timestamp) return -1;
+                        return a.timestamp - b.timestamp;
+                    });
+                    // Actualizar availableDates y calendario
+                    availableDates = Array.from(uniqueDates);
+                    if (flatpickrInstance) {
+                        const prevSel = flatpickrInstance.selectedDates.map(d =>
+                            `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`
+                        );
+                        flatpickrInstance.set('enable', availableDates);
+                        if (prevSel.length > 0) flatpickrInstance.setDate(prevSel, false);
+                    }
+                    // Regenerar pills de mes
+                    const monthNames = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+                    const pillsContainer = document.getElementById('month-pills');
+                    if (pillsContainer) {
+                        pillsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">Meses:</span>';
+                        Array.from(uniqueMonths).sort().forEach(m => {
+                            const [monthNum, yearNum] = m.split('/');
+                            const btn = document.createElement('button');
+                            btn.className = 'month-pill';
+                            btn.setAttribute('data-month', m);
+                            btn.innerText = `${monthNames[parseInt(monthNum)-1]} ${yearNum}`;
+                            btn.onclick = () => window.toggleMonth(m);
+                            pillsContainer.appendChild(btn);
+                        });
+                    }
+                    // Re-render
+                    window.renderLineChart();
+                    renderDashboard([]);
+                    window.syncMonthPills();
+                }
+            } catch(e) {
+                console.warn('Fallback fetch error:', e);
+            }
+        };
 
-        // Procesa datos de pallets desde la API MySQL
-        window.processSheetData = function (rows) {
+        // Esta función será ejecutada automáticamente por el <script> insertado cuando Google responde
+        window.processSheetData = function (response) {
             try {
-                if (!rows || !Array.isArray(rows)) {
+                if (!response || !response.table || !response.table.rows) {
                     throw new Error("Formato de respuesta inválido.");
                 }
 
                 allSheetData = [];
                 const uniqueDates = new Set();
-                const uniqueMonths = new Set();
+                const uniqueMonths = new Set(); // Para generar los botones
 
-                // Indices fijos para renderizado de tabla
-                window.displayIndices = [0, 1, 2, 3];
-
-                // Helper: convertir fecha MySQL (YYYY-MM-DD, ISO string, Date obj) a M/D/YYYY
-                function toMDY(f) {
-                    if (!f) return 'N/A';
-                    const s = f.toString();
-                    // Ya está en M/D/YYYY
-                    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
-                    // YYYY-MM-DD (sin timezone shift)
-                    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-                    if (isoMatch) return `${parseInt(isoMatch[2])}/${parseInt(isoMatch[3])}/${isoMatch[1]}`;
-                    // Otros formatos
-                    const d = new Date(s);
-                    if (isNaN(d.getTime())) return s;
-                    return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+                // Parsear encabezados dinámicamente, omitiendo Timestamp (índice 0) y usando hasta el 7
+                const allRawHeaders = response.table.cols.map(c => c ? (c.label || "Columna") : "N/A");
+                const colHeaders = allRawHeaders.slice(1, 7).map((lbl, i) => {
+                    let txt = lbl.toLowerCase();
+                    // Índice 0 es siempre la columna B (Número de pallet) en este Sheet
+                    if (i === 0 || txt.includes('número') || txt.includes('numero') || (txt.includes('pallet') && !txt.includes('destino'))) {
+                        return 'Pallet ID';
+                    }
+                    if (txt.includes('cantidad') || txt.includes('qty')) return 'Cantidad';
+                    if (txt.includes('dónde') || txt.includes('destino')) return 'Destino';
+                    return lbl;
+                });
+                // Calcular los índices a mostrar (hasta la columna "CONDICION")
+                window.displayIndices = [];
+                let foundCondicion = false;
+                for (let i = 0; i < colHeaders.length; i++) {
+                    if (foundCondicion) break; // Ya vimos condicion, ignoramos las demás
+                    window.displayIndices.push(i);
+                    if (colHeaders[i].toUpperCase().includes('CONDICI')) {
+                        foundCondicion = true;
+                    }
                 }
 
+                // Mapear y procesar todos los datos iniciales
                 let rowIdx = 0;
-                rows.forEach(r => {
+                response.table.rows.forEach(r => {
+                    const c = r.c;
                     rowIdx++;
-                    if (!r.destino) return;
+                    // Índices: c[4] = Destino, c[5] = Fecha, c[6] = Turno
+                    if (!c || !c[4] || c[4].v === null) return;
 
-                    const rawDate = toMDY(r.fecha);
+                    // Extraer los 6 valores omitiendo la Marca Temporal (columna 0)
+                    let rawValues = [];
+                    for (let i = 1; i <= 6; i++) {
+                        let cell = c[i];
+                        if (!cell || cell.v == null) {
+                            rawValues.push('');
+                        } else {
+                            rawValues.push(cell.f ? cell.f.toString() : cell.v.toString());
+                        }
+                    }
+
+                    let rawDate = (c[5] && c[5].f) ? c[5].f.split(' ')[0] : 'N/A'; // Formato esperado M/d/yyyy
                     if (rawDate !== 'N/A') {
                         uniqueDates.add(rawDate);
                         const parts = rawDate.split('/');
-                        if (parts.length >= 3) uniqueMonths.add(`${parts[0]}/${parts[2]}`);
+                        uniqueMonths.add(`${parts[0]}/${parts[2]}`);
                     }
 
+                    // Guardar timestamp (c[0]) para ordenar cronológicamente
+                    // gviz devuelve fechas nativas como "Date(y,m,d,h,min,s)"
+                    // El web form guarda texto como "3/10/2026 14:30:00" — probar ambos formatos
                     let tsDate = null;
-                    if (r.created_at) {
-                        tsDate = new Date(r.created_at);
-                    } else if (r.fecha) {
-                        // Parsear YYYY-MM-DD sin timezone shift
-                        const fm = r.fecha.toString().match(/^(\d{4})-(\d{2})-(\d{2})/);
-                        tsDate = fm ? new Date(+fm[1], +fm[2]-1, +fm[3], 12, 0, 0) : new Date(r.fecha);
+                    if (c[0] && c[0].v != null) {
+                        const tsV = c[0].v.toString();
+                        // 1) Formato gviz nativo: Date(y,m,d,h,min,s)
+                        const gvMatch = tsV.match(/Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/);
+                        if (gvMatch) {
+                            tsDate = new Date(+gvMatch[1], +gvMatch[2], +gvMatch[3], +gvMatch[4], +gvMatch[5], +gvMatch[6]);
+                        }
+                        // 2) Fallback: intentar parsear el valor directo
+                        if (!tsDate || isNaN(tsDate.getTime())) {
+                            const d = new Date(tsV);
+                            tsDate = (!isNaN(d.getTime())) ? d : null;
+                        }
                     }
-                    if (tsDate && isNaN(tsDate.getTime())) tsDate = null;
-                    const palletId = r.pallet_id ? r.pallet_id.toString().split('-')[0].trim() : 'Sin ID';
+                    // 3) Fallback: usar c[0].f (valor formateado visible en la hoja)
+                    if ((!tsDate || isNaN(tsDate.getTime())) && c[0] && c[0].f) {
+                        const d = new Date(c[0].f);
+                        tsDate = (!isNaN(d.getTime())) ? d : null;
+                    }
+                    if (!tsDate) {
+                        console.warn('⚠ Timestamp no parseable, fila:', c[1]?.v, '| v:', c[0]?.v, '| f:', c[0]?.f);
+                    }
 
                     allSheetData.push({
-                        rowValues: [
-                            palletId,
-                            r.cantidad != null ? String(r.cantidad) : '',
-                            r.condicion || '',
-                            r.destino || '',
-                            rawDate,
-                            r.turno || 'N/A'
-                        ],
+                        rowValues: rawValues,
                         _rowIdx: rowIdx,
                         timestamp: tsDate,
-                        id: palletId,
-                        cantidad: r.cantidad || 0,
-                        condicion: r.condicion || '',
-                        destinoOriginal: r.destino || '',
+                        id: (c[1] && c[1].v != null) ? c[1].v.toString().split('-')[0].trim() : 'Sin ID',
+                        cantidad: rawValues[1] ? (parseFloat(rawValues[1].toString().replace(/,/g, '')) || 0) : 0,
+                        condicion: (c[3] && c[3].v != null) ? c[3].v.toString().trim() : '',
+                        destinoOriginal: (c[4] && c[4].v != null) ? c[4].v.toString().trim() : '',
                         fecha: rawDate,
-                        turno: r.turno || 'N/A',
-                        operador: r.operador || r.observaciones || '',
-                        pedido: r.pedido || ''
+                        turno: (c[6] && c[6].v != null) ? c[6].v.toString() : 'N/A',
+                        operador: (c[7] && c[7].v != null) ? c[7].v.toString().trim() : '',
+                        pedido: (c[8] && c[8].v != null) ? c[8].v.toString().trim() : ''
                     });
                 });
 
-                // Ordenar por timestamp cronológicamente
+                // Ordenar por timestamp para que web y Drive queden en orden cronológico
+                // Registros sin timestamp mantienen su orden original del sheet
                 allSheetData.sort((a, b) => {
                     if (!a.timestamp && !b.timestamp) return a._rowIdx - b._rowIdx;
-                    if (!a.timestamp) return 1;
+                    if (!a.timestamp) return 1;  // sin timestamp van al final
                     if (!b.timestamp) return -1;
                     return a.timestamp - b.timestamp;
                 });
-                console.log(`📊 Datos cargados: ${allSheetData.length} registros desde MySQL`);
+                console.log(`📊 Datos cargados: ${allSheetData.length} registros. Con timestamp: ${allSheetData.filter(r => r.timestamp).length}, sin: ${allSheetData.filter(r => !r.timestamp).length}`);
+
+                // [FIX] Detectar filas con fecha null (texto plano en Sheets) y lanzar fallback
+                const nullDateIds = new Set();
+                allSheetData.forEach(row => {
+                    if (row.fecha === 'N/A' && row.id !== 'Sin ID') {
+                        nullDateIds.add(row.id);
+                    }
+                });
+                if (nullDateIds.size > 0) {
+                    console.log(`⚠ ${nullDateIds.size} filas sin fecha detectadas, lanzando fallback...`);
+                    fetchFallbackDates(nullDateIds, response.table.rows.length);
+                }
 
                 // [FIX] Guardar selección actual del calendario para restaurarla después del refresh
                 let previousSelectedStrs = [];
@@ -2518,7 +2665,7 @@
                 window.renderOrdenesTable();
 
             } catch (error) {
-                console.error('Error procesando datos de pallets', error);
+                console.error('Error procesando datos del Spreadsheet', error);
             }
         };
 
@@ -2826,7 +2973,8 @@
             }
         };
 
-        // === ENVÍO FORMULARIO INVENTARIO A MySQL (via API REST) ===
+        // === ENVÍO FORMULARIO INVENTARIO A GOOGLE SHEET (via Apps Script) ===
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbydPLwlIU8R6aDZlKKYg8waA2WhcfV2ftqFdy0m3bIoIM3b_SfyuNN0bdm7cSKq09q4dw/exec';
 
         window.submitInventarioForm = function (e) {
             e.preventDefault();
@@ -2870,20 +3018,12 @@
             const tsString = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
             const rawDate = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
 
-            // Enviar a MySQL via API REST
-            fetch('/api/pallets', {
+            // Disparar POST en segundo plano (fire-and-forget, no-cors no permite leer respuesta)
+            fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
+                mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    pallet_id: pallet,
-                    cantidad: parseInt(qty) || 0,
-                    destino: destino,
-                    fecha: rawDate,
-                    turno: turno,
-                    condicion: condicion,
-                    operador: escaneadora,
-                    pedido: pedido || null
-                })
+                body: JSON.stringify({ pallet, qty, condicion, destino, pedido, turno, escaneadora, timestamp: tsString })
             }).catch(err => console.warn('⚠ Error enviando registro:', err));
 
             // Agregar registro localmente AL INSTANTE (sin esperar respuesta del servidor)
@@ -2905,8 +3045,8 @@
             document.getElementById('inventario-form').reset();
             document.querySelector('.inventario-form-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-            // Refrescar datos desde MySQL después de 2s
-            setTimeout(() => { if (typeof fetchSheetData === 'function') fetchSheetData(); }, 2000);
+            // Sincronizar con el sheet en segundo plano después de 5s
+            setTimeout(() => { if (typeof fetchSheetData === 'function') fetchSheetData(); }, 5000);
         };
 
         function showInvStatus(msg, type) {
@@ -2983,7 +3123,7 @@
 
             // Guard: si los datos aún no cargan del spreadsheet
             if (allSheetData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--text-muted);">Cargando datos...</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--text-muted);">Cargando datos del SpreadSheet...</td></tr>`;
                 return;
             }
 
@@ -3113,7 +3253,7 @@
             if (!tbody) return;
 
             if (allSheetData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--text-muted);">Cargando datos...</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding: 2rem; color: var(--text-muted);">Cargando datos del SpreadSheet...</td></tr>`;
                 return;
             }
 
@@ -4476,7 +4616,7 @@
             fetchSheetData();
             fetchErrorsData();
 
-            // Auto-refresh cada 60s desde MySQL
+            // [FIX] Auto-refresh siempre cada 60s (la selección del calendario se preserva en processSheetData)
             setInterval(() => {
                 fetchSheetData();
                 fetchErrorsData();

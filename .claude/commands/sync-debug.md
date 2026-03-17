@@ -21,7 +21,7 @@ Diagnostica problemas con la sincronización de datos entre Google Sheets y MySQ
 
 ## Mapeo de columnas conocido
 
-### Sheet Pallets (gid=530597405)
+### Sheet Pallets (gid=1543653429)
 - c[1] → pallet_id
 - c[2] → cantidad
 - c[3] → producto

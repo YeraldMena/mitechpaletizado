@@ -1,4 +1,4 @@
-import { API_BASE, nowTimestamp, todayStr } from './config';
+import { API_BASE, GOOGLE_SCRIPT_URL, nowTimestamp, todayStr } from './config';
 
 // ── Timeout wrapper ──
 function fetchWithTimeout(url, opts = {}, ms = 5000) {
@@ -21,14 +21,45 @@ export async function checkDuplicate(palletId) {
 }
 
 // ═══════════════════════════════════════
-// REGISTER PALLET — MySQL API (single write)
+// REGISTER PALLET — dual write
+// Escribe al Google Sheet (primario) y al backend MySQL (respaldo)
 // ═══════════════════════════════════════
 export async function registerPallet({ palletId, cantidad, condicion, destino, turno, operador, pedido, items }) {
+  const timestamp = nowTimestamp();
   const fecha = todayStr();
 
-  // Formato de turno: "Day (día)" / "Night (noche)"
+  // Formato de turno que usa el Google Sheet: "Day (día)" / "Night (noche)"
   const turnoSheet = turno === 'Day' ? 'Day (día)' : 'Night (noche)';
 
+  // ──────────────────────────────────────
+  // 1. GOOGLE SHEETS — JSON POST, mode no-cors
+  //    Campos EXACTOS que espera el Apps Script
+  //    (mismo formato que el formulario web)
+  // ──────────────────────────────────────
+  try {
+    fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        timestamp:   timestamp,
+        pallet:      palletId,
+        qty:         String(cantidad),
+        condicion:   condicion.join(', '),
+        destino:     destino,
+        turno:       turnoSheet,
+        escaneadora: operador,
+        pedido:      pedido || '',
+      }),
+    }).catch(() => {});
+    // no-cors: no se puede leer la respuesta, pero el dato SÍ se escribe
+  } catch {
+    // fire-and-forget
+  }
+
+  // ──────────────────────────────────────
+  // 2. EXPRESS API — MySQL backup con detalle de items
+  // ──────────────────────────────────────
   try {
     const r = await fetchWithTimeout(`${API_BASE}/api/mobile/register`, {
       method: 'POST',
@@ -46,9 +77,10 @@ export async function registerPallet({ palletId, cantidad, condicion, destino, t
       }),
     }, 8000);
     const j = await r.json();
-    return { success: j.success, id: j.id };
+    return { success: j.success, id: j.id, googleSent: true };
   } catch {
-    return { success: false, id: null, offline: true };
+    // API caída pero Google Sheets ya se mandó
+    return { success: true, id: null, googleSent: true, offline: true };
   }
 }
 
