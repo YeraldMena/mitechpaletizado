@@ -2095,6 +2095,8 @@
                     if (!f) return 'N/A';
                     const s = f.toString();
                     if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
+                    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                    if (isoMatch) return `${parseInt(isoMatch[2])}/${parseInt(isoMatch[3])}/${isoMatch[1]}`;
                     const d = new Date(s);
                     if (isNaN(d.getTime())) return s;
                     return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
@@ -2301,19 +2303,38 @@
         // ── Fetch pallets desde MySQL API ──
         function fetchSheetData() {
             fetch('/api/pallets')
-                .then(r => r.json())
-                .then(j => {
-                    if (j.success) window.processSheetData(j.data);
+                .then(r => {
+                    if (!r.ok) throw new Error('API respondió ' + r.status);
+                    return r.json();
                 })
-                .catch(err => console.error('Error cargando pallets:', err));
+                .then(j => {
+                    if (j.success && j.data) {
+                        window.processSheetData(j.data);
+                    } else {
+                        console.warn('API /api/pallets sin datos:', j);
+                    }
+                })
+                .catch(err => {
+                    console.error('Error cargando pallets:', err);
+                    // Mostrar mensaje en las tablas
+                    const tbody = document.getElementById('palets-table-body');
+                    if (tbody && allSheetData.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:2rem; color:#ef4444;">Error al conectar con la API. Verifica que el servidor esté corriendo.</td></tr>';
+                    }
+                });
         }
 
         // ── Fetch errores desde MySQL API ──
         function fetchErrorsData() {
             fetch('/api/errores')
-                .then(r => r.json())
+                .then(r => {
+                    if (!r.ok) throw new Error('API respondió ' + r.status);
+                    return r.json();
+                })
                 .then(j => {
-                    if (j.success) window.processErrorsData(j.data);
+                    if (j.success && j.data) {
+                        window.processErrorsData(j.data);
+                    }
                 })
                 .catch(err => console.error('Error cargando errores:', err));
         }
@@ -2332,13 +2353,16 @@
                 // Indices fijos para renderizado de tabla
                 window.displayIndices = [0, 1, 2, 3];
 
-                // Helper: convertir fecha MySQL (YYYY-MM-DD o Date obj) a M/D/YYYY
+                // Helper: convertir fecha MySQL (YYYY-MM-DD, ISO string, Date obj) a M/D/YYYY
                 function toMDY(f) {
                     if (!f) return 'N/A';
                     const s = f.toString();
                     // Ya está en M/D/YYYY
                     if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
-                    // ISO o Date string
+                    // YYYY-MM-DD (sin timezone shift)
+                    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                    if (isoMatch) return `${parseInt(isoMatch[2])}/${parseInt(isoMatch[3])}/${isoMatch[1]}`;
+                    // Otros formatos
                     const d = new Date(s);
                     if (isNaN(d.getTime())) return s;
                     return `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
@@ -2356,7 +2380,15 @@
                         if (parts.length >= 3) uniqueMonths.add(`${parts[0]}/${parts[2]}`);
                     }
 
-                    const tsDate = r.created_at ? new Date(r.created_at) : (r.fecha ? new Date(r.fecha) : null);
+                    let tsDate = null;
+                    if (r.created_at) {
+                        tsDate = new Date(r.created_at);
+                    } else if (r.fecha) {
+                        // Parsear YYYY-MM-DD sin timezone shift
+                        const fm = r.fecha.toString().match(/^(\d{4})-(\d{2})-(\d{2})/);
+                        tsDate = fm ? new Date(+fm[1], +fm[2]-1, +fm[3], 12, 0, 0) : new Date(r.fecha);
+                    }
+                    if (tsDate && isNaN(tsDate.getTime())) tsDate = null;
                     const palletId = r.pallet_id ? r.pallet_id.toString().split('-')[0].trim() : 'Sin ID';
 
                     allSheetData.push({

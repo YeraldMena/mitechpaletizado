@@ -17,10 +17,10 @@ echo.
 echo  Abriendo dashboard en el navegador...
 start "" http://localhost:3009/index.html
 
-:: Iniciar servidor + sync automatico
+:: Iniciar servidor
 cd /d "%~dp0backend"
-echo  API + Sync iniciados en http://localhost:3009
-echo  Sync Google Sheets - MySQL cada 30 segundos
+echo  API iniciada en http://localhost:3009
+echo  Base de datos: MySQL (paletizado_db)
 echo.
 echo  Presiona Ctrl+C para detener
 echo  ==========================================
