@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "expo start --clear",
-    "tunnel": "expo start --tunnel --clear",
-    "android": "expo start --android",
-    "lan": "expo start --lan --clear",
+    "start": "EXPO_OFFLINE=1 expo start --clear",
+    "tunnel": "EXPO_OFFLINE=1 expo start --tunnel --clear",
+    "android": "EXPO_OFFLINE=1 expo start --android",
+    "lan": "EXPO_OFFLINE=1 expo start --lan --clear",
     "web": "expo start --web",
     "build:apk": "eas build --platform android --profile preview"
   },

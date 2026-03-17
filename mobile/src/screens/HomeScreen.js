@@ -88,7 +88,7 @@ export default function HomeScreen({ navigation, route }) {
         <TouchableOpacity
           style={s.scanBtn}
           activeOpacity={0.75}
-          onPress={() => navigation.navigate('Scan', { operator, turno })}
+          onPress={() => navigation.navigate('PalletForm', { operator, turno, palletId: '', scanned: false })}
         >
           <View style={s.scanIconWrap}>
             <Ionicons name="scan" size={48} color="#FFF" />
