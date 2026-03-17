@@ -8,78 +8,107 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { C, RADIUS, RADIUS_SM } from '../theme';
-import { CONDITIONS, DESTINATIONS, BARCODE_TYPES } from '../config';
+import { CONDITIONS, DESTINATIONS, BARCODE_TYPES, DEFAULT_CONDITION, DEFAULT_DESTINO } from '../config';
 import { registerPallet } from '../api';
 import { getLastDestino, setLastDestino } from '../storage';
 
 export default function PalletFormScreen({ navigation, route }) {
   const { palletId: initId, operator, turno, scanned } = route.params;
 
-  // ── State ──
-  const [palletId, setPalletId] = useState(initId || '');
-  const [items, setItems] = useState([]);           // { id, sku, qty }
-  const [cantidad, setCantidad] = useState('');      // cantidad total obligatoria
-  const [conditions, setConditions] = useState([]);
+  // ── State — auto-filled defaults ──
+  const [palletId] = useState(initId || '');
+  const [items, setItems] = useState([]);
+  const [cantidad, setCantidad] = useState('');
+  const [conditions, setConditions] = useState([DEFAULT_CONDITION]);
   const [destino, setDestino] = useState('');
   const [pedido, setPedido] = useState('');
   const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState(false);       // summary vs edit mode
 
-  // SKU scanner modal
+  // SKU modal
   const [skuModal, setSkuModal] = useState(false);
-  const [skuManual, setSkuManual] = useState(false);
+  const [skuManualMode, setSkuManualMode] = useState(false);
   const [skuInput, setSkuInput] = useState('');
   const [skuQty, setSkuQty] = useState('1');
   const [skuScanned, setSkuScanned] = useState(false);
   const skuLastRef = useRef('');
   const itemIdRef = useRef(1);
 
+  // Track all SKU codes added to this pallet (Set for O(1) lookup)
+  const skuSetRef = useRef(new Set());
+
   const [permission] = useCameraPermissions();
 
-  // Pre-fill last destino
+  // Auto-fill destino: last used or default
   useEffect(() => {
-    getLastDestino().then((v) => { if (v) setDestino(v); });
+    getLastDestino().then((v) => setDestino(v || DEFAULT_DESTINO));
   }, []);
 
   // ═══════════════════════════════════════
-  // SKU DUPLICATE BLOCK + ADD
+  // SKU DUPLICATE CHECK — STRICT BLOCK
+  // Uses both Set (fast) and array scan (safe)
   // ═══════════════════════════════════════
-  const addSku = (sku, qty) => {
-    const q = parseInt(qty, 10) || 1;
-    if (q < 1) {
+  const isSkuDuplicate = (sku) => {
+    const normalized = String(sku).trim().toUpperCase();
+    if (skuSetRef.current.has(normalized)) return true;
+    return items.some((i) => String(i.sku).trim().toUpperCase() === normalized);
+  };
+
+  const addSku = (rawSku, rawQty) => {
+    const sku = String(rawSku).trim();
+    const q = parseInt(rawQty, 10);
+    if (!sku) return false;
+    if (!q || q < 1) {
       Alert.alert('Error', 'La cantidad debe ser al menos 1');
       return false;
     }
 
-    // BLOQUEAR SKU duplicado en este pallet
-    const existing = items.find((i) => i.sku === sku);
-    if (existing) {
+    // BLOCK duplicate
+    if (isSkuDuplicate(sku)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Vibration.vibrate([0, 100, 50, 100]);
+      Vibration.vibrate([0, 120, 60, 120]);
       Alert.alert(
-        'SKU duplicado',
-        `"${sku}" ya fue escaneado en este pallet (×${existing.qty}).\n\nNo se puede agregar dos veces.`,
-        [{ text: 'Entendido' }]
+        'SKU DUPLICADO',
+        `"${sku}" ya fue escaneado en este pallet.\nNo se puede agregar dos veces.`,
       );
       return false;
     }
 
-    setItems((prev) => [...prev, { id: itemIdRef.current++, sku, qty: q }]);
+    const id = itemIdRef.current++;
+    setItems((prev) => [...prev, { id, sku, qty: q }]);
+    skuSetRef.current.add(sku.toUpperCase());
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Vibration.vibrate(50);
+
+    // Auto-update cantidad with sum of SKU quantities
+    setItems((prev) => {
+      const sum = [...prev, { qty: q }].reduce((s, i) => s + (i.qty || 0), 0);
+      // Actually we already added, so just calculate from state after
+      return prev;
+    });
+
     return true;
   };
 
-  const removeSku = (id) => {
+  // Recalculate cantidad when items change
+  useEffect(() => {
+    if (items.length > 0) {
+      const sum = items.reduce((s, i) => s + i.qty, 0);
+      setCantidad(String(sum));
+    }
+  }, [items]);
+
+  const removeSku = (id, sku) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setItems((prev) => prev.filter((i) => i.id !== id));
+    skuSetRef.current.delete(String(sku).trim().toUpperCase());
   };
 
   const updateSkuQty = (id, delta) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setItems((prev) => prev.map((i) => {
       if (i.id !== id) return i;
-      const nq = Math.max(1, i.qty + delta);
-      return { ...i, qty: nq };
+      return { ...i, qty: Math.max(1, i.qty + delta) };
     }));
   };
 
@@ -89,26 +118,22 @@ export default function PalletFormScreen({ navigation, route }) {
     setSkuScanned(true);
     skuLastRef.current = data;
 
-    // Check duplicate BEFORE opening qty input
-    const existing = items.find((i) => i.sku === data);
-    if (existing) {
+    // BLOCK duplicate immediately at scan time
+    if (isSkuDuplicate(data)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Vibration.vibrate([0, 100, 50, 100]);
+      Vibration.vibrate([0, 120, 60, 120]);
       Alert.alert(
-        'SKU duplicado',
-        `"${data}" ya fue escaneado en este pallet (×${existing.qty}).`,
-        [{ text: 'Entendido', onPress: () => { setSkuScanned(false); skuLastRef.current = ''; } }]
+        'SKU DUPLICADO',
+        `"${data}" ya fue escaneado en este pallet.`,
+        [{ text: 'OK', onPress: () => { setSkuScanned(false); skuLastRef.current = ''; } }],
       );
       return;
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Vibration.vibrate(80);
-
-    // Show qty input for this SKU
     setSkuInput(data);
-    setSkuManual(true);
-
+    setSkuManualMode(true); // Show qty input
     setTimeout(() => { setSkuScanned(false); skuLastRef.current = ''; }, 1200);
   };
 
@@ -116,74 +141,50 @@ export default function PalletFormScreen({ navigation, route }) {
     const sku = skuInput.trim();
     if (!sku) { Alert.alert('Error', 'Ingresa un SKU'); return; }
     const q = parseInt(skuQty, 10);
-    if (!q || q < 1) { Alert.alert('Error', 'La cantidad debe ser al menos 1'); return; }
-
-    const added = addSku(sku, skuQty);
-    if (added) {
+    if (!q || q < 1) { Alert.alert('Error', 'Cantidad mínima: 1'); return; }
+    if (addSku(sku, q)) {
       setSkuInput('');
       setSkuQty('1');
-      setSkuManual(false);
-      // Stay in modal for next scan
+      setSkuManualMode(false);
     }
   };
 
   const closeSkuModal = () => {
     setSkuModal(false);
-    setSkuManual(false);
+    setSkuManualMode(false);
     setSkuInput('');
     setSkuQty('1');
     setSkuScanned(false);
     skuLastRef.current = '';
   };
 
-  // ── Condition toggle ──
+  // ── Toggles ──
   const toggleCond = (code) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setConditions((prev) =>
-      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
-    );
+    setConditions((prev) => prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]);
   };
 
-  // ── Destino select ──
   const pickDestino = (val) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setDestino(val);
   };
 
-  // ── Adjust cantidad ──
-  const adjustCantidad = (delta) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const n = Math.max(1, (parseInt(cantidad, 10) || 0) + delta);
-    setCantidad(String(n));
-  };
-
   // ═══════════════════════════════════════
-  // SUBMIT — all validations
+  // SUBMIT
   // ═══════════════════════════════════════
   const handleSubmit = async () => {
-    // Validación: Pallet ID
-    if (!palletId || palletId.trim().length < 4) {
-      Alert.alert('Falta pallet ID', 'El ID del pallet debe tener al menos 4 caracteres');
-      return;
-    }
-
-    // Validación: Cantidad obligatoria
     const qty = parseInt(cantidad, 10);
+    if (!palletId || palletId.trim().length < 4) {
+      Alert.alert('Error', 'Pallet ID inválido'); return;
+    }
     if (!qty || qty < 1) {
-      Alert.alert('Falta cantidad', 'Ingresa la cantidad total del pallet');
-      return;
+      Alert.alert('Falta cantidad', 'Ingresa la cantidad total'); return;
     }
-
-    // Validación: Condición
     if (conditions.length === 0) {
-      Alert.alert('Falta condición', 'Selecciona al menos una condición');
-      return;
+      Alert.alert('Falta condición', 'Selecciona al menos una'); return;
     }
-
-    // Validación: Destino
     if (!destino) {
-      Alert.alert('Falta destino', 'Selecciona un destino');
-      return;
+      Alert.alert('Falta destino', 'Selecciona destino'); return;
     }
 
     setLoading(true);
@@ -203,28 +204,26 @@ export default function PalletFormScreen({ navigation, route }) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Vibration.vibrate(200);
 
-      // Confirmación visual
       Alert.alert(
-        'Pallet registrado',
-        `${palletId} · ${qty} uds · ${destino}${result.offline ? '\n(Sin conexión al servidor, guardado en Google Sheets)' : ''}`,
-        [{
-          text: 'Siguiente pallet',
-          onPress: () => {
-            // Go back to home
-            navigation.popToTop();
-          },
-        }]
+        'Registrado',
+        `${palletId} · ${qty} uds · ${destino}`,
+        [{ text: 'Siguiente', onPress: () => navigation.popToTop() }],
       );
-    } catch (err) {
-      Alert.alert('Error', 'No se pudo registrar. Intenta de nuevo.');
+    } catch {
+      Alert.alert('Error', 'No se pudo guardar. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Computed ──
-  const skuTotalQty = items.reduce((s, i) => s + i.qty, 0);
+  // ── Derived ──
+  const turnoLabel = turno === 'Day' ? 'Día' : 'Noche';
+  const condLabel = conditions.join(', ') || '—';
+  const qty = parseInt(cantidad, 10) || 0;
 
+  // ═══════════════════════════════════════════════════
+  // RENDER — Summary-first, edit on demand
+  // ═══════════════════════════════════════════════════
   return (
     <SafeAreaView style={s.safe}>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
@@ -234,190 +233,216 @@ export default function PalletFormScreen({ navigation, route }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
           <Ionicons name="close" size={24} color={C.text} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Registrar pallet</Text>
-        <View style={s.headerRight}>
-          <View style={s.chip}>
-            <Ionicons name={turno === 'Day' ? 'sunny' : 'moon'} size={12} color={turno === 'Day' ? C.yellow : C.purple} />
-            <Text style={s.chipTxt}>{turno === 'Day' ? 'Día' : 'Noche'}</Text>
-          </View>
-        </View>
+        <Text style={s.headerTitle}>{editing ? 'Editar datos' : 'Confirmar registro'}</Text>
+        {!editing && (
+          <TouchableOpacity onPress={() => setEditing(true)} style={s.editLink}>
+            <Ionicons name="create-outline" size={18} color={C.blue} />
+          </TouchableOpacity>
+        )}
+        {editing && (
+          <TouchableOpacity onPress={() => setEditing(false)} style={s.editLink}>
+            <Text style={{ color: C.blue, fontWeight: '600', fontSize: 13 }}>Listo</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={s.scroll} contentContainerStyle={s.scrollInner} keyboardShouldPersistTaps="handled">
 
-          {/* ── Pallet ID ── */}
-          <View style={s.section}>
-            <Text style={s.label}>PALLET ID</Text>
-            {scanned && initId ? (
-              <View style={s.scannedBadge}>
-                <Ionicons name="checkmark-circle" size={20} color={C.green} />
-                <Text style={s.scannedTxt}>{palletId}</Text>
-                <Text style={s.scannedTag}>ESCANEADO</Text>
-              </View>
-            ) : (
-              <TextInput
-                style={s.input}
-                value={palletId}
-                onChangeText={setPalletId}
-                placeholder="ID del pallet"
-                placeholderTextColor={C.textMuted}
-                autoFocus={!initId}
-              />
-            )}
-          </View>
-
-          {/* ── CANTIDAD (OBLIGATORIA) ── */}
-          <View style={s.section}>
-            <Text style={s.label}>CANTIDAD (QTY) *</Text>
-            <View style={s.qtyRow}>
-              <TouchableOpacity style={s.qtyBtnBig} onPress={() => adjustCantidad(-1)}>
-                <Ionicons name="remove" size={24} color={C.text} />
-              </TouchableOpacity>
-              <TextInput
-                style={s.qtyInputBig}
-                value={cantidad}
-                onChangeText={setCantidad}
-                keyboardType="number-pad"
-                textAlign="center"
-                placeholder="0"
-                placeholderTextColor={C.textMuted}
-              />
-              <TouchableOpacity style={s.qtyBtnBig} onPress={() => adjustCantidad(1)}>
-                <Ionicons name="add" size={24} color={C.text} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* ── Condición ── */}
-          <View style={s.section}>
-            <Text style={s.label}>CONDICIÓN *</Text>
-            <View style={s.chipGrid}>
-              {CONDITIONS.map((c) => {
-                const active = conditions.includes(c.code);
-                return (
-                  <TouchableOpacity
-                    key={c.code}
-                    style={[s.condChip, active && { backgroundColor: c.color, borderColor: c.color }]}
-                    onPress={() => toggleCond(c.code)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[s.condTxt, active && { color: '#FFF' }]}>{c.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* ── Destino ── */}
-          <View style={s.section}>
-            <Text style={s.label}>DESTINO *</Text>
-            <View style={s.destGrid}>
-              {DESTINATIONS.map((d) => {
-                const active = destino === d.value;
-                return (
-                  <TouchableOpacity
-                    key={d.value}
-                    style={[s.destBtn, active && s.destBtnActive]}
-                    onPress={() => pickDestino(d.value)}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={d.icon}
-                      size={20}
-                      color={active ? '#FFF' : C.textMuted}
-                    />
-                    <Text style={[s.destTxt, active && { color: '#FFF' }]}>{d.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* ── Contenido / SKUs (opcional pero validado) ── */}
-          <View style={s.section}>
-            <View style={s.labelRow}>
-              <Text style={s.label}>CONTENIDO DEL PALLET</Text>
-              {items.length > 0 && (
-                <Text style={s.labelBadge}>{items.length} SKU · {skuTotalQty} uds</Text>
-              )}
-            </View>
-
-            {/* Item list */}
-            {items.map((item) => (
-              <View key={item.id} style={s.itemRow}>
-                <View style={s.itemInfo}>
-                  <Text style={s.itemSku}>{item.sku}</Text>
+          {/* ══════════════════════════════════════ */}
+          {/* SUMMARY VIEW (default) */}
+          {/* ══════════════════════════════════════ */}
+          {!editing && (
+            <>
+              {/* Pallet ID */}
+              <View style={s.summaryCard}>
+                <View style={s.summaryRow}>
+                  <Text style={s.summaryLabel}>Pallet</Text>
+                  <View style={s.palletBadge}>
+                    <Ionicons name={scanned ? 'scan' : 'keypad'} size={14} color={C.green} />
+                    <Text style={s.palletTxt}>{palletId}</Text>
+                  </View>
                 </View>
-                <View style={s.itemQty}>
-                  <TouchableOpacity style={s.qtyBtn} onPress={() => updateSkuQty(item.id, -1)}>
-                    <Ionicons name="remove" size={16} color={C.text} />
-                  </TouchableOpacity>
-                  <Text style={s.qtyNum}>{item.qty}</Text>
-                  <TouchableOpacity style={s.qtyBtn} onPress={() => updateSkuQty(item.id, 1)}>
-                    <Ionicons name="add" size={16} color={C.text} />
-                  </TouchableOpacity>
+
+                <View style={s.divider} />
+
+                {/* SKUs */}
+                <View style={s.summaryRow}>
+                  <Text style={s.summaryLabel}>Contenido</Text>
+                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                    {items.length === 0 ? (
+                      <Text style={s.summaryMuted}>Sin SKUs</Text>
+                    ) : (
+                      items.map((i) => (
+                        <Text key={i.id} style={s.summaryVal}>{i.sku} ×{i.qty}</Text>
+                      ))
+                    )}
+                  </View>
                 </View>
-                <TouchableOpacity onPress={() => removeSku(item.id)} style={s.itemDel}>
-                  <Ionicons name="trash-outline" size={18} color={C.red} />
+
+                {/* Add SKU button inline */}
+                <TouchableOpacity style={s.addSkuInline} onPress={() => { setSkuManualMode(false); setSkuModal(true); }}>
+                  <Ionicons name="add-circle" size={18} color={C.blue} />
+                  <Text style={s.addSkuTxt}>Escanear / agregar SKU</Text>
                 </TouchableOpacity>
+
+                <View style={s.divider} />
+
+                {/* Cantidad */}
+                <View style={s.summaryRow}>
+                  <Text style={s.summaryLabel}>Cantidad</Text>
+                  <View style={s.qtyInline}>
+                    <TouchableOpacity style={s.qtyBtnSm} onPress={() => setCantidad(String(Math.max(1, qty - 1)))}>
+                      <Ionicons name="remove" size={18} color={C.text} />
+                    </TouchableOpacity>
+                    <TextInput
+                      style={s.qtyInputSm}
+                      value={cantidad}
+                      onChangeText={setCantidad}
+                      keyboardType="number-pad"
+                      textAlign="center"
+                      placeholder="0"
+                      placeholderTextColor={C.textMuted}
+                    />
+                    <TouchableOpacity style={s.qtyBtnSm} onPress={() => setCantidad(String(qty + 1))}>
+                      <Ionicons name="add" size={18} color={C.text} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={s.divider} />
+
+                {/* Condición */}
+                <View style={s.summaryRow}>
+                  <Text style={s.summaryLabel}>Condición</Text>
+                  <Text style={s.summaryVal}>{condLabel}</Text>
+                </View>
+
+                <View style={s.divider} />
+
+                {/* Destino */}
+                <View style={s.summaryRow}>
+                  <Text style={s.summaryLabel}>Destino</Text>
+                  <Text style={s.summaryVal}>{destino || '—'}</Text>
+                </View>
+
+                <View style={s.divider} />
+
+                {/* Auto fields */}
+                <View style={s.summaryRow}>
+                  <Text style={s.summaryLabel}>Escaneadora</Text>
+                  <Text style={s.summaryAuto}>{operator}</Text>
+                </View>
+                <View style={s.summaryRow}>
+                  <Text style={s.summaryLabel}>Turno</Text>
+                  <Text style={s.summaryAuto}>{turnoLabel}</Text>
+                </View>
+                <View style={s.summaryRow}>
+                  <Text style={s.summaryLabel}>Fecha</Text>
+                  <Text style={s.summaryAuto}>Hoy (auto)</Text>
+                </View>
+
+                {pedido ? (
+                  <>
+                    <View style={s.divider} />
+                    <View style={s.summaryRow}>
+                      <Text style={s.summaryLabel}>Pedido</Text>
+                      <Text style={s.summaryVal}>{pedido}</Text>
+                    </View>
+                  </>
+                ) : null}
               </View>
-            ))}
 
-            {/* Add SKU buttons */}
-            <View style={s.addRow}>
-              <TouchableOpacity
-                style={s.addBtn}
-                onPress={() => { setSkuManual(false); setSkuModal(true); }}
-              >
-                <Ionicons name="scan" size={20} color={C.blue} />
-                <Text style={s.addBtnTxt}>Escanear SKU</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={s.addBtn}
-                onPress={() => { setSkuManual(true); setSkuModal(true); }}
-              >
-                <Ionicons name="create-outline" size={20} color={C.blue} />
-                <Text style={s.addBtnTxt}>Manual</Text>
-              </TouchableOpacity>
-            </View>
-
-            {items.length === 0 && (
-              <Text style={s.hint}>
-                Opcional: escanea los SKUs del contenido del pallet.
+              {/* Edit hint */}
+              <Text style={s.editHint}>
+                Toca el lápiz arriba para editar condición, destino o pedido
               </Text>
-            )}
-          </View>
+            </>
+          )}
 
-          {/* ── Pedido (opcional) ── */}
-          <View style={s.section}>
-            <Text style={s.label}>PEDIDO (OPCIONAL)</Text>
-            <TextInput
-              style={s.input}
-              value={pedido}
-              onChangeText={setPedido}
-              placeholder="Número de pedido"
-              placeholderTextColor={C.textMuted}
-            />
-          </View>
+          {/* ══════════════════════════════════════ */}
+          {/* EDIT VIEW */}
+          {/* ══════════════════════════════════════ */}
+          {editing && (
+            <>
+              {/* Cantidad */}
+              <View style={s.section}>
+                <Text style={s.label}>CANTIDAD *</Text>
+                <View style={s.qtyRowBig}>
+                  <TouchableOpacity style={s.qtyBtnBig} onPress={() => setCantidad(String(Math.max(1, qty - 1)))}>
+                    <Ionicons name="remove" size={24} color={C.text} />
+                  </TouchableOpacity>
+                  <TextInput
+                    style={s.qtyInputBig}
+                    value={cantidad}
+                    onChangeText={setCantidad}
+                    keyboardType="number-pad"
+                    textAlign="center"
+                    placeholder="0"
+                    placeholderTextColor={C.textMuted}
+                  />
+                  <TouchableOpacity style={s.qtyBtnBig} onPress={() => setCantidad(String(qty + 1))}>
+                    <Ionicons name="add" size={24} color={C.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
 
-          {/* ── Auto-filled info ── */}
-          <View style={s.infoBar}>
-            <View style={s.chip}>
-              <Ionicons name="person" size={12} color={C.blue} />
-              <Text style={s.chipTxt}>{operator}</Text>
-            </View>
-            <View style={s.chip}>
-              <Ionicons name={turno === 'Day' ? 'sunny' : 'moon'} size={12} color={turno === 'Day' ? C.yellow : C.purple} />
-              <Text style={s.chipTxt}>{turno === 'Day' ? 'Día' : 'Noche'}</Text>
-            </View>
-            <View style={s.chip}>
-              <Ionicons name="calendar" size={12} color={C.textMuted} />
-              <Text style={s.chipTxt}>Auto</Text>
-            </View>
-          </View>
+              {/* Condición */}
+              <View style={s.section}>
+                <Text style={s.label}>CONDICIÓN *</Text>
+                <View style={s.chipGrid}>
+                  {CONDITIONS.map((c) => {
+                    const active = conditions.includes(c.code);
+                    return (
+                      <TouchableOpacity
+                        key={c.code}
+                        style={[s.condChip, active && { backgroundColor: c.color, borderColor: c.color }]}
+                        onPress={() => toggleCond(c.code)}
+                      >
+                        <Text style={[s.condTxt, active && { color: '#FFF' }]}>{c.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
 
-          {/* ── SUBMIT ── */}
+              {/* Destino */}
+              <View style={s.section}>
+                <Text style={s.label}>DESTINO *</Text>
+                <View style={s.destGrid}>
+                  {DESTINATIONS.map((d) => {
+                    const active = destino === d.value;
+                    return (
+                      <TouchableOpacity
+                        key={d.value}
+                        style={[s.destBtn, active && s.destBtnActive]}
+                        onPress={() => pickDestino(d.value)}
+                      >
+                        <Ionicons name={d.icon} size={20} color={active ? '#FFF' : C.textMuted} />
+                        <Text style={[s.destTxt, active && { color: '#FFF' }]}>{d.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Pedido */}
+              <View style={s.section}>
+                <Text style={s.label}>PEDIDO (OPCIONAL)</Text>
+                <TextInput
+                  style={s.input}
+                  value={pedido}
+                  onChangeText={setPedido}
+                  placeholder="Número de pedido"
+                  placeholderTextColor={C.textMuted}
+                />
+              </View>
+            </>
+          )}
+
+          {/* ══════════════════════════════════════ */}
+          {/* CONFIRM BUTTON — always visible */}
+          {/* ══════════════════════════════════════ */}
           <TouchableOpacity
             style={[s.submitBtn, loading && { opacity: 0.5 }]}
             onPress={handleSubmit}
@@ -429,7 +454,7 @@ export default function PalletFormScreen({ navigation, route }) {
             ) : (
               <>
                 <Ionicons name="checkmark-circle" size={24} color="#FFF" />
-                <Text style={s.submitTxt}>REGISTRAR PALLET</Text>
+                <Text style={s.submitTxt}>CONFIRMAR Y GUARDAR</Text>
               </>
             )}
           </TouchableOpacity>
@@ -437,108 +462,76 @@ export default function PalletFormScreen({ navigation, route }) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* ── SKU Scanner/Manual Modal ── */}
+      {/* ══════════════════════════════════════ */}
+      {/* SKU SCANNER MODAL */}
+      {/* ══════════════════════════════════════ */}
       <Modal visible={skuModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={s.modalSafe}>
           <View style={s.modalHeader}>
-            <Text style={s.modalTitle}>
-              {skuManual ? 'Agregar SKU' : 'Escanear SKU'}
-            </Text>
+            <Text style={s.modalTitle}>{skuManualMode ? 'Agregar SKU' : 'Escanear SKU'}</Text>
             <TouchableOpacity onPress={closeSkuModal} style={s.modalClose}>
               <Ionicons name="close" size={24} color={C.text} />
             </TouchableOpacity>
           </View>
 
-          {skuManual ? (
-            /* Manual SKU entry */
+          {skuManualMode ? (
             <View style={s.modalBody}>
               <Text style={s.label}>CÓDIGO SKU</Text>
-              <TextInput
-                style={s.input}
-                value={skuInput}
-                onChangeText={setSkuInput}
-                placeholder="Código o nombre del SKU"
-                placeholderTextColor={C.textMuted}
-                autoFocus
-              />
+              <TextInput style={s.input} value={skuInput} onChangeText={setSkuInput}
+                placeholder="Código del producto" placeholderTextColor={C.textMuted} autoFocus />
+
               <Text style={[s.label, { marginTop: 16 }]}>CANTIDAD *</Text>
               <View style={s.modalQtyRow}>
-                <TouchableOpacity
-                  style={s.modalQtyBtn}
-                  onPress={() => setSkuQty(String(Math.max(1, (parseInt(skuQty, 10) || 1) - 1)))}
-                >
+                <TouchableOpacity style={s.modalQtyBtn}
+                  onPress={() => setSkuQty(String(Math.max(1, (parseInt(skuQty, 10) || 1) - 1)))}>
                   <Ionicons name="remove" size={22} color={C.text} />
                 </TouchableOpacity>
-                <TextInput
-                  style={s.modalQtyInput}
-                  value={skuQty}
-                  onChangeText={setSkuQty}
-                  keyboardType="number-pad"
-                  textAlign="center"
-                />
-                <TouchableOpacity
-                  style={s.modalQtyBtn}
-                  onPress={() => setSkuQty(String((parseInt(skuQty, 10) || 1) + 1))}
-                >
+                <TextInput style={s.modalQtyInput} value={skuQty} onChangeText={setSkuQty}
+                  keyboardType="number-pad" textAlign="center" />
+                <TouchableOpacity style={s.modalQtyBtn}
+                  onPress={() => setSkuQty(String((parseInt(skuQty, 10) || 1) + 1))}>
                   <Ionicons name="add" size={22} color={C.text} />
                 </TouchableOpacity>
               </View>
+
               <TouchableOpacity style={s.modalAddBtn} onPress={confirmSkuAdd}>
                 <Ionicons name="add-circle" size={22} color="#FFF" />
                 <Text style={s.modalAddTxt}>Agregar al pallet</Text>
               </TouchableOpacity>
 
-              {/* Switch to scanner */}
-              <TouchableOpacity
-                style={s.modalSwitchBtn}
-                onPress={() => { setSkuManual(false); setSkuInput(''); setSkuQty('1'); }}
-              >
+              <TouchableOpacity style={s.switchBtn} onPress={() => { setSkuManualMode(false); setSkuInput(''); setSkuQty('1'); }}>
                 <Ionicons name="scan" size={18} color={C.blue} />
-                <Text style={s.modalSwitchTxt}>Escanear con cámara</Text>
+                <Text style={s.switchTxt}>Escanear con cámara</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            /* Camera SKU scanner */
             <View style={s.modalCam}>
               {permission?.granted ? (
-                <CameraView
-                  style={{ flex: 1 }}
-                  facing="back"
+                <CameraView style={{ flex: 1 }} facing="back"
                   barcodeScannerSettings={{ barcodeTypes: BARCODE_TYPES }}
-                  onBarcodeScanned={skuScanned ? undefined : onSkuBarcode}
-                />
+                  onBarcodeScanned={skuScanned ? undefined : onSkuBarcode} />
               ) : (
-                <View style={s.center}>
-                  <Text style={{ color: C.textSec }}>Cámara no disponible</Text>
-                </View>
+                <View style={s.center}><Text style={{ color: C.textSec }}>Cámara no disponible</Text></View>
               )}
-              <View style={s.modalCamOverlay}>
-                <Text style={s.modalCamHint}>
-                  {skuScanned ? 'SKU detectado!' : 'Apunta al código del producto'}
-                </Text>
+              <View style={s.camOverlay}>
+                <Text style={s.camHint}>{skuScanned ? 'SKU detectado!' : 'Apunta al código del producto'}</Text>
               </View>
-
-              {/* Switch to manual */}
-              <View style={s.modalCamBottom}>
-                <TouchableOpacity
-                  style={s.modalSwitchBtn}
-                  onPress={() => setSkuManual(true)}
-                >
+              <View style={s.camBottom}>
+                <TouchableOpacity style={s.switchBtn} onPress={() => setSkuManualMode(true)}>
                   <Ionicons name="create-outline" size={18} color={C.blue} />
-                  <Text style={s.modalSwitchTxt}>Ingresar manualmente</Text>
+                  <Text style={s.switchTxt}>Ingresar manualmente</Text>
                 </TouchableOpacity>
               </View>
             </View>
           )}
 
-          {/* Items added so far */}
           {items.length > 0 && (
-            <View style={s.modalItemList}>
-              <Text style={s.modalItemTitle}>En este pallet ({items.length} SKUs):</Text>
+            <View style={s.modalItems}>
+              <Text style={s.modalItemsTitle}>En este pallet ({items.length}):</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {items.map((item) => (
-                  <View key={item.id} style={s.modalItemChip}>
-                    <Text style={s.modalItemTxt}>{item.sku} ×{item.qty}</Text>
+                {items.map((i) => (
+                  <View key={i.id} style={s.modalChip}>
+                    <Text style={s.modalChipTxt}>{i.sku} ×{i.qty}</Text>
                   </View>
                 ))}
               </ScrollView>
@@ -550,6 +543,9 @@ export default function PalletFormScreen({ navigation, route }) {
   );
 }
 
+// ═══════════════════════════════════════════════════
+// STYLES
+// ═══════════════════════════════════════════════════
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg },
   header: {
@@ -558,44 +554,62 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: C.border,
   },
   backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { color: C.text, fontWeight: '700', fontSize: 17 },
-  headerRight: { minWidth: 40 },
-  chip: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: C.card, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 5,
-    borderWidth: 1, borderColor: C.border,
-  },
-  chipTxt: { color: C.textSec, fontSize: 12, fontWeight: '600' },
+  headerTitle: { color: C.text, fontWeight: '700', fontSize: 17, flex: 1, textAlign: 'center' },
+  editLink: { width: 40, alignItems: 'center' },
 
   scroll: { flex: 1 },
-  scrollInner: { padding: 20, paddingBottom: 40 },
+  scrollInner: { padding: 16, paddingBottom: 40 },
 
-  section: { marginBottom: 24 },
-  label: {
-    color: C.textSec, fontSize: 11, fontWeight: '700',
-    letterSpacing: 0.8, marginBottom: 10,
+  // ── Summary card ──
+  summaryCard: {
+    backgroundColor: C.card, borderRadius: RADIUS, padding: 16,
+    borderWidth: 1, borderColor: C.border,
   },
-  labelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  labelBadge: { color: C.blue, fontSize: 12, fontWeight: '600' },
+  summaryRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10, minHeight: 44,
+  },
+  summaryLabel: { color: C.textMuted, fontSize: 13, fontWeight: '600' },
+  summaryVal: { color: C.text, fontSize: 15, fontWeight: '600' },
+  summaryAuto: { color: C.textSec, fontSize: 14 },
+  summaryMuted: { color: C.textMuted, fontSize: 13, fontStyle: 'italic' },
+  divider: { height: 1, backgroundColor: C.border },
 
+  palletBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(34,197,94,0.1)', borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 6,
+  },
+  palletTxt: { color: C.green, fontWeight: '700', fontSize: 16, letterSpacing: 0.3 },
+
+  addSkuInline: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 10, marginTop: 4,
+  },
+  addSkuTxt: { color: C.blue, fontWeight: '600', fontSize: 13 },
+
+  // Inline qty in summary
+  qtyInline: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  qtyBtnSm: {
+    width: 36, height: 36, borderRadius: 8,
+    backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center',
+  },
+  qtyInputSm: {
+    width: 60, backgroundColor: C.input, borderWidth: 1, borderColor: C.inputBorder,
+    borderRadius: 8, paddingVertical: 6, fontSize: 20, fontWeight: '700', color: C.text,
+    textAlign: 'center',
+  },
+
+  editHint: { color: C.textMuted, fontSize: 12, textAlign: 'center', marginTop: 12, marginBottom: 16 },
+
+  // ── Edit mode ──
+  section: { marginBottom: 20 },
+  label: { color: C.textSec, fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 8 },
   input: {
     backgroundColor: C.input, borderWidth: 1, borderColor: C.inputBorder,
     borderRadius: RADIUS, padding: 14, fontSize: 16, color: C.text,
   },
-
-  scannedBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: 'rgba(34,197,94,0.08)', borderRadius: RADIUS,
-    padding: 14, borderWidth: 1.5, borderColor: 'rgba(34,197,94,0.25)',
-  },
-  scannedTxt: { color: C.green, fontWeight: '700', fontSize: 20, flex: 1, letterSpacing: 0.5 },
-  scannedTag: {
-    color: C.green, fontSize: 10, fontWeight: '700',
-    backgroundColor: 'rgba(34,197,94,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4,
-  },
-
-  // Cantidad grande
-  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  qtyRowBig: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   qtyBtnBig: {
     width: 56, height: 56, borderRadius: RADIUS,
     backgroundColor: C.card, alignItems: 'center', justifyContent: 'center',
@@ -605,44 +619,12 @@ const s = StyleSheet.create({
     flex: 1, backgroundColor: C.input, borderWidth: 1, borderColor: C.inputBorder,
     borderRadius: RADIUS, paddingVertical: 14, fontSize: 32, fontWeight: '800', color: C.text,
   },
-
-  // Items
-  itemRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: C.card, borderRadius: RADIUS_SM, padding: 12,
-    marginBottom: 8, borderWidth: 1, borderColor: C.border,
-  },
-  itemInfo: { flex: 1 },
-  itemSku: { color: C.text, fontWeight: '600', fontSize: 15 },
-  itemQty: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  qtyBtn: {
-    width: 32, height: 32, borderRadius: 8,
-    backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center',
-  },
-  qtyNum: { color: C.text, fontWeight: '700', fontSize: 16, minWidth: 28, textAlign: 'center' },
-  itemDel: { marginLeft: 10, padding: 4 },
-
-  addRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  addBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, backgroundColor: 'rgba(59,130,246,0.08)',
-    borderRadius: RADIUS_SM, paddingVertical: 14,
-    borderWidth: 1.5, borderColor: 'rgba(59,130,246,0.2)', borderStyle: 'dashed',
-  },
-  addBtnTxt: { color: C.blue, fontWeight: '600', fontSize: 13 },
-
-  hint: { color: C.textMuted, fontSize: 12, marginTop: 10, lineHeight: 17 },
-
-  // Conditions
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   condChip: {
     paddingHorizontal: 18, paddingVertical: 12, borderRadius: RADIUS_SM,
-    backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border,
-    minWidth: 60, alignItems: 'center',
+    backgroundColor: C.card, borderWidth: 1.5, borderColor: C.border, minWidth: 60, alignItems: 'center',
   },
   condTxt: { fontSize: 14, fontWeight: '700', color: C.textSec },
-
-  // Destinations
   destGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   destBtn: {
     flex: 1, minWidth: '44%', paddingVertical: 16, borderRadius: RADIUS,
@@ -652,11 +634,10 @@ const s = StyleSheet.create({
   destBtnActive: { backgroundColor: C.blue, borderColor: C.blue },
   destTxt: { fontSize: 13, fontWeight: '600', color: C.textSec },
 
-  infoBar: { flexDirection: 'row', gap: 8, marginBottom: 20, flexWrap: 'wrap' },
-
+  // ── Submit ──
   submitBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: C.blue, borderRadius: RADIUS, paddingVertical: 18, gap: 10,
+    backgroundColor: C.green, borderRadius: RADIUS, paddingVertical: 18, gap: 10, marginTop: 16,
   },
   submitTxt: { color: '#FFF', fontWeight: '800', fontSize: 17, letterSpacing: 0.5 },
 
@@ -669,7 +650,6 @@ const s = StyleSheet.create({
   },
   modalTitle: { color: C.text, fontWeight: '700', fontSize: 17 },
   modalClose: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-
   modalBody: { padding: 20 },
   modalQtyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
   modalQtyBtn: {
@@ -686,35 +666,21 @@ const s = StyleSheet.create({
     backgroundColor: C.blue, borderRadius: RADIUS, paddingVertical: 16, gap: 8, marginTop: 20,
   },
   modalAddTxt: { color: '#FFF', fontWeight: '700', fontSize: 16 },
-  modalSwitchBtn: {
+  switchBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, marginTop: 16, paddingVertical: 12,
   },
-  modalSwitchTxt: { color: C.blue, fontWeight: '600', fontSize: 14 },
-
+  switchTxt: { color: C.blue, fontWeight: '600', fontSize: 14 },
   modalCam: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  modalCamOverlay: {
-    position: 'absolute', top: 20, left: 0, right: 0, alignItems: 'center',
-  },
-  modalCamHint: {
+  camOverlay: { position: 'absolute', top: 20, left: 0, right: 0, alignItems: 'center' },
+  camHint: {
     color: C.text, fontSize: 14, fontWeight: '600',
-    backgroundColor: C.overlay, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20,
-    overflow: 'hidden',
+    backgroundColor: C.overlay, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, overflow: 'hidden',
   },
-  modalCamBottom: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 16, backgroundColor: C.overlay,
-  },
-
-  modalItemList: {
-    padding: 16, borderTopWidth: 1, borderTopColor: C.border,
-    backgroundColor: C.card,
-  },
-  modalItemTitle: { color: C.textSec, fontSize: 12, fontWeight: '600', marginBottom: 8 },
-  modalItemChip: {
-    backgroundColor: C.surface, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6,
-    marginRight: 8,
-  },
-  modalItemTxt: { color: C.text, fontSize: 13, fontWeight: '600' },
+  camBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: C.overlay },
+  modalItems: { padding: 16, borderTopWidth: 1, borderTopColor: C.border, backgroundColor: C.card },
+  modalItemsTitle: { color: C.textSec, fontSize: 12, fontWeight: '600', marginBottom: 8 },
+  modalChip: { backgroundColor: C.surface, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8 },
+  modalChipTxt: { color: C.text, fontSize: 13, fontWeight: '600' },
 });
