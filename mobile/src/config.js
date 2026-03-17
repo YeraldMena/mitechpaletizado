@@ -3,19 +3,26 @@
 // ═══════════════════════════════════════════════════
 
 // ── Backend API ──
-// CHANGE THIS to your server's local network IP
+// CAMBIAR a la IP real del servidor en la red local
 export const API_BASE = 'http://192.168.1.100:3009';
 
-// Google Apps Script (primary write — same as web form)
+// Google Apps Script (escritura primaria — igual que formulario web)
 export const GOOGLE_SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbydPLwlIU8R6aDZlKKYg8waA2WhcfV2ftqFdy0m3bIoIM3b_SfyuNN0bdm7cSKq09q4dw/exec';
 
-// ── Operators ──
+// ═══════════════════════════════════════════════════
+// OPERADORES
+// Para agregar/quitar/cambiar operadores, editar esta lista.
+// turno: 'day' = turno día, 'night' = turno noche
+// ═══════════════════════════════════════════════════
 export const OPERATORS = [
-  { id: 'brayan',       name: 'Brayan' },
-  { id: 'luis_antonio',  name: 'Luis Antonio' },
-  { id: 'leonardo',     name: 'Leonardo' },
-  { id: 'cristian',     name: 'Cristian' },
+  // ── Turno día (3 operadores) ──
+  { id: 'brayan',       name: 'Brayan',       turno: 'day' },
+  { id: 'luis_antonio',  name: 'Luis Antonio', turno: 'day' },
+  { id: 'leonardo',     name: 'Leonardo',      turno: 'day' },
+
+  // ── Turno noche (1 operador) ──
+  { id: 'cristian',     name: 'Cristian',      turno: 'night' },
 ];
 
 // ── Condition codes — quality grades ──
