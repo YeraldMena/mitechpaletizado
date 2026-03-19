@@ -34,9 +34,11 @@ Two main tables:
 - Uses `INSERT IGNORE` to avoid duplicates during sync
 - Has views: `v_resumen_destino`, `v_turno_destino` (used by dashboard endpoints as fallback)
 
-### Google Sheets Sources
-- Pallets sheet: spreadsheet ID `1eTZKzt00TGHzVHhcIpf6-_IGF6y4jwhc`, gid `1543653429`
-- Errores sheet: spreadsheet ID `1FjVHlUNzu0gqhBunDNXKD5GUpcKGviLrFdJJAZG5qhg`, sheet `Liberación de Pallet`
+### Google Sheets Sources (NUEVO SPREADSHEET OFICIAL)
+- spreadsheetId: `1nAouHO7k2s7kSzrz2IX3GF_Y0Ba0ZDhx_JZsaR3rK44`
+- Hoja "anterior": datos históricos de pallets
+- Hoja "formulario de escaneadores": registros nuevos de pallets (escritura)
+- Dashboard combina AMBAS hojas: histórico + nuevos = vista completa
 
 ## Commands
 

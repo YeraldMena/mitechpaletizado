@@ -591,8 +591,14 @@ app.get('/api/health', async (req, res) => {
 // =============================================
 // SYNC AUTOMÁTICO: Google Sheets → MySQL
 // =============================================
-const SHEET_PALLETS = 'https://docs.google.com/spreadsheets/d/1jhocRpSlYkSj3rSJ5-JYe1QgvIOGKw5YIAVDN66zlbA/gviz/tq?tqx=out:json&gid=1411419232';
-const SHEET_ERRORES = 'https://docs.google.com/spreadsheets/d/1FjVHlUNzu0gqhBunDNXKD5GUpcKGviLrFdJJAZG5qhg/gviz/tq?tqx=out:json&sheet=Liberaci%C3%B3n%20de%20Pallet';
+// ── NUEVO SPREADSHEET OFICIAL ──
+// spreadsheetId: 1nAouHO7k2s7kSzrz2IX3GF_Y0Ba0ZDhx_JZsaR3rK44
+// Hoja "anterior" = datos históricos
+// Hoja "formulario de escaneadores" = registros nuevos
+const NEW_SPREADSHEET_ID = '1nAouHO7k2s7kSzrz2IX3GF_Y0Ba0ZDhx_JZsaR3rK44';
+const SHEET_HISTORICO = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=anterior`;
+const SHEET_NUEVOS = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=formulario%20de%20escaneadores`;
+const SHEET_ERRORES = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Liberaci%C3%B3n%20de%20Pallet`;
 const SYNC_INTERVAL = 30; // segundos
 
 function fetchSheet(url) {
@@ -626,60 +632,79 @@ function parseGoogleDate(cell) {
     return null;
 }
 
+async function syncPalletsFromSheet(sheetUrl, label) {
+    let pNew = 0;
+    try {
+        console.log(`  [SYNC] Descargando ${label}...`);
+        const resp = await fetchSheet(sheetUrl);
+        if (!resp || !resp.table || !resp.table.rows) {
+            console.warn(`  [SYNC] ${label}: respuesta vacía o inválida`);
+            return 0;
+        }
+        console.log(`  [SYNC] ${label}: ${resp.table.rows.length} filas encontradas`);
+        for (const r of resp.table.rows) {
+            const c = r.c;
+            if (!c || !c[4] || c[4].v === null) continue;
+            const pid = (c[1] && c[1].v != null) ? c[1].v.toString().trim() : null;
+            const fecha = parseGoogleDate(c[5]);
+            if (!pid || !fecha) continue;
+            const [res] = await pool.query(
+                'INSERT IGNORE INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, observaciones) VALUES (?,?,?,?,?,?,?,?)',
+                [pid,
+                 (c[2] && c[2].v != null) ? parseFloat(c[2].v.toString().replace(/,/g,'')) || 0 : 0,
+                 (c[3] && c[3].v != null) ? c[3].v.toString().trim() : null,
+                 (c[4] && c[4].v != null) ? c[4].v.toString().trim() : '',
+                 fecha,
+                 (c[6] && c[6].v != null) ? c[6].v.toString().trim() : 'N/A',
+                 (c[7] && c[7].v != null) ? c[7].v.toString().trim() : null,
+                 (c[8] && c[8].v != null) ? c[8].v.toString().trim() : null]
+            );
+            if (res.affectedRows > 0) pNew++;
+        }
+    } catch (err) {
+        console.error(`  [SYNC] ${label} ERROR: ${err.message}`);
+    }
+    return pNew;
+}
+
 async function syncFromSheets() {
     const ts = new Date().toLocaleString('es-MX');
     try {
-        // Sync pallets
-        const pResp = await fetchSheet(SHEET_PALLETS);
-        let pNew = 0;
-        if (pResp && pResp.table && pResp.table.rows) {
-            for (const r of pResp.table.rows) {
-                const c = r.c;
-                if (!c || !c[4] || c[4].v === null) continue;
-                const pid = (c[1] && c[1].v != null) ? c[1].v.toString().trim() : null;
-                const fecha = parseGoogleDate(c[5]);
-                if (!pid || !fecha) continue;
-                const [res] = await pool.query(
-                    'INSERT IGNORE INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, observaciones) VALUES (?,?,?,?,?,?,?,?)',
-                    [pid,
-                     (c[2] && c[2].v != null) ? parseFloat(c[2].v.toString().replace(/,/g,'')) || 0 : 0,
-                     (c[3] && c[3].v != null) ? c[3].v.toString().trim() : null,
-                     (c[4] && c[4].v != null) ? c[4].v.toString().trim() : '',
-                     fecha,
-                     (c[6] && c[6].v != null) ? c[6].v.toString().trim() : 'N/A',
-                     (c[7] && c[7].v != null) ? c[7].v.toString().trim() : null,
-                     (c[8] && c[8].v != null) ? c[8].v.toString().trim() : null]
-                );
-                if (res.affectedRows > 0) pNew++;
-            }
-        }
+        // Sync pallets desde AMBAS hojas del nuevo spreadsheet
+        const pHistorico = await syncPalletsFromSheet(SHEET_HISTORICO, 'HISTORICO (anterior)');
+        const pNuevos = await syncPalletsFromSheet(SHEET_NUEVOS, 'NUEVOS (formulario de escaneadores)');
+        const pNew = pHistorico + pNuevos;
 
-        // Sync errores
-        const eResp = await fetchSheet(SHEET_ERRORES);
+        // Sync errores (si existe la hoja)
         let eNew = 0;
-        if (eResp && eResp.table && eResp.table.rows) {
-            for (const r of eResp.table.rows) {
-                const c = r.c;
-                if (!c || !c[9] || c[9].v === null) continue;
-                const def = c[9].v.toString().trim();
-                if (def === '' || def === '-') continue;
-                const fecha = parseGoogleDate(c[1]);
-                if (!fecha) continue;
-                const [res] = await pool.query(
-                    'INSERT IGNORE INTO errores_pallet (pallet_id, fecha, defecto, tipo) VALUES (?,?,?,?)',
-                    [(c[3] && c[3].v != null) ? c[3].v.toString().trim() : 'N/A',
-                     fecha, def,
-                     (c[11] && c[11].v != null) ? c[11].v.toString().trim() : null]
-                );
-                if (res.affectedRows > 0) eNew++;
+        try {
+            const eResp = await fetchSheet(SHEET_ERRORES);
+            if (eResp && eResp.table && eResp.table.rows) {
+                for (const r of eResp.table.rows) {
+                    const c = r.c;
+                    if (!c || !c[9] || c[9].v === null) continue;
+                    const def = c[9].v.toString().trim();
+                    if (def === '' || def === '-') continue;
+                    const fecha = parseGoogleDate(c[1]);
+                    if (!fecha) continue;
+                    const [res] = await pool.query(
+                        'INSERT IGNORE INTO errores_pallet (pallet_id, fecha, defecto, tipo) VALUES (?,?,?,?)',
+                        [(c[3] && c[3].v != null) ? c[3].v.toString().trim() : 'N/A',
+                         fecha, def,
+                         (c[11] && c[11].v != null) ? c[11].v.toString().trim() : null]
+                    );
+                    if (res.affectedRows > 0) eNew++;
+                }
             }
+        } catch (errErr) {
+            console.warn(`  [SYNC ${ts}] Errores sheet no disponible: ${errErr.message}`);
         }
 
         if (pNew > 0 || eNew > 0) {
-            console.log(`  [SYNC ${ts}] +${pNew} pallets, +${eNew} errores nuevos`);
+            console.log(`  [SYNC ${ts}] +${pNew} pallets (+${pHistorico} hist, +${pNuevos} nuevos), +${eNew} errores`);
         }
     } catch (err) {
-        console.error(`  [SYNC ${ts}] Error: ${err.message}`);
+        console.error(`  [SYNC ${ts}] Error general: ${err.message}`);
     }
 }
 

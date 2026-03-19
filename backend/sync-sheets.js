@@ -11,9 +11,14 @@ const mysql = require('mysql2/promise');
 const https = require('https');
 const config = require('./config');
 
-// URLs de los Google Sheets (extraídas del index.html)
-const SHEET_PALLETS = 'https://docs.google.com/spreadsheets/d/1jhocRpSlYkSj3rSJ5-JYe1QgvIOGKw5YIAVDN66zlbA/gviz/tq?tqx=out:json&gid=1411419232';
-const SHEET_ERRORES = 'https://docs.google.com/spreadsheets/d/1FjVHlUNzu0gqhBunDNXKD5GUpcKGviLrFdJJAZG5qhg/gviz/tq?tqx=out:json&sheet=Liberaci%C3%B3n%20de%20Pallet';
+// ── NUEVO SPREADSHEET OFICIAL ──
+// spreadsheetId: 1nAouHO7k2s7kSzrz2IX3GF_Y0Ba0ZDhx_JZsaR3rK44
+// Hoja "anterior" = datos históricos
+// Hoja "formulario de escaneadores" = registros nuevos
+const NEW_SPREADSHEET_ID = '1nAouHO7k2s7kSzrz2IX3GF_Y0Ba0ZDhx_JZsaR3rK44';
+const SHEET_HISTORICO = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=anterior`;
+const SHEET_NUEVOS = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=formulario%20de%20escaneadores`;
+const SHEET_ERRORES = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=out:json&sheet=Liberaci%C3%B3n%20de%20Pallet`;
 
 // =============================================
 // Fetch URL y extraer JSON del wrapper JSONP
@@ -79,12 +84,19 @@ function parseGoogleDate(cell) {
 // =============================================
 // Sincronizar PALLETS
 // =============================================
-async function syncPallets(pool) {
-    console.log('  Descargando pallets de Google Sheets...');
-    const response = await fetchSheet(SHEET_PALLETS);
+async function syncPalletsFromSheet(pool, sheetUrl, label) {
+    console.log(`  Descargando ${label}...`);
+    let response;
+    try {
+        response = await fetchSheet(sheetUrl);
+    } catch (err) {
+        console.error(`  ERROR descargando ${label}: ${err.message}`);
+        return { total: 0, inserted: 0, skipped: 0 };
+    }
 
     if (!response || !response.table || !response.table.rows) {
-        throw new Error('Respuesta de pallets inválida');
+        console.warn(`  ${label}: respuesta vacía o inválida`);
+        return { total: 0, inserted: 0, skipped: 0 };
     }
 
     const rows = response.table.rows;
@@ -113,7 +125,6 @@ async function syncPallets(pool) {
         }
 
         try {
-            // INSERT IGNORE para no duplicar registros existentes
             const [result] = await pool.query(
                 `INSERT IGNORE INTO pallets (pallet_id, cantidad, producto, destino, fecha, turno, condicion, observaciones)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -128,6 +139,17 @@ async function syncPallets(pool) {
     }
 
     return { total: rows.length, inserted, skipped };
+}
+
+async function syncPallets(pool) {
+    // Lee de AMBAS hojas y combina resultados
+    const hist = await syncPalletsFromSheet(pool, SHEET_HISTORICO, 'HISTORICO (anterior)');
+    const nuevos = await syncPalletsFromSheet(pool, SHEET_NUEVOS, 'NUEVOS (formulario de escaneadores)');
+    return {
+        total: hist.total + nuevos.total,
+        inserted: hist.inserted + nuevos.inserted,
+        skipped: hist.skipped + nuevos.skipped
+    };
 }
 
 // =============================================
