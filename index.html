@@ -2316,7 +2316,7 @@
 
             const script = document.createElement('script');
             script.id = 'jsonp-script';
-            script.src = `https://docs.google.com/spreadsheets/d/1eTZKzt00TGHzVHhcIpf6-_IGF6y4jwhc/gviz/tq?tqx=out:json&gid=1543653429&_=${new Date().getTime()}`;
+            script.src = `https://docs.google.com/spreadsheets/d/1jhocRpSlYkSj3rSJ5-JYe1QgvIOGKw5YIAVDN66zlbA/gviz/tq?tqx=out:json&gid=1411419232&_=${new Date().getTime()}`;
             document.body.appendChild(script);
         }
 
@@ -2499,7 +2499,24 @@
                         }
                     }
 
-                    let rawDate = (c[5] && c[5].f) ? c[5].f.split(' ')[0] : 'N/A'; // Formato esperado M/d/yyyy
+                    let rawDate = 'N/A';
+                    if (c[5]) {
+                        if (c[5].f) {
+                            rawDate = c[5].f.split(' ')[0];
+                        } else if (c[5].v != null) {
+                            // Fallback: parsear Date(yyyy,m,d,...) de Google Visualization
+                            const dateMatch = c[5].v.toString().match(/Date\((\d+),(\d+),(\d+)/);
+                            if (dateMatch) {
+                                rawDate = `${parseInt(dateMatch[2]) + 1}/${parseInt(dateMatch[3])}/${dateMatch[1]}`;
+                            } else {
+                                // Intentar como fecha normal
+                                const d = new Date(c[5].v);
+                                if (!isNaN(d.getTime())) {
+                                    rawDate = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+                                }
+                            }
+                        }
+                    } // Formato esperado M/d/yyyy
                     if (rawDate !== 'N/A') {
                         uniqueDates.add(rawDate);
                         const parts = rawDate.split('/');
@@ -2975,7 +2992,7 @@
         };
 
         // === ENVÍO FORMULARIO INVENTARIO A GOOGLE SHEET (via Apps Script) ===
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyzmD31eBtUzstvOOAOsv1rWuincpBWPJjDT7ffAFXbVJJhYmceHl3u4_GlpBZEPc3i4A/exec';
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbznEcCRNPfV7j4178YagclTjoJNJzR91KtfnKWRKTYtROKYfA9d8rqLC_qMNscNa9B6/exec';
 
         window.submitInventarioForm = function (e) {
             e.preventDefault();

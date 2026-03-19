@@ -12,7 +12,7 @@ const https = require('https');
 const config = require('./config');
 
 // URLs de los Google Sheets (extraídas del index.html)
-const SHEET_PALLETS = 'https://docs.google.com/spreadsheets/d/1eTZKzt00TGHzVHhcIpf6-_IGF6y4jwhc/gviz/tq?tqx=out:json&gid=1543653429';
+const SHEET_PALLETS = 'https://docs.google.com/spreadsheets/d/1jhocRpSlYkSj3rSJ5-JYe1QgvIOGKw5YIAVDN66zlbA/gviz/tq?tqx=out:json&gid=1411419232';
 const SHEET_ERRORES = 'https://docs.google.com/spreadsheets/d/1FjVHlUNzu0gqhBunDNXKD5GUpcKGviLrFdJJAZG5qhg/gviz/tq?tqx=out:json&sheet=Liberaci%C3%B3n%20de%20Pallet';
 
 // =============================================
