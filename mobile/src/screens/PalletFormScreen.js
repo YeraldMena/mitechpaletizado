@@ -218,7 +218,9 @@ export default function PalletFormScreen({ navigation, route }) {
 
     setLoading(true);
     try {
-      await registerPallet({
+      console.log('[SUBMIT] Iniciando registro de pallet:', palletId.trim());
+
+      const result = await registerPallet({
         palletId: palletId.trim(),
         cantidad: qty,
         items,
@@ -228,6 +230,8 @@ export default function PalletFormScreen({ navigation, route }) {
         operador: operator,
         pedido,
       });
+
+      console.log('[SUBMIT] Resultado:', JSON.stringify(result));
 
       await setLastDestino(destino);
 
@@ -250,13 +254,23 @@ export default function PalletFormScreen({ navigation, route }) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Vibration.vibrate(200);
 
+      // Mensaje detallado de estado de escritura
+      const statusParts = [];
+      statusParts.push(result.googleSent ? 'Sheet principal ✔' : 'Sheet principal ✘');
+      statusParts.push(result.backupSent ? 'Sheet respaldo ✔' : 'Sheet respaldo ✘');
+      statusParts.push(result.apiSent ? 'API ✔' : 'API ✘');
+
       Alert.alert(
         'Registrado',
-        `${palletId.trim()} · ${qty} uds · ${destino}\nHoy: ${newCount} pallets`,
+        `${palletId.trim()} · ${qty} uds · ${destino}\nHoy: ${newCount} pallets\n\n${statusParts.join(' | ')}`,
         [{ text: 'Siguiente', onPress: () => navigation.popToTop() }],
       );
-    } catch {
-      Alert.alert('Error', 'No se pudo guardar.');
+    } catch (err) {
+      console.error('[SUBMIT] ❌ Error:', err.message || err);
+      Alert.alert(
+        'Error al guardar',
+        `${err.message || 'No se pudo guardar.'}\n\nRevisa la conexión e intenta de nuevo.`,
+      );
     } finally {
       setLoading(false);
     }

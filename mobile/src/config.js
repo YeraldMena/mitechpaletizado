@@ -6,8 +6,14 @@
 // CAMBIAR a la IP real del servidor en la red local
 export const API_BASE = 'http://192.168.1.100:3009';
 
-// Google Apps Script (escritura primaria — igual que formulario web)
+// Google Apps Script — escritura primaria (REPORTES INGENIERO)
 export const GOOGLE_SCRIPT_URL =
+  'https://script.google.com/macros/s/AKfycbydPLwlIU8R6aDZlKKYg8waA2WhcfV2ftqFdy0m3bIoIM3b_SfyuNN0bdm7cSKq09q4dw/exec';
+
+// Google Apps Script — escritura respaldo (Sheet de backup)
+// IMPORTANTE: Crear un Apps Script para el sheet de respaldo y pegar la URL aquí
+// Sheet respaldo: https://docs.google.com/spreadsheets/d/1eTZKzt00TGHzVHhcIpf6-_IGF6y4jwhc/edit
+export const GOOGLE_SCRIPT_BACKUP_URL =
   'https://script.google.com/macros/s/AKfycbydPLwlIU8R6aDZlKKYg8waA2WhcfV2ftqFdy0m3bIoIM3b_SfyuNN0bdm7cSKq09q4dw/exec';
 
 // ═══════════════════════════════════════════════════
