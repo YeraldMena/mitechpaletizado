@@ -3086,13 +3086,12 @@
             const tsString = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
             const rawDate = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
 
-            // Disparar POST en segundo plano (fire-and-forget, no-cors no permite leer respuesta)
+            // Disparar POST en segundo plano via Google Apps Script
             fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ pallet, qty, condicion, destino, pedido, turno, escaneadora, timestamp: tsString })
-            }).catch(err => console.warn('⚠ Error enviando registro:', err));
+            }).then(res => console.log('✅ Registro enviado:', res.status))
+              .catch(err => console.warn('⚠ Error enviando registro:', err));
 
             // Agregar registro localmente AL INSTANTE (sin esperar respuesta del servidor)
             allSheetData.push({
