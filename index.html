@@ -2310,215 +2310,48 @@
             }
         };
 
-        // ── NUEVO SPREADSHEET OFICIAL ──
-        const NEW_SPREADSHEET_ID = '1nAouHO7k2s7kSzrz2IX3GF_Y0Ba0ZDhx_JZsaR3rK44';
-
-        // Contador para combinar datos de ambas hojas
-        window._sheetPartsReceived = 0;
-        window._sheetPartsData = [];
+        // ══════════════════════════════════════════════════════════════
+        // CONFIGURACIÓN CENTRAL — NUEVO SPREADSHEET OFICIAL
+        // ══════════════════════════════════════════════════════════════
+        // spreadsheetId: 1nAouHO7k2s7kSzrz2IX3GF_Y0Ba0ZDhx_JZsaR3rK44
+        // Lee de: "anterior" (histórico) + "formulario de escaneadores" (nuevos)
+        // Escribe en: "formulario de escaneadores"
+        //
+        // IMPORTANTE: Esta URL debe apuntar al Apps Script deployado en el nuevo spreadsheet.
+        // Para deployar: ver mobile/google-apps-script-backup.js
+        // ══════════════════════════════════════════════════════════════
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxk0Uw3Xs-q7Vs4B2T791SCBz9tQfTmbGCv2CPSNWIZwaPZ9E7dhF7Q7qeBNpITVRyq/exec';
 
         function fetchSheetData() {
-            // Limpiar estado previo
-            window._sheetPartsReceived = 0;
-            window._sheetPartsData = [];
+            const oldScript = document.getElementById('jsonp-script-main');
+            if (oldScript) oldScript.remove();
 
-            // 1. Cargar hoja "anterior" (histórico)
-            const oldScript1 = document.getElementById('jsonp-script-hist');
-            if (oldScript1) oldScript1.remove();
-            const script1 = document.createElement('script');
-            script1.id = 'jsonp-script-hist';
-            script1.src = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=responseHandler:window._processSheetPart;out:json&sheet=anterior&_=${Date.now()}`;
-            script1.onerror = function() {
-                console.error('[FETCH] ERROR cargando hoja "anterior" - el spreadsheet puede no ser público');
-                window._sheetPartsReceived++;
-                window._checkAllPartsLoaded();
-            };
-            document.body.appendChild(script1);
+            console.log('[FETCH] Solicitando datos combinados via Apps Script (anterior + formulario de escaneadores)...');
 
-            // 2. Cargar hoja "formulario de escaneadores" (nuevos)
-            const oldScript2 = document.getElementById('jsonp-script-new');
-            if (oldScript2) oldScript2.remove();
-            const script2 = document.createElement('script');
-            script2.id = 'jsonp-script-new';
-            script2.src = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=responseHandler:window._processSheetPart;out:json&sheet=formulario%20de%20escaneadores&_=${Date.now()+1}`;
-            script2.onerror = function() {
-                console.error('[FETCH] ERROR cargando hoja "formulario de escaneadores" - el spreadsheet puede no ser público');
-                window._sheetPartsReceived++;
-                window._checkAllPartsLoaded();
-            };
-            document.body.appendChild(script2);
-
-            console.log('[FETCH] Solicitando datos de ambas hojas del spreadsheet...');
-        }
-
-        window._processSheetPart = function(response) {
-            window._sheetPartsReceived++;
-            if (response && response.table && response.table.rows) {
-                console.log(`[FETCH] Hoja recibida: ${response.table.rows.length} filas, cols: ${response.table.cols.map(c=>c.label).join(', ')}`);
-                window._sheetPartsData.push(response);
-            } else {
-                console.warn('[FETCH] Respuesta de hoja vacía o inválida:', response ? response.status : 'null');
-            }
-            window._checkAllPartsLoaded();
-        };
-
-        window._checkAllPartsLoaded = function() {
-            if (window._sheetPartsReceived < 2) return; // Esperamos 2 hojas
-            console.log(`[FETCH] Ambas hojas recibidas. Combinando ${window._sheetPartsData.length} respuestas...`);
-
-            // Combinar todas las filas en una sola respuesta
-            if (window._sheetPartsData.length === 0) {
-                console.error('[FETCH] NINGUNA hoja devolvió datos. Verifica que el spreadsheet sea público (Compartir > Cualquier persona con el enlace > Lector).');
+            const script = document.createElement('script');
+            script.id = 'jsonp-script-main';
+            script.src = `${APPS_SCRIPT_URL}?action=readAll&callback=window.processSheetData&_=${Date.now()}`;
+            script.onerror = function() {
+                console.error('[FETCH] ERROR: No se pudo conectar al Apps Script. URL:', APPS_SCRIPT_URL);
                 const tbody = document.getElementById('table-body');
                 if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:2rem;"><i class="fa-solid fa-triangle-exclamation" style="font-size:2rem;margin-bottom:0.5rem;"></i><br><strong>No se pudieron cargar datos del SpreadSheet.</strong><br>Verifica que el spreadsheet sea público.</td></tr>';
-                }
-                return;
-            }
-
-            // Usar la primera respuesta como base (sus cols definen la estructura)
-            const combined = {
-                table: {
-                    cols: window._sheetPartsData[0].table.cols,
-                    rows: []
+                    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:2rem;">
+                        <i class="fa-solid fa-triangle-exclamation" style="font-size:2rem;margin-bottom:0.5rem;"></i><br>
+                        <strong>Error cargando datos.</strong><br>
+                        No se pudo conectar al Apps Script.<br>
+                        <small style="color:var(--text-muted);">Verifica que el Apps Script esté deployado correctamente.</small>
+                    </td></tr>`;
                 }
             };
-            window._sheetPartsData.forEach(resp => {
-                combined.table.rows = combined.table.rows.concat(resp.table.rows);
-            });
-            console.log(`[FETCH] Total combinado: ${combined.table.rows.length} filas`);
-
-            // Procesar como si fuera una sola respuesta
-            window.processSheetData(combined);
-        };
+            document.body.appendChild(script);
+        }
 
         function fetchErrorsData() {
-            const oldScript = document.getElementById('jsonp-errors-script');
-            if (oldScript) oldScript.remove();
-
-            const script = document.createElement('script');
-            script.id = 'jsonp-errors-script';
-            script.src = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=responseHandler:window.processErrorsData;out:json&sheet=Liberaci%C3%B3n%20de%20Pallet&_=${Date.now()}`;
-            script.onerror = function() {
-                console.warn('[FETCH] Hoja de errores no disponible (puede no existir en el nuevo spreadsheet)');
-            };
-            document.body.appendChild(script);
+            // Los errores no están en el nuevo sheet por ahora — skip silencioso
+            console.log('[FETCH] Hoja de errores: no disponible en el nuevo spreadsheet (skip).');
         }
 
-        // --- FALLBACK: recuperar fechas texto que gviz devuelve como null ---
-        // Cuando las fechas en Google Sheets están como texto plano (no Date nativo),
-        // el motor gviz las devuelve como null en columnas tipadas datetime/date.
-        // Esta función hace un segundo fetch con range+headers=0, que fuerza tipo string.
-        window._pendingFallback = false;
-        function fetchFallbackDates(nullDateIds, totalRows) {
-            if (window._pendingFallback || nullDateIds.size === 0) return;
-            window._pendingFallback = true;
-            const oldScript = document.getElementById('jsonp-fallback-script');
-            if (oldScript) oldScript.remove();
-            // Pedir SOLO las filas con fecha-texto (al final del sheet).
-            // Con headers=0 y un rango que NO incluya filas con Date nativo,
-            // gviz infiere tipo "string" y devuelve los valores texto.
-            // Las filas con fecha-texto están al final: totalRows - nullDateIds.size en adelante.
-            const startRow = Math.max(2, totalRows - nullDateIds.size + 2); // justo donde empiezan los null
-            const endRow = totalRows + 500; // margen amplio para filas nuevas no detectadas
-            const script = document.createElement('script');
-            script.id = 'jsonp-fallback-script';
-            script.src = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=responseHandler:window.processFallbackDates;out:json&sheet=formulario%20de%20escaneadores&range=A${startRow}:N${endRow}&headers=0&_=${Date.now()}`;
-            document.body.appendChild(script);
-        }
-        window.processFallbackDates = function(response) {
-            window._pendingFallback = false;
-            try {
-                if (!response || !response.table || !response.table.rows) return;
-                // Construir mapa palletId → {fecha, timestamp} desde la respuesta string-typed
-                const fallbackMap = {};
-                response.table.rows.forEach(r => {
-                    const c = r.c;
-                    if (!c) return;
-                    // Col B (index 1) = pallet ID, Col A (index 0) = timestamp, Col F (index 5) = fecha
-                    const palletId = (c[1] && c[1].v != null) ? String(c[1].v).split('.')[0].split('-')[0].trim() : null;
-                    if (!palletId) return;
-                    const tsText = (c[0] && c[0].v != null) ? String(c[0].v) : null;
-                    const fechaText = (c[5] && c[5].v != null) ? String(c[5].v).split(' ')[0] : null;
-                    if (tsText || fechaText) {
-                        fallbackMap[palletId] = { tsText, fechaText };
-                    }
-                });
-                // Actualizar allSheetData con las fechas recuperadas
-                let updated = 0;
-                const uniqueDates = new Set();
-                const uniqueMonths = new Set();
-                // Recoger fechas existentes
-                allSheetData.forEach(row => {
-                    if (row.fecha && row.fecha !== 'N/A') {
-                        uniqueDates.add(row.fecha);
-                        const parts = row.fecha.split('/');
-                        if (parts.length >= 3) uniqueMonths.add(`${parts[0]}/${parts[2]}`);
-                    }
-                });
-                allSheetData.forEach(row => {
-                    if (row.fecha !== 'N/A') return; // ya tiene fecha
-                    const fb = fallbackMap[row.id];
-                    if (!fb) return;
-                    // Recuperar fecha
-                    if (fb.fechaText) {
-                        row.fecha = fb.fechaText;
-                        row.rowValues[4] = fb.fechaText; // index 4 en rawValues = Fecha (col F, offset 1-6 → idx 4)
-                        uniqueDates.add(fb.fechaText);
-                        const parts = fb.fechaText.split('/');
-                        if (parts.length >= 3) uniqueMonths.add(`${parts[0]}/${parts[2]}`);
-                    }
-                    // Recuperar timestamp
-                    if (fb.tsText && !row.timestamp) {
-                        const d = new Date(fb.tsText);
-                        if (!isNaN(d.getTime())) {
-                            row.timestamp = d;
-                        }
-                    }
-                    updated++;
-                });
-                if (updated > 0) {
-                    console.log(`🔄 Fallback: ${updated} filas recuperadas con fechas texto`);
-                    // Re-sort
-                    allSheetData.sort((a, b) => {
-                        if (!a.timestamp && !b.timestamp) return a._rowIdx - b._rowIdx;
-                        if (!a.timestamp) return 1;
-                        if (!b.timestamp) return -1;
-                        return a.timestamp - b.timestamp;
-                    });
-                    // Actualizar availableDates y calendario
-                    availableDates = Array.from(uniqueDates);
-                    if (flatpickrInstance) {
-                        const prevSel = flatpickrInstance.selectedDates.map(d =>
-                            `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`
-                        );
-                        flatpickrInstance.set('enable', availableDates);
-                        if (prevSel.length > 0) flatpickrInstance.setDate(prevSel, false);
-                    }
-                    // Regenerar pills de mes
-                    const monthNames = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-                    const pillsContainer = document.getElementById('month-pills');
-                    if (pillsContainer) {
-                        pillsContainer.innerHTML = '<span style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500;">Meses:</span>';
-                        Array.from(uniqueMonths).sort().forEach(m => {
-                            const [monthNum, yearNum] = m.split('/');
-                            const btn = document.createElement('button');
-                            btn.className = 'month-pill';
-                            btn.setAttribute('data-month', m);
-                            btn.innerText = `${monthNames[parseInt(monthNum)-1]} ${yearNum}`;
-                            btn.onclick = () => window.toggleMonth(m);
-                            pillsContainer.appendChild(btn);
-                        });
-                    }
-                    // Re-render
-                    window.renderLineChart();
-                    renderDashboard([]);
-                    window.syncMonthPills();
-                }
-            } catch(e) {
-                console.warn('Fallback fetch error:', e);
-            }
-        };
+        // (Fallback de fechas ya no necesario — el Apps Script devuelve todas las fechas como texto)
 
         // Esta función será ejecutada automáticamente por el <script> insertado cuando Google responde
         window.processSheetData = function (response) {
@@ -3066,11 +2899,6 @@
         };
 
         // === ENVÍO FORMULARIO INVENTARIO A GOOGLE SHEET (via Apps Script) ===
-        // IMPORTANTE: Debes crear un Apps Script en el nuevo spreadsheet que apunte a la hoja "formulario de escaneadores"
-        // Ver archivo: mobile/google-apps-script-backup.js para el código a deployar
-        // SpreadsheetId: 1nAouHO7k2s7kSzrz2IX3GF_Y0Ba0ZDhx_JZsaR3rK44
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxk0Uw3Xs-q7Vs4B2T791SCBz9tQfTmbGCv2CPSNWIZwaPZ9E7dhF7Q7qeBNpITVRyq/exec';
-
         window.submitInventarioForm = function (e) {
             e.preventDefault();
 
@@ -3113,12 +2941,31 @@
             const tsString = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
             const rawDate = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
 
-            // Enviar datos via GET a Google Apps Script (método más confiable)
-            const params = new URLSearchParams({
-                pallet, qty, condicion, destino, pedido, turno, escaneadora, timestamp: tsString
+            // Enviar datos via JSONP a Google Apps Script (permite leer respuesta real)
+            const writeParams = new URLSearchParams({
+                pallet, qty, condicion, destino, pedido, turno, escaneadora, timestamp: tsString,
+                callback: 'window._onWriteResponse'
             });
-            fetch(`${APPS_SCRIPT_URL}?${params.toString()}`, { mode: 'no-cors' })
-                .catch(err => console.warn('⚠ Error enviando registro:', err));
+            const writeUrl = `${APPS_SCRIPT_URL}?${writeParams.toString()}`;
+            console.log('[WRITE] Enviando registro a Apps Script:', writeUrl);
+
+            window._onWriteResponse = function(resp) {
+                console.log('[WRITE] Respuesta del Apps Script:', JSON.stringify(resp));
+                if (resp && resp.result === 'ok') {
+                    console.log(`[WRITE] Registro guardado en fila ${resp.row} de "${resp.sheet}"`);
+                } else if (resp && resp.result === 'error') {
+                    console.error('[WRITE] ERROR del Apps Script:', resp.message);
+                    showInvStatus('Error guardando en Google Sheet: ' + resp.message, 'error');
+                }
+            };
+
+            const writeScript = document.createElement('script');
+            writeScript.src = writeUrl;
+            writeScript.onerror = function() {
+                console.error('[WRITE] ERROR: No se pudo conectar al Apps Script');
+                showInvStatus('Error de conexión al guardar. El registro se guardó localmente.', 'error');
+            };
+            document.body.appendChild(writeScript);
 
             // Agregar registro localmente AL INSTANTE (sin esperar respuesta del servidor)
             allSheetData.push({

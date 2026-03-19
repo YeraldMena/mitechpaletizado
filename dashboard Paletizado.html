@@ -1181,93 +1181,37 @@
             }
         };
 
-        // ── NUEVO SPREADSHEET OFICIAL ──
-        const NEW_SPREADSHEET_ID = '1nAouHO7k2s7kSzrz2IX3GF_Y0Ba0ZDhx_JZsaR3rK44';
-
-        window._sheetPartsReceived = 0;
-        window._sheetPartsData = [];
+        // ══════════════════════════════════════════════════════════════
+        // CONFIGURACIÓN — Apps Script como proxy de lectura
+        // Lee "anterior" + "formulario de escaneadores" combinados
+        // ══════════════════════════════════════════════════════════════
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxk0Uw3Xs-q7Vs4B2T791SCBz9tQfTmbGCv2CPSNWIZwaPZ9E7dhF7Q7qeBNpITVRyq/exec';
 
         function fetchSheetData() {
-            window._sheetPartsReceived = 0;
-            window._sheetPartsData = [];
-
-            // 1. Cargar hoja "anterior" (histórico)
-            const oldScript1 = document.getElementById('jsonp-script-hist');
-            if (oldScript1) oldScript1.remove();
-            const script1 = document.createElement('script');
-            script1.id = 'jsonp-script-hist';
-            script1.src = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=responseHandler:window._processSheetPart;out:json&sheet=anterior&_=${Date.now()}`;
-            script1.onerror = function() {
-                console.error('[FETCH] ERROR cargando hoja "anterior"');
-                window._sheetPartsReceived++;
-                window._checkAllPartsLoaded();
-            };
-            document.body.appendChild(script1);
-
-            // 2. Cargar hoja "formulario de escaneadores" (nuevos)
-            const oldScript2 = document.getElementById('jsonp-script-new');
-            if (oldScript2) oldScript2.remove();
-            const script2 = document.createElement('script');
-            script2.id = 'jsonp-script-new';
-            script2.src = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=responseHandler:window._processSheetPart;out:json&sheet=formulario%20de%20escaneadores&_=${Date.now()+1}`;
-            script2.onerror = function() {
-                console.error('[FETCH] ERROR cargando hoja "formulario de escaneadores"');
-                window._sheetPartsReceived++;
-                window._checkAllPartsLoaded();
-            };
-            document.body.appendChild(script2);
-
-            console.log('[FETCH] Solicitando datos de ambas hojas del spreadsheet...');
-        }
-
-        window._processSheetPart = function(response) {
-            window._sheetPartsReceived++;
-            if (response && response.table && response.table.rows) {
-                console.log(`[FETCH] Hoja recibida: ${response.table.rows.length} filas`);
-                window._sheetPartsData.push(response);
-            } else {
-                console.warn('[FETCH] Respuesta de hoja vacía o inválida');
-            }
-            window._checkAllPartsLoaded();
-        };
-
-        window._checkAllPartsLoaded = function() {
-            if (window._sheetPartsReceived < 2) return;
-            console.log(`[FETCH] Ambas hojas recibidas. Combinando...`);
-
-            if (window._sheetPartsData.length === 0) {
-                console.error('[FETCH] NINGUNA hoja devolvió datos. Verifica que el spreadsheet sea público.');
-                const tbody = document.getElementById('table-body');
-                if (tbody) {
-                    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:2rem;"><i class="fa-solid fa-triangle-exclamation" style="font-size:2rem;margin-bottom:0.5rem;"></i><br><strong>No se pudieron cargar datos del SpreadSheet.</strong><br>Verifica que el spreadsheet sea público.</td></tr>';
-                }
-                return;
-            }
-
-            const combined = {
-                table: {
-                    cols: window._sheetPartsData[0].table.cols,
-                    rows: []
-                }
-            };
-            window._sheetPartsData.forEach(resp => {
-                combined.table.rows = combined.table.rows.concat(resp.table.rows);
-            });
-            console.log(`[FETCH] Total combinado: ${combined.table.rows.length} filas`);
-            window.processSheetData(combined);
-        };
-
-        function fetchErrorsData() {
-            const oldScript = document.getElementById('jsonp-errors-script');
+            const oldScript = document.getElementById('jsonp-script-main');
             if (oldScript) oldScript.remove();
 
+            console.log('[FETCH] Solicitando datos combinados via Apps Script...');
+
             const script = document.createElement('script');
-            script.id = 'jsonp-errors-script';
-            script.src = `https://docs.google.com/spreadsheets/d/${NEW_SPREADSHEET_ID}/gviz/tq?tqx=responseHandler:window.processErrorsData;out:json&sheet=Liberaci%C3%B3n%20de%20Pallet&_=${Date.now()}`;
+            script.id = 'jsonp-script-main';
+            script.src = `${APPS_SCRIPT_URL}?action=readAll&callback=window.processSheetData&_=${Date.now()}`;
             script.onerror = function() {
-                console.warn('[FETCH] Hoja de errores no disponible');
+                console.error('[FETCH] ERROR: No se pudo conectar al Apps Script.');
+                const tbody = document.getElementById('table-body');
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:2rem;">
+                        <i class="fa-solid fa-triangle-exclamation" style="font-size:2rem;margin-bottom:0.5rem;"></i><br>
+                        <strong>Error cargando datos.</strong><br>
+                        No se pudo conectar al Apps Script.
+                    </td></tr>`;
+                }
             };
             document.body.appendChild(script);
+        }
+
+        function fetchErrorsData() {
+            console.log('[FETCH] Hoja de errores: no disponible en el nuevo spreadsheet (skip).');
         }
 
         // Esta función será ejecutada automáticamente por el <script> insertado cuando Google responde
