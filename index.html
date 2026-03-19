@@ -3089,9 +3089,10 @@
             // Disparar POST en segundo plano via Google Apps Script
             fetch(APPS_SCRIPT_URL, {
                 method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify({ pallet, qty, condicion, destino, pedido, turno, escaneadora, timestamp: tsString })
-            }).then(res => console.log('✅ Registro enviado:', res.status))
-              .catch(err => console.warn('⚠ Error enviando registro:', err));
+            }).catch(err => console.warn('⚠ Error enviando registro:', err));
 
             // Agregar registro localmente AL INSTANTE (sin esperar respuesta del servidor)
             allSheetData.push({
