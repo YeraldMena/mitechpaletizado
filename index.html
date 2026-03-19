@@ -3042,7 +3042,7 @@
         };
 
         // === ENVÍO FORMULARIO INVENTARIO A GOOGLE SHEET (via Apps Script) ===
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyuH25bkAVjyB7y90T0WGLQpWnhc8frs0uMXd_yXe8_QRQYJB6ASwVbyTbYu9WI12WN/exec';
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxk0Uw3Xs-q7Vs4B2T791SCBz9tQfTmbGCv2CPSNWIZwaPZ9E7dhF7Q7qeBNpITVRyq/exec';
 
         window.submitInventarioForm = function (e) {
             e.preventDefault();
@@ -3086,13 +3086,12 @@
             const tsString = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
             const rawDate = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
 
-            // Disparar POST en segundo plano via Google Apps Script
-            fetch(APPS_SCRIPT_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({ pallet, qty, condicion, destino, pedido, turno, escaneadora, timestamp: tsString })
-            }).catch(err => console.warn('⚠ Error enviando registro:', err));
+            // Enviar datos via GET a Google Apps Script (método más confiable)
+            const params = new URLSearchParams({
+                pallet, qty, condicion, destino, pedido, turno, escaneadora, timestamp: tsString
+            });
+            fetch(`${APPS_SCRIPT_URL}?${params.toString()}`, { mode: 'no-cors' })
+                .catch(err => console.warn('⚠ Error enviando registro:', err));
 
             // Agregar registro localmente AL INSTANTE (sin esperar respuesta del servidor)
             allSheetData.push({
