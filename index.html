@@ -2198,8 +2198,25 @@
 
                     let desc = c[9].v.toString().trim();
                     if (desc !== "" && desc !== "-") {
-                        // B (c[1]) = Fecha 
-                        let dateVal = c[1] && c[1].f ? c[1].f.split(' ')[0] : (c[1] && c[1].v ? c[1].v : 'N/A');
+                        // B (c[1]) = Fecha
+                        let dateVal = 'N/A';
+                        if (c[1]) {
+                            if (c[1].f) {
+                                dateVal = c[1].f.split(' ')[0];
+                            } else if (c[1].v != null) {
+                                const dm = c[1].v.toString().match(/Date\((\d+),(\d+),(\d+)/);
+                                if (dm) {
+                                    dateVal = `${parseInt(dm[2]) + 1}/${parseInt(dm[3])}/${dm[1]}`;
+                                } else {
+                                    const dd = new Date(c[1].v);
+                                    if (!isNaN(dd.getTime())) {
+                                        dateVal = `${dd.getMonth() + 1}/${dd.getDate()}/${dd.getFullYear()}`;
+                                    } else {
+                                        dateVal = c[1].v.toString();
+                                    }
+                                }
+                            }
+                        }
 
                         // D (c[3]) = Pallet ID
                         let idVal = c[3] && c[3].v ? c[3].v.toString().trim() : 'N/A';
@@ -2366,7 +2383,7 @@
 
             const script = document.createElement('script');
             script.id = 'jsonp-script';
-            script.src = `https://docs.google.com/spreadsheets/d/1Su-CGdOPU-etXKoVXAKYx6qKhN92RFBiH-gLeN_XElk/gviz/tq?tqx=out:json&gid=530597405&_=${new Date().getTime()}`;
+            script.src = `https://docs.google.com/spreadsheets/d/1jhocRpSlYkSj3rSJ5-JYe1QgvIOGKw5YIAVDN66zlbA/gviz/tq?tqx=out:json&gid=1411419232&_=${new Date().getTime()}`;
             document.body.appendChild(script);
         }
 
@@ -2443,7 +2460,24 @@
                         }
                     }
 
-                    let rawDate = (c[5] && c[5].f) ? c[5].f.split(' ')[0] : 'N/A'; // Formato esperado M/d/yyyy
+                    let rawDate = 'N/A';
+                    if (c[5]) {
+                        if (c[5].f) {
+                            rawDate = c[5].f.split(' ')[0];
+                        } else if (c[5].v != null) {
+                            // Fallback: parsear Date(yyyy,m,d,...) de Google Visualization
+                            const dateMatch = c[5].v.toString().match(/Date\((\d+),(\d+),(\d+)/);
+                            if (dateMatch) {
+                                rawDate = `${parseInt(dateMatch[2]) + 1}/${parseInt(dateMatch[3])}/${dateMatch[1]}`;
+                            } else {
+                                // Intentar como fecha normal
+                                const d = new Date(c[5].v);
+                                if (!isNaN(d.getTime())) {
+                                    rawDate = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+                                }
+                            }
+                        }
+                    } // Formato esperado M/d/yyyy
                     if (rawDate !== 'N/A') {
                         uniqueDates.add(rawDate);
                         const parts = rawDate.split('/');
@@ -3008,7 +3042,7 @@
         };
 
         // === ENVÍO FORMULARIO INVENTARIO A GOOGLE SHEET (via Apps Script) ===
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyzmD31eBtUzstvOOAOsv1rWuincpBWPJjDT7ffAFXbVJJhYmceHl3u4_GlpBZEPc3i4A/exec';
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbznEcCRNPfV7j4178YagclTjoJNJzR91KtfnKWRKTYtROKYfA9d8rqLC_qMNscNa9B6/exec';
 
         window.submitInventarioForm = function (e) {
             e.preventDefault();
