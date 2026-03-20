@@ -3,19 +3,15 @@
 // ═══════════════════════════════════════════════════
 
 // ── Backend API ──
-// CAMBIAR a la IP real del servidor en la red local
+// CAMBIAR a la IP/URL real del servidor
+// Para desarrollo local: 'http://192.168.1.100:3009'
+// Para producción: la URL de tu backend en Vercel/Railway/etc
 export const API_BASE = 'http://192.168.1.100:3009';
 
-// Google Apps Script — escritura al NUEVO SPREADSHEET OFICIAL
-// Spreadsheet: https://docs.google.com/spreadsheets/d/1nAouHO7k2s7kSzrz2IX3GF_Y0Ba0ZDhx_JZsaR3rK44/edit
-// Escribe en la hoja "formulario de escaneadores"
-// IMPORTANTE: Deployar el script de mobile/google-apps-script-backup.js y pegar la URL aquí
-export const GOOGLE_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbydPLwlIU8R6aDZlKKYg8waA2WhcfV2ftqFdy0m3bIoIM3b_SfyuNN0bdm7cSKq09q4dw/exec';
-
-// Google Apps Script — misma URL (ya no hay sheet de respaldo separado, todo va al nuevo spreadsheet)
-export const GOOGLE_SCRIPT_BACKUP_URL =
-  'https://script.google.com/macros/s/AKfycbydPLwlIU8R6aDZlKKYg8waA2WhcfV2ftqFdy0m3bIoIM3b_SfyuNN0bdm7cSKq09q4dw/exec';
+// Google Apps Script — YA NO SE USA
+// Todo va directo a MongoDB Atlas via el backend Express
+export const GOOGLE_SCRIPT_URL = null;
+export const GOOGLE_SCRIPT_BACKUP_URL = null;
 
 // ═══════════════════════════════════════════════════
 // ESCANEADORAS (nombres reales del Google Sheet)

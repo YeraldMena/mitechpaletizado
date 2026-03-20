@@ -4,41 +4,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MI-TECH Paletizado is an industrial pallet tracking dashboard. It displays real-time data synced from Google Sheets into a local MySQL database, with a Node.js/Express backend API and a single-page frontend.
+MI-TECH Paletizado is an industrial pallet tracking dashboard. Data is stored in **MongoDB Atlas** (database: `mitech`), served via Node.js/Express backend, with a single-page HTML frontend.
 
 ## Architecture
 
-### Frontend (index.html — single monolithic file, ~2700 lines)
+### Frontend (index.html — single monolithic file)
 - Pure HTML/CSS/JS — no build step, no framework
 - Dark-themed dashboard with sidebar navigation and 5 views: Dashboard, Palets, Órdenes, Formulario, Configuración
 - Uses Chart.js for charts (donut, bar, line), Flatpickr for date picker, Font Awesome for icons
-- Data comes from two sources:
-  - **Google Sheets** (via JSONP `gviz/tq` endpoint) — fetched directly in the browser for the main data tables
-  - **Backend API** (`/api/...`) — used by dashboard charts and aggregated views
-- `dashboard Paletizado.html` is an older/legacy version of the dashboard (not served by default)
+- Data loaded via JSONP from `/api/sheet-proxy` (returns gviz-compatible format from MongoDB)
+- Form writes via JSONP to `/api/sheet-write`
+- `dashboard Paletizado.html` is a legacy dashboard version
 
 ### Backend (backend/)
-- **server.js**: Express server on port 3009 (configured in config.js). Serves static files from project root. Contains:
-  - REST API endpoints under `/api/pallets`, `/api/errores`, `/api/dashboard/*`, `/api/health`
-  - Built-in Google Sheets → MySQL sync that runs every 30 seconds
-- **sync-sheets.js**: Standalone sync script (can run independently with `node sync-sheets.js` or `--auto` for continuous mode)
-- **config.js**: MySQL connection config (host, user, password, database) and server port
+- **server.js**: Express server on port 3009. Connects to MongoDB Atlas. Serves static files from project root.
+  - `/api/pallets` — CRUD for pallets
+  - `/api/dashboard` — aggregated dashboard data
+  - `/api/mobile/*` — mobile app endpoints
+  - `/api/sheet-proxy` — JSONP proxy that returns MongoDB data in gviz format (for frontend compatibility)
+  - `/api/sheet-write` — JSONP write endpoint (for form compatibility)
+  - `/api/health` — health check
+- **models/Pallet.js**: Mongoose model for pallets collection
+- **models/Error.js**: Mongoose model for pallet errors collection
+- **routes/**: Express route modules (pallets, dashboard, mobile)
+- **scripts/migrate-csv.js**: Migration script to import CSV data from Google Sheets into MongoDB
 
-### Data Flow
-Google Sheets → (JSONP fetch / sync-sheets) → MySQL `paletizado_db` → Express API → Frontend charts & tables
+### Database (MongoDB Atlas — `mitech`)
+Collections:
+- `pallets` — palletId, cantidad, condicion, destino, turno, escaneadora, pedido, fecha, source, timestamps
+- `palleterrors` — palletId, fecha, defecto, tipo, timestamps
 
-### Database (MySQL — `paletizado_db`)
-Two main tables:
-- `pallets` — columns: id, pallet_id, cantidad, producto, destino, fecha, turno, condicion, observaciones
-- `errores_pallet` — columns: id, pallet_id, fecha, defecto, tipo
-- Uses `INSERT IGNORE` to avoid duplicates during sync
-- Has views: `v_resumen_destino`, `v_turno_destino` (used by dashboard endpoints as fallback)
-
-### Google Sheets Sources (NUEVO SPREADSHEET OFICIAL)
-- spreadsheetId: `1nAouHO7k2s7kSzrz2IX3GF_Y0Ba0ZDhx_JZsaR3rK44`
-- Hoja "anterior": datos históricos de pallets
-- Hoja "formulario de escaneadores": registros nuevos de pallets (escritura)
-- Dashboard combina AMBAS hojas: histórico + nuevos = vista completa
+### Mobile App (mobile/)
+- React Native (Expo) app for barcode scanning
+- Writes directly to Express API → MongoDB (no Google Sheets dependency)
 
 ## Commands
 
@@ -46,56 +44,22 @@ Two main tables:
 # Install backend dependencies
 cd backend && npm install
 
-# Start server (API + auto-sync + serves frontend at http://localhost:3009)
+# Create .env file with MongoDB URI
+echo "MONGODB_URI=mongodb+srv://..." > backend/.env
+echo "PORT=3009" >> backend/.env
+
+# Start server (API + serves frontend at http://localhost:3009)
 cd backend && node server.js
 
-# Or use the Windows batch launcher (starts MySQL service, opens browser, runs server)
-./START-SERVER.bat
-
-# Run standalone sync once
-cd backend && node sync-sheets.js
-
-# Run standalone sync in continuous mode
-cd backend && node sync-sheets.js --auto
+# Migrate CSV data from Google Sheets to MongoDB
+# First export sheets as CSV to backend/scripts/anterior.csv and formulario.csv
+cd backend && npm run migrate
 ```
-
-## Custom Skills (Slash Commands)
-
-Disponibles en `.claude/commands/`:
-
-| Comando | Uso |
-|---------|-----|
-| `/add-endpoint` | Agregar un nuevo endpoint REST al backend |
-| `/add-tab` | Agregar una nueva pestaña/vista al dashboard |
-| `/add-chart` | Agregar un gráfico Chart.js al dashboard |
-| `/fix-tabla` | Diagnosticar y corregir problemas en tablas de datos |
-| `/sync-debug` | Diagnosticar problemas de sincronización Sheets-MySQL |
-| `/refactor-section` | Refactorizar una sección del index.html |
-| `/verify-forms` | Verificar que los formularios funcionen correctamente (estructura, validaciones, envío, flujo completo) |
-| `/pre-push` | Agente de deploy: verificar, commit, push y pull de forma segura |
-| `/changelog` | Generar/actualizar registro enumerado de commits con nombres descriptivos |
-| `/add-mood-theme` | Agregar un nuevo tema visual (mood) con toggle en Configuración |
-| `/form-field` | Agregar, modificar o eliminar campos del formulario de inventario |
-
-## MANDATORY: Git Operations Protocol
-
-**SIEMPRE usar `/pre-push` antes de cualquier operación git que suba o baje cambios.** Esto incluye:
-- `git push` → usar `/pre-push subir`
-- `git pull` → usar `/pre-push bajar`
-- `git commit` + push → usar `/pre-push`
-
-**NUNCA hacer push/pull directo sin pasar por el agente.** El agente verifica:
-1. Que los archivos del proyecto estén en la raíz (no en .claude/)
-2. Que no haya archivos "deleted" en git status
-3. Que index.html, backend/ y config estén íntegros
-4. Que no se suban archivos sensibles o node_modules
 
 ## Key Conventions
 
 - The project language is Spanish (UI labels, variable names, comments, commit messages)
-- Commit messages use conventional-style prefixes in Spanish context: `feat:`, `fix:`, `refactor:`
 - All frontend code lives in a single `index.html` file — CSS in `<style>`, JS in `<script>` at the bottom
-- The backend has no test suite, no linter, no TypeScript — it's plain Node.js with mysql2 + express + cors
-- The `Staticfile` with `root: .` suggests historical Cloud Foundry deployment
-- MySQL service name is `MySQL84` (used by START-SERVER.bat)
-- Server port: 3009 (configured in backend/config.js)
+- The backend uses dotenv for configuration — never hardcode credentials
+- Server port: 3009 (configured via PORT env var)
+- `.env` files are gitignored

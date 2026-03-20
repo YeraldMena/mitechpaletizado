@@ -1,14 +1,14 @@
-import { API_BASE, GOOGLE_SCRIPT_URL, GOOGLE_SCRIPT_BACKUP_URL, nowTimestamp, todayStr } from './config';
+import { API_BASE, nowTimestamp, todayStr } from './config';
 
 // ── Timeout wrapper ──
-function fetchWithTimeout(url, opts = {}, ms = 5000) {
+function fetchWithTimeout(url, opts = {}, ms = 8000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
 
 // ═══════════════════════════════════════
-// DUPLICATE CHECK — fast, single query
+// DUPLICATE CHECK
 // ═══════════════════════════════════════
 export async function checkDuplicate(palletId) {
   try {
@@ -21,88 +21,16 @@ export async function checkDuplicate(palletId) {
 }
 
 // ═══════════════════════════════════════
-// POST a Google Sheet via Apps Script
-// Sin mode: 'no-cors' (React Native no lo necesita)
-// Con await y logs reales de error
-// ═══════════════════════════════════════
-async function postToGoogleSheet(url, payload, label) {
-  try {
-    console.log(`[SHEETS][${label}] Enviando POST →`, url);
-    console.log(`[SHEETS][${label}] Payload:`, JSON.stringify(payload));
-
-    const r = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }, 15000);
-
-    // Apps Script redirige (302) y devuelve HTML o JSON
-    const text = await r.text();
-    console.log(`[SHEETS][${label}] Status: ${r.status}`);
-    console.log(`[SHEETS][${label}] Respuesta:`, text.substring(0, 500));
-
-    return { ok: r.status >= 200 && r.status < 400, status: r.status, body: text };
-  } catch (err) {
-    console.error(`[SHEETS][${label}] ❌ ERROR:`, err.message || err);
-    return { ok: false, status: 0, body: null, error: err.message || String(err) };
-  }
-}
-
-// ═══════════════════════════════════════
-// REGISTER PALLET — DUAL WRITE real
-// 1. Google Sheet principal (REPORTES INGENIERO)
-// 2. Google Sheet respaldo
-// 3. Express API / MySQL
+// REGISTER PALLET — Direct to MongoDB via Express API
 // ═══════════════════════════════════════
 export async function registerPallet({ palletId, cantidad, condicion, destino, turno, operador, pedido, items }) {
   const timestamp = nowTimestamp();
   const fecha = todayStr();
-
-  // Formato de turno que usa el Google Sheet: "Day (día)" / "Night (noche)"
   const turnoSheet = turno === 'Day' ? 'Day (día)' : 'Night (noche)';
 
-  // Payload EXACTO que espera el Apps Script
-  // (mismo formato que el formulario web en index.html)
-  const sheetPayload = {
-    timestamp:   timestamp,
-    pallet:      palletId,
-    qty:         String(cantidad),
-    condicion:   condicion.join(', '),
-    destino:     destino,
-    turno:       turnoSheet,
-    escaneadora: operador,
-    pedido:      pedido || '',
-  };
-
-  // ──────────────────────────────────────
-  // 1 & 2. DUAL WRITE — ambos Google Sheets en paralelo
-  // ──────────────────────────────────────
-  const [sheetResult, backupResult] = await Promise.allSettled([
-    postToGoogleSheet(GOOGLE_SCRIPT_URL, sheetPayload, 'PRINCIPAL'),
-    postToGoogleSheet(GOOGLE_SCRIPT_BACKUP_URL, sheetPayload, 'RESPALDO'),
-  ]);
-
-  const sheetOk = sheetResult.status === 'fulfilled' && sheetResult.value.ok;
-  const backupOk = backupResult.status === 'fulfilled' && backupResult.value.ok;
-
-  console.log(`[REGISTER] Sheet principal: ${sheetOk ? '✅' : '❌'}`);
-  console.log(`[REGISTER] Sheet respaldo: ${backupOk ? '✅' : '❌'}`);
-
-  if (!sheetOk) {
-    const err = sheetResult.status === 'fulfilled' ? sheetResult.value : sheetResult.reason;
-    console.error('[REGISTER] ❌ Fallo Sheet principal:', JSON.stringify(err));
-  }
-  if (!backupOk) {
-    const err = backupResult.status === 'fulfilled' ? backupResult.value : backupResult.reason;
-    console.error('[REGISTER] ❌ Fallo Sheet respaldo:', JSON.stringify(err));
-  }
-
-  // ──────────────────────────────────────
-  // 3. EXPRESS API — MySQL con detalle de items
-  // ──────────────────────────────────────
   let apiResult = { success: false, id: null };
   try {
-    console.log(`[API] Enviando POST → ${API_BASE}/api/mobile/register`);
+    console.log(`[API] POST → ${API_BASE}/api/mobile/register`);
     const r = await fetchWithTimeout(`${API_BASE}/api/mobile/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -113,7 +41,7 @@ export async function registerPallet({ palletId, cantidad, condicion, destino, t
         fecha,
         turno: turnoSheet,
         condicion: condicion.join(', '),
-        operador: operador,
+        operador,
         pedido: pedido || null,
         items: items.map(i => ({ sku: i.sku, cantidad: i.qty })),
       }),
@@ -122,27 +50,22 @@ export async function registerPallet({ palletId, cantidad, condicion, destino, t
     console.log(`[API] Respuesta:`, JSON.stringify(j));
     apiResult = { success: j.success, id: j.id };
   } catch (err) {
-    console.error(`[API] ❌ ERROR:`, err.message || err);
+    console.error(`[API] ERROR:`, err.message || err);
   }
 
-  // Si al menos uno de los Sheets escribió, se considera éxito
-  const anySheetOk = sheetOk || backupOk;
-
-  if (!anySheetOk && !apiResult.success) {
-    // Fallo total — lanzar error para que PalletFormScreen muestre alerta
+  if (!apiResult.success) {
     throw new Error(
-      'No se pudo guardar en ningún destino. ' +
-      'Verifica tu conexión a internet y vuelve a intentar.'
+      'No se pudo guardar en MongoDB. Verifica tu conexión y vuelve a intentar.'
     );
   }
 
   return {
     success: true,
     id: apiResult.id,
-    googleSent: sheetOk,
-    backupSent: backupOk,
-    apiSent: apiResult.success,
-    offline: !apiResult.success,
+    googleSent: false,
+    backupSent: false,
+    apiSent: true,
+    offline: false,
   };
 }
 
@@ -162,7 +85,7 @@ export async function fetchRecent(operador, limit = 50) {
 }
 
 // ═══════════════════════════════════════
-// TODAY STATS (filtered by operator)
+// TODAY STATS
 // ═══════════════════════════════════════
 export async function fetchStats(operador) {
   try {

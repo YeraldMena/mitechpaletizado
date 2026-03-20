@@ -1182,28 +1182,27 @@
         };
 
         // ══════════════════════════════════════════════════════════════
-        // CONFIGURACIÓN — Apps Script como proxy de lectura
-        // Lee "anterior" + "formulario de escaneadores" combinados
+        // CONFIGURACIÓN — MONGODB ATLAS via /api/sheet-proxy
         // ══════════════════════════════════════════════════════════════
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxk0Uw3Xs-q7Vs4B2T791SCBz9tQfTmbGCv2CPSNWIZwaPZ9E7dhF7Q7qeBNpITVRyq/exec';
+        const API_BASE = window.location.origin;
 
         function fetchSheetData() {
             const oldScript = document.getElementById('jsonp-script-main');
             if (oldScript) oldScript.remove();
 
-            console.log('[FETCH] Solicitando datos combinados via Apps Script...');
+            console.log('[FETCH] Solicitando datos de MongoDB...');
 
             const script = document.createElement('script');
             script.id = 'jsonp-script-main';
-            script.src = `${APPS_SCRIPT_URL}?action=readAll&callback=window.processSheetData&_=${Date.now()}`;
+            script.src = `${API_BASE}/api/sheet-proxy?callback=window.processSheetData&_=${Date.now()}`;
             script.onerror = function() {
-                console.error('[FETCH] ERROR: No se pudo conectar al Apps Script.');
+                console.error('[FETCH] ERROR: No se pudo conectar al backend.');
                 const tbody = document.getElementById('table-body');
                 if (tbody) {
                     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#ef4444;padding:2rem;">
                         <i class="fa-solid fa-triangle-exclamation" style="font-size:2rem;margin-bottom:0.5rem;"></i><br>
                         <strong>Error cargando datos.</strong><br>
-                        No se pudo conectar al Apps Script.
+                        No se pudo conectar al servidor.
                     </td></tr>`;
                 }
             };
@@ -1211,7 +1210,7 @@
         }
 
         function fetchErrorsData() {
-            console.log('[FETCH] Hoja de errores: no disponible en el nuevo spreadsheet (skip).');
+            console.log('[FETCH] Errores: endpoint pendiente de migración.');
         }
 
         // Esta función será ejecutada automáticamente por el <script> insertado cuando Google responde
