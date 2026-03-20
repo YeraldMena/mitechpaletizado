@@ -222,12 +222,12 @@
         <div class="alert alert-error" id="login-error"></div>
         <form id="login-form" onsubmit="handleLogin(event)">
             <div class="form-group">
-                <label>Usuario</label>
-                <input type="text" class="form-input" id="login-user" placeholder="Tu usuario" autocomplete="username" required>
+                <label>Numero de empleado</label>
+                <input type="text" class="form-input" id="login-user" placeholder="Ej: 3647" autocomplete="username" inputmode="numeric" required>
             </div>
             <div class="form-group">
-                <label>Contrasena</label>
-                <input type="password" class="form-input" id="login-pass" placeholder="Tu contrasena" autocomplete="current-password" required>
+                <label>Contrasena (6 digitos)</label>
+                <input type="password" class="form-input" id="login-pass" placeholder="000000" autocomplete="current-password" inputmode="numeric" maxlength="6" pattern="\d{6}" required>
             </div>
             <button type="submit" class="btn btn-primary" id="login-btn">
                 <i class="fa-solid fa-right-to-bracket"></i> Iniciar Sesion
@@ -542,6 +542,13 @@ async function handleLogin(e) {
     const btn = document.getElementById('login-btn');
     const errEl = document.getElementById('login-error');
     errEl.style.display = 'none';
+
+    if (!/^\d{6}$/.test(password)) {
+        errEl.textContent = 'La contrasena debe ser exactamente 6 digitos.';
+        errEl.style.display = 'block';
+        return;
+    }
+
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Ingresando...';
 
