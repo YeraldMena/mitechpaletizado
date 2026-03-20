@@ -327,6 +327,181 @@ app.get('/api/mobile/stats', async (req, res) => {
 });
 
 // ══════════════════════════════════════════
+// ROUTES — Escaneadoras
+// ══════════════════════════════════════════
+
+const escaneadoraRegistroSchema = new mongoose.Schema({
+  escaneadora: { type: String, required: true, index: true },
+  turno: { type: String, required: true },
+  fecha: { type: String, required: true, index: true },
+  linea: { type: String, default: '' },
+  palletsEscaneados: { type: Number, default: 0 },
+  horaInicio: { type: String, default: '' },
+  horaFin: { type: String, default: '' },
+  incidencias: { type: String, default: '' },
+  observaciones: { type: String, default: '' },
+  datosExtra: { type: mongoose.Schema.Types.Mixed, default: {} },
+  source: { type: String, enum: ['web', 'csv-import', 'mobile'], default: 'web' },
+}, { timestamps: true, strict: false });
+
+escaneadoraRegistroSchema.index({ fecha: 1, turno: 1 });
+escaneadoraRegistroSchema.index({ escaneadora: 1, fecha: 1 });
+escaneadoraRegistroSchema.index({ createdAt: -1 });
+
+const EscaneadoraRegistro = mongoose.models.EscaneadoraRegistro || mongoose.model('EscaneadoraRegistro', escaneadoraRegistroSchema);
+
+app.post('/api/escaneadoras', async (req, res) => {
+  try {
+    const { escaneadora, turno, fecha, linea, palletsEscaneados, horaInicio, horaFin, incidencias, observaciones } = req.body;
+    if (!escaneadora || !turno || !fecha) {
+      return res.status(400).json({ success: false, error: 'Campos requeridos: escaneadora, turno, fecha' });
+    }
+    const doc = await EscaneadoraRegistro.create({
+      escaneadora, turno, fecha,
+      linea: linea || '',
+      palletsEscaneados: parseInt(palletsEscaneados) || 0,
+      horaInicio: horaInicio || '',
+      horaFin: horaFin || '',
+      incidencias: incidencias || '',
+      observaciones: observaciones || '',
+      source: 'web',
+    });
+    res.json({ success: true, id: doc._id, message: 'Registro de escaneadora guardado' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/escaneadoras', async (req, res) => {
+  try {
+    const { fecha, escaneadora, turno, limit, desde } = req.query;
+    const filter = {};
+    if (fecha) filter.fecha = fecha;
+    if (escaneadora) filter.escaneadora = { $regex: escaneadora, $options: 'i' };
+    if (turno) filter.turno = { $regex: turno, $options: 'i' };
+    if (desde) filter.createdAt = { $gte: new Date(desde) };
+    const registros = await EscaneadoraRegistro.find(filter).sort({ createdAt: -1 }).limit(parseInt(limit) || 200);
+    res.json({ success: true, data: registros, total: registros.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/escaneadoras/dashboard', async (req, res) => {
+  try {
+    const { fecha, escaneadora, turno } = req.query;
+    const filter = {};
+    filter.createdAt = { $gte: new Date('2026-03-20T00:00:00.000Z') };
+    if (fecha) filter.fecha = fecha;
+    if (escaneadora) filter.escaneadora = { $regex: escaneadora, $options: 'i' };
+    if (turno) filter.turno = { $regex: turno, $options: 'i' };
+    const registros = await EscaneadoraRegistro.find(filter).sort({ createdAt: -1 });
+    const now = new Date();
+    const hoyStr = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
+    const registrosHoy = registros.filter(r => r.fecha === hoyStr);
+    const porEscaneadora = {};
+    registros.forEach(r => {
+      if (!porEscaneadora[r.escaneadora]) porEscaneadora[r.escaneadora] = { registros: 0, pallets: 0 };
+      porEscaneadora[r.escaneadora].registros++;
+      porEscaneadora[r.escaneadora].pallets += (r.palletsEscaneados || 0);
+    });
+    const porTurno = {};
+    registros.forEach(r => {
+      const t = r.turno || 'Otro';
+      if (!porTurno[t]) porTurno[t] = { registros: 0, pallets: 0 };
+      porTurno[t].registros++;
+      porTurno[t].pallets += (r.palletsEscaneados || 0);
+    });
+    const porFecha = {};
+    registros.forEach(r => {
+      if (!porFecha[r.fecha]) porFecha[r.fecha] = { registros: 0, pallets: 0 };
+      porFecha[r.fecha].registros++;
+      porFecha[r.fecha].pallets += (r.palletsEscaneados || 0);
+    });
+    const escaneadoras = [...new Set(registros.map(r => r.escaneadora))].sort();
+    const fechas = [...new Set(registros.map(r => r.fecha))].sort();
+    res.json({
+      success: true,
+      totalRegistros: registros.length,
+      registrosHoy: registrosHoy.length,
+      fechaHoy: hoyStr,
+      porEscaneadora: Object.entries(porEscaneadora).map(([nombre, d]) => ({ nombre, ...d })),
+      porTurno: Object.entries(porTurno).map(([turno, d]) => ({ turno, ...d })),
+      porFecha: Object.entries(porFecha).map(([fecha, d]) => ({ fecha, ...d })).sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 14),
+      escaneadoras,
+      fechas,
+      ultimosRegistros: registros.slice(0, 50),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/escaneadoras/import', async (req, res) => {
+  try {
+    const { registros, columnMap } = req.body;
+    if (!registros || !Array.isArray(registros) || registros.length === 0) {
+      return res.status(400).json({ success: false, error: 'Se requiere un array de registros' });
+    }
+    const defaultMap = {
+      escaneadora: ['escaneadora', 'scanner', 'operador', 'operadora', 'nombre'],
+      turno: ['turno', 'shift'],
+      fecha: ['fecha', 'date', 'marca temporal', 'timestamp'],
+      linea: ['linea', 'línea', 'line', 'area', 'área'],
+      palletsEscaneados: ['pallets', 'pallets_escaneados', 'cantidad', 'qty', 'total'],
+      horaInicio: ['hora_inicio', 'horainicio', 'start', 'inicio'],
+      horaFin: ['hora_fin', 'horafin', 'end', 'fin'],
+      incidencias: ['incidencias', 'incidencia', 'incidents'],
+      observaciones: ['observaciones', 'observacion', 'notas', 'notes', 'comentarios'],
+    };
+    const map = columnMap || defaultMap;
+    const cutoffDate = new Date('2026-03-20');
+    function findValue(row, fieldPatterns) {
+      if (typeof fieldPatterns === 'string') return row[fieldPatterns] || '';
+      const keys = Object.keys(row);
+      for (const p of fieldPatterns) {
+        const key = keys.find(k => k.toLowerCase().trim() === p.toLowerCase().trim());
+        if (key && row[key]) return row[key];
+      }
+      for (const p of fieldPatterns) {
+        const key = keys.find(k => k.toLowerCase().includes(p.toLowerCase()));
+        if (key && row[key]) return row[key];
+      }
+      return '';
+    }
+    const docs = [];
+    let skipped = 0;
+    for (const row of registros) {
+      const esc = findValue(row, map.escaneadora);
+      const tur = findValue(row, map.turno);
+      const fec = findValue(row, map.fecha);
+      if (!esc || !tur) { skipped++; continue; }
+      const parsedDate = new Date(fec);
+      if (!isNaN(parsedDate) && parsedDate < cutoffDate) { skipped++; continue; }
+      docs.push({
+        escaneadora: esc, turno: tur,
+        fecha: fec ? fec.split(' ')[0] : `${new Date().getMonth()+1}/${new Date().getDate()}/${new Date().getFullYear()}`,
+        linea: findValue(row, map.linea),
+        palletsEscaneados: parseInt(findValue(row, map.palletsEscaneados)) || 0,
+        horaInicio: findValue(row, map.horaInicio),
+        horaFin: findValue(row, map.horaFin),
+        incidencias: findValue(row, map.incidencias),
+        observaciones: findValue(row, map.observaciones),
+        source: 'csv-import',
+      });
+    }
+    let inserted = 0;
+    if (docs.length > 0) {
+      const result = await EscaneadoraRegistro.insertMany(docs);
+      inserted = result.length;
+    }
+    res.json({ success: true, imported: inserted, skipped, total: registros.length, message: `${inserted} registros importados, ${skipped} omitidos` });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ══════════════════════════════════════════
 // ROUTES — JSONP compatibility (sheet-proxy, sheet-write)
 // ══════════════════════════════════════════
 

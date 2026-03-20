@@ -19,10 +19,12 @@ app.use(express.static(path.join(__dirname, '..')));
 const palletsRouter = require('./routes/pallets');
 const dashboardRouter = require('./routes/dashboard');
 const mobileRouter = require('./routes/mobile');
+const escaneadorasRouter = require('./routes/escaneadoras');
 
 app.use('/api/pallets', palletsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/mobile', mobileRouter);
+app.use('/api/escaneadoras', escaneadorasRouter);
 
 // ── Health check ──
 app.get('/api/health', async (req, res) => {

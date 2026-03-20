@@ -1245,6 +1245,14 @@
                 <i class="fa-solid fa-clipboard-list"></i>
                 <span>Formulario</span>
             </li>
+            <li class="nav-item" onclick="switchView('esc-form')">
+                <i class="fa-solid fa-barcode"></i>
+                <span>Escaneadoras</span>
+            </li>
+            <li class="nav-item" onclick="switchView('esc-dashboard')">
+                <i class="fa-solid fa-chart-bar"></i>
+                <span>Esc. Dashboard</span>
+            </li>
             <li class="nav-item" onclick="switchView('configuracion')">
                 <i class="fa-solid fa-gear"></i>
                 <span>Configuración</span>
@@ -1868,6 +1876,207 @@
                 </div>
             </div>
         </div><!-- /view-configuracion -->
+
+        <!-- ══════════════════════════════════════════════════ -->
+        <!-- VISTA: ESCANEADORAS — FORMULARIO                  -->
+        <!-- ══════════════════════════════════════════════════ -->
+        <div id="view-esc-form" style="display:none;">
+            <header>
+                <div class="page-title">
+                    <h1><i class="fa-solid fa-barcode" style="margin-right:8px;color:var(--accent-primary);"></i>Escaneadoras</h1>
+                    <p>Registro de actividad de escaneadoras</p>
+                </div>
+            </header>
+
+            <div class="inventario-form-panel">
+                <div class="inv-header-card">
+                    <h2>Registro de Escaneadora</h2>
+                    <p>Formulario de actividad — completa los campos requeridos</p>
+                    <div class="inv-required-note"><span class="inv-req">*</span> Indica campo obligatorio</div>
+                </div>
+
+                <form id="escaneadora-form" onsubmit="submitEscaneadoraForm(event)">
+                    <!-- 1. Escaneadora -->
+                    <div class="inv-question-card">
+                        <label class="inv-question-label"><i class="fa-solid fa-user" style="margin-right:6px;color:#ec4899;"></i>Escaneadora <span class="inv-req">*</span></label>
+                        <select id="esc-escaneadora" required>
+                            <option value="" disabled selected>Seleccionar escaneadora...</option>
+                            <option value="Yusley Montes">Yusley Montes</option>
+                            <option value="Angelica Aleman">Angelica Aleman</option>
+                            <option value="Cecilia Perez">Cecilia Perez</option>
+                            <option value="Nathalie Lopez">Nathalie Lopez</option>
+                        </select>
+                    </div>
+
+                    <!-- 2. Turno -->
+                    <div class="inv-question-card">
+                        <label class="inv-question-label"><i class="fa-solid fa-clock" style="margin-right:6px;color:#3b82f6;"></i>Turno <span class="inv-req">*</span></label>
+                        <select id="esc-turno" required>
+                            <option value="" disabled selected>Seleccionar turno...</option>
+                            <option value="Day (día)">Day (Dia)</option>
+                            <option value="Night (Noche)">Night (Noche)</option>
+                        </select>
+                    </div>
+
+                    <!-- 3. Fecha -->
+                    <div class="inv-question-card">
+                        <label class="inv-question-label"><i class="fa-solid fa-calendar" style="margin-right:6px;color:#10b981;"></i>Fecha <span class="inv-req">*</span></label>
+                        <input type="date" id="esc-fecha" required>
+                    </div>
+
+                    <!-- 4. Linea / Area -->
+                    <div class="inv-question-card">
+                        <label class="inv-question-label"><i class="fa-solid fa-industry" style="margin-right:6px;color:#f59e0b;"></i>Linea / Area <span style="color:var(--text-muted);font-size:0.85rem;font-weight:400;">(opcional)</span></label>
+                        <input type="text" id="esc-linea" placeholder="Ej: Linea 1, Area A">
+                    </div>
+
+                    <!-- 5. Pallets escaneados -->
+                    <div class="inv-question-card">
+                        <label class="inv-question-label"><i class="fa-solid fa-cubes" style="margin-right:6px;color:#8b5cf6;"></i>Pallets Escaneados <span style="color:var(--text-muted);font-size:0.85rem;font-weight:400;">(opcional)</span></label>
+                        <input type="number" id="esc-pallets" placeholder="Ej: 25" min="0">
+                    </div>
+
+                    <!-- 6. Hora inicio -->
+                    <div class="inv-question-card">
+                        <label class="inv-question-label"><i class="fa-solid fa-play" style="margin-right:6px;color:#10b981;"></i>Hora Inicio <span style="color:var(--text-muted);font-size:0.85rem;font-weight:400;">(opcional)</span></label>
+                        <input type="time" id="esc-hora-inicio">
+                    </div>
+
+                    <!-- 7. Hora fin -->
+                    <div class="inv-question-card">
+                        <label class="inv-question-label"><i class="fa-solid fa-stop" style="margin-right:6px;color:#ef4444;"></i>Hora Fin <span style="color:var(--text-muted);font-size:0.85rem;font-weight:400;">(opcional)</span></label>
+                        <input type="time" id="esc-hora-fin">
+                    </div>
+
+                    <!-- 8. Incidencias -->
+                    <div class="inv-question-card">
+                        <label class="inv-question-label"><i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;color:#f97316;"></i>Incidencias <span style="color:var(--text-muted);font-size:0.85rem;font-weight:400;">(opcional)</span></label>
+                        <input type="text" id="esc-incidencias" placeholder="Describir incidencias si aplica">
+                    </div>
+
+                    <!-- 9. Observaciones -->
+                    <div class="inv-question-card">
+                        <label class="inv-question-label"><i class="fa-solid fa-comment" style="margin-right:6px;color:#6366f1;"></i>Observaciones <span style="color:var(--text-muted);font-size:0.85rem;font-weight:400;">(opcional)</span></label>
+                        <textarea id="esc-observaciones" rows="3" placeholder="Notas adicionales..." style="width:100%;padding:0.75rem;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-dark);color:var(--text-main);font-family:inherit;resize:vertical;"></textarea>
+                    </div>
+
+                    <div id="esc-status" class="inv-status" style="display:none;"></div>
+
+                    <div class="inv-form-footer">
+                        <button type="submit" class="inv-btn-submit" id="esc-submit-btn"><i class="fa-solid fa-paper-plane"></i> Enviar</button>
+                        <button type="button" class="inv-btn-clear" onclick="document.getElementById('escaneadora-form').reset()">Borrar formulario</button>
+                    </div>
+                </form>
+
+                <!-- CSV Import Section -->
+                <div style="margin-top:2rem;padding:1.5rem;border:1px dashed var(--border-color);border-radius:12px;">
+                    <h3 style="margin-bottom:0.75rem;color:var(--text-main);"><i class="fa-solid fa-file-csv" style="margin-right:6px;color:#10b981;"></i>Importar desde CSV</h3>
+                    <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1rem;">Sube un CSV exportado del Google Sheet. Las columnas se mapean automaticamente.</p>
+                    <input type="file" id="esc-csv-file" accept=".csv" style="margin-bottom:0.75rem;color:var(--text-muted);">
+                    <br>
+                    <button type="button" onclick="importEscaneadorasCSV()" class="inv-btn-submit" style="margin-top:0.5rem;"><i class="fa-solid fa-upload"></i> Importar CSV</button>
+                    <div id="esc-csv-status" style="display:none;margin-top:0.75rem;padding:0.75rem;border-radius:8px;font-size:0.9rem;"></div>
+                </div>
+            </div>
+        </div><!-- /view-esc-form -->
+
+        <!-- ══════════════════════════════════════════════════ -->
+        <!-- VISTA: ESCANEADORAS — DASHBOARD                   -->
+        <!-- ══════════════════════════════════════════════════ -->
+        <div id="view-esc-dashboard" style="display:none;">
+            <header>
+                <div class="page-title">
+                    <h1><i class="fa-solid fa-chart-bar" style="margin-right:8px;color:var(--accent-primary);"></i>Dashboard Escaneadoras</h1>
+                    <p>Resumen de actividad desde 20/03/2026</p>
+                </div>
+            </header>
+
+            <!-- Filtros -->
+            <div class="panel" style="margin-top:1rem;padding:1rem 1.5rem;display:flex;flex-wrap:wrap;gap:1rem;align-items:end;">
+                <div style="flex:1;min-width:150px;">
+                    <label style="display:block;font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Fecha</label>
+                    <input type="date" id="esc-dash-fecha" style="width:100%;padding:0.5rem;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-dark);color:var(--text-main);">
+                </div>
+                <div style="flex:1;min-width:150px;">
+                    <label style="display:block;font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Escaneadora</label>
+                    <select id="esc-dash-escaneadora" style="width:100%;padding:0.5rem;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-dark);color:var(--text-main);">
+                        <option value="">Todas</option>
+                    </select>
+                </div>
+                <div style="flex:1;min-width:150px;">
+                    <label style="display:block;font-size:0.8rem;color:var(--text-muted);margin-bottom:4px;">Turno</label>
+                    <select id="esc-dash-turno" style="width:100%;padding:0.5rem;border:1px solid var(--border-color);border-radius:6px;background:var(--bg-dark);color:var(--text-main);">
+                        <option value="">Todos</option>
+                        <option value="Day">Day (Dia)</option>
+                        <option value="Night">Night (Noche)</option>
+                    </select>
+                </div>
+                <div>
+                    <button onclick="loadEscDashboard()" style="padding:0.5rem 1.25rem;background:var(--accent-primary);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:500;">
+                        <i class="fa-solid fa-filter"></i> Filtrar
+                    </button>
+                </div>
+            </div>
+
+            <!-- KPIs -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-top:1rem;">
+                <div class="kpi-card" id="esc-kpi-hoy">
+                    <div class="kpi-value">-</div>
+                    <div class="kpi-label">Registros Hoy</div>
+                </div>
+                <div class="kpi-card" id="esc-kpi-total">
+                    <div class="kpi-value">-</div>
+                    <div class="kpi-label">Total Registros</div>
+                </div>
+                <div class="kpi-card" id="esc-kpi-escaneadoras">
+                    <div class="kpi-value">-</div>
+                    <div class="kpi-label">Escaneadoras Activas</div>
+                </div>
+                <div class="kpi-card" id="esc-kpi-pallets">
+                    <div class="kpi-value">-</div>
+                    <div class="kpi-label">Pallets Escaneados</div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:1rem;margin-top:1rem;">
+                <!-- Por Escaneadora -->
+                <div class="panel" style="padding:1.25rem;">
+                    <h3 style="margin-bottom:1rem;font-size:1rem;color:var(--text-main);">Registros por Escaneadora</h3>
+                    <canvas id="esc-chart-escaneadora" height="250"></canvas>
+                </div>
+                <!-- Por Turno -->
+                <div class="panel" style="padding:1.25rem;">
+                    <h3 style="margin-bottom:1rem;font-size:1rem;color:var(--text-main);">Registros por Turno</h3>
+                    <canvas id="esc-chart-turno" height="250"></canvas>
+                </div>
+            </div>
+
+            <!-- Tabla ultimos registros -->
+            <div class="panel" style="margin-top:1rem;padding:1.25rem;">
+                <h3 style="margin-bottom:1rem;font-size:1rem;color:var(--text-main);">Ultimos Registros</h3>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+                        <thead>
+                            <tr style="border-bottom:2px solid var(--border-color);text-align:left;">
+                                <th style="padding:0.5rem;color:var(--text-muted);">Fecha</th>
+                                <th style="padding:0.5rem;color:var(--text-muted);">Escaneadora</th>
+                                <th style="padding:0.5rem;color:var(--text-muted);">Turno</th>
+                                <th style="padding:0.5rem;color:var(--text-muted);">Linea</th>
+                                <th style="padding:0.5rem;color:var(--text-muted);">Pallets</th>
+                                <th style="padding:0.5rem;color:var(--text-muted);">Hora Ini.</th>
+                                <th style="padding:0.5rem;color:var(--text-muted);">Hora Fin</th>
+                                <th style="padding:0.5rem;color:var(--text-muted);">Incidencias</th>
+                                <th style="padding:0.5rem;color:var(--text-muted);">Obs.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="esc-table-body">
+                            <tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted);">Cargando...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div><!-- /view-esc-dashboard -->
 
     </main>
 
@@ -2871,19 +3080,29 @@
             // Cerrar menú móvil al navegar
             document.getElementById('sidebar').classList.remove('open');
             document.querySelector('.mobile-menu-overlay').classList.remove('open');
-            const views = ['dashboard', 'palets', 'formulario', 'configuracion'];
+            const views = ['dashboard', 'palets', 'formulario', 'configuracion', 'esc-form', 'esc-dashboard'];
+            const flexViews = ['formulario', 'esc-form'];
             views.forEach(v => {
                 const el = document.getElementById('view-' + v);
-                if (el) el.style.display = (v === viewName) ? (v === 'formulario' ? 'flex' : '') : 'none';
+                if (el) el.style.display = (v === viewName) ? (flexViews.includes(v) ? 'flex' : '') : 'none';
             });
 
             // Actualizar clase active en sidebar
             const navItems = document.querySelectorAll('.nav-item');
+            const viewToNav = {
+                'dashboard': 'dashboard',
+                'palets': 'palets',
+                'formulario': 'formulario',
+                'esc-form': 'escaneadoras',
+                'esc-dashboard': 'esc. dashboard',
+                'configuracion': 'configuracion',
+            };
+            const activeLabel = (viewToNav[viewName] || viewName).toLowerCase();
             navItems.forEach(item => {
                 const span = item.querySelector('span');
                 if (!span) return;
                 const text = span.textContent.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                if (text === viewName) {
+                if (text === activeLabel) {
                     item.classList.add('active');
                 } else {
                     item.classList.remove('active');
@@ -2893,6 +3112,17 @@
             // Renderizar tabla de palets al entrar a esa vista
             if (viewName === 'palets') {
                 renderPaletsTable();
+            }
+            // Cargar dashboard escaneadoras
+            if (viewName === 'esc-dashboard') {
+                loadEscDashboard();
+            }
+            // Auto-set fecha en formulario escaneadoras
+            if (viewName === 'esc-form') {
+                const fechaInput = document.getElementById('esc-fecha');
+                if (fechaInput && !fechaInput.value) {
+                    fechaInput.value = new Date().toISOString().split('T')[0];
+                }
             }
         };
 
@@ -4577,6 +4807,267 @@
             const label = document.getElementById('mood-nathy-label');
             if (label) label.textContent = 'Activado';
         }
+
+        // ══════════════════════════════════════════════════════════════
+        // ESCANEADORAS — FORMULARIO
+        // ══════════════════════════════════════════════════════════════
+
+        function showEscStatus(msg, type) {
+            const el = document.getElementById('esc-status');
+            el.style.display = 'block';
+            el.textContent = msg;
+            el.style.background = type === 'error' ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)';
+            el.style.color = type === 'error' ? '#ef4444' : '#10b981';
+            el.style.border = `1px solid ${type === 'error' ? '#ef4444' : '#10b981'}`;
+            el.style.padding = '0.75rem';
+            el.style.borderRadius = '8px';
+            el.style.marginTop = '0.5rem';
+            if (type !== 'error') setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        window.submitEscaneadoraForm = function(e) {
+            e.preventDefault();
+
+            const escaneadora = document.getElementById('esc-escaneadora').value;
+            const turno = document.getElementById('esc-turno').value;
+            const fechaRaw = document.getElementById('esc-fecha').value;
+            const linea = document.getElementById('esc-linea').value.trim();
+            const palletsEscaneados = document.getElementById('esc-pallets').value;
+            const horaInicio = document.getElementById('esc-hora-inicio').value;
+            const horaFin = document.getElementById('esc-hora-fin').value;
+            const incidencias = document.getElementById('esc-incidencias').value.trim();
+            const observaciones = document.getElementById('esc-observaciones').value.trim();
+
+            if (!escaneadora || !turno || !fechaRaw) {
+                showEscStatus('Completa los campos obligatorios: Escaneadora, Turno, Fecha.', 'error');
+                return;
+            }
+
+            // Convertir fecha de YYYY-MM-DD a M/D/YYYY
+            const dp = fechaRaw.split('-');
+            const fecha = `${parseInt(dp[1])}/${parseInt(dp[2])}/${dp[0]}`;
+
+            const btn = document.getElementById('esc-submit-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+
+            fetch(`${API_BASE}/api/escaneadoras`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ escaneadora, turno, fecha, linea, palletsEscaneados: parseInt(palletsEscaneados) || 0, horaInicio, horaFin, incidencias, observaciones })
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar';
+                if (data.success) {
+                    showEscStatus('Registro guardado correctamente en MongoDB.', 'success');
+                    document.getElementById('escaneadora-form').reset();
+                    document.getElementById('esc-fecha').value = new Date().toISOString().split('T')[0];
+                } else {
+                    showEscStatus('Error: ' + (data.error || 'desconocido'), 'error');
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar';
+                showEscStatus('Error de conexion: ' + err.message, 'error');
+            });
+        };
+
+        // ── CSV Import ──
+        window.importEscaneadorasCSV = function() {
+            const fileInput = document.getElementById('esc-csv-file');
+            const statusEl = document.getElementById('esc-csv-status');
+
+            if (!fileInput.files || !fileInput.files[0]) {
+                statusEl.style.display = 'block';
+                statusEl.style.background = 'rgba(239,68,68,0.15)';
+                statusEl.style.color = '#ef4444';
+                statusEl.textContent = 'Selecciona un archivo CSV primero.';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split('\n').filter(l => l.trim());
+                if (lines.length < 2) {
+                    statusEl.style.display = 'block';
+                    statusEl.style.background = 'rgba(239,68,68,0.15)';
+                    statusEl.style.color = '#ef4444';
+                    statusEl.textContent = 'CSV vacio o sin datos.';
+                    return;
+                }
+
+                // Parse CSV
+                function parseLine(line) {
+                    const result = [];
+                    let current = '', inQ = false;
+                    for (let i = 0; i < line.length; i++) {
+                        const c = line[i];
+                        if (c === '"') { if (inQ && line[i+1] === '"') { current += '"'; i++; } else inQ = !inQ; }
+                        else if (c === ',' && !inQ) { result.push(current.trim()); current = ''; }
+                        else current += c;
+                    }
+                    result.push(current.trim());
+                    return result;
+                }
+
+                const headers = parseLine(lines[0]);
+                const registros = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const vals = parseLine(lines[i]);
+                    const row = {};
+                    headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+                    registros.push(row);
+                }
+
+                statusEl.style.display = 'block';
+                statusEl.style.background = 'rgba(59,130,246,0.15)';
+                statusEl.style.color = '#3b82f6';
+                statusEl.textContent = `Importando ${registros.length} filas... (columnas: ${headers.join(', ')})`;
+
+                fetch(`${API_BASE}/api/escaneadoras/import`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ registros })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        statusEl.style.background = 'rgba(16,185,129,0.15)';
+                        statusEl.style.color = '#10b981';
+                        statusEl.textContent = `${data.imported} registros importados, ${data.skipped} omitidos.`;
+                    } else {
+                        statusEl.style.background = 'rgba(239,68,68,0.15)';
+                        statusEl.style.color = '#ef4444';
+                        statusEl.textContent = 'Error: ' + (data.error || 'desconocido');
+                    }
+                })
+                .catch(err => {
+                    statusEl.style.background = 'rgba(239,68,68,0.15)';
+                    statusEl.style.color = '#ef4444';
+                    statusEl.textContent = 'Error de conexion: ' + err.message;
+                });
+            };
+            reader.readAsText(fileInput.files[0]);
+        };
+
+        // ══════════════════════════════════════════════════════════════
+        // ESCANEADORAS — DASHBOARD
+        // ══════════════════════════════════════════════════════════════
+
+        let escChartEscaneadora = null;
+        let escChartTurno = null;
+
+        window.loadEscDashboard = function() {
+            const fecha = document.getElementById('esc-dash-fecha').value;
+            const escaneadora = document.getElementById('esc-dash-escaneadora').value;
+            const turno = document.getElementById('esc-dash-turno').value;
+
+            const params = new URLSearchParams();
+            if (fecha) {
+                const dp = fecha.split('-');
+                params.set('fecha', `${parseInt(dp[1])}/${parseInt(dp[2])}/${dp[0]}`);
+            }
+            if (escaneadora) params.set('escaneadora', escaneadora);
+            if (turno) params.set('turno', turno);
+
+            fetch(`${API_BASE}/api/escaneadoras/dashboard?${params.toString()}`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.success) return;
+
+                // KPIs
+                document.querySelector('#esc-kpi-hoy .kpi-value').textContent = data.registrosHoy;
+                document.querySelector('#esc-kpi-total .kpi-value').textContent = data.totalRegistros;
+                document.querySelector('#esc-kpi-escaneadoras .kpi-value').textContent = data.escaneadoras.length;
+                const totalPallets = data.porEscaneadora.reduce((s, e) => s + e.pallets, 0);
+                document.querySelector('#esc-kpi-pallets .kpi-value').textContent = totalPallets;
+
+                // Populate filter dropdown
+                const sel = document.getElementById('esc-dash-escaneadora');
+                const currentVal = sel.value;
+                sel.innerHTML = '<option value="">Todas</option>';
+                data.escaneadoras.forEach(e => {
+                    const opt = document.createElement('option');
+                    opt.value = e;
+                    opt.textContent = e;
+                    if (e === currentVal) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+
+                // Chart: por escaneadora
+                const ctxEsc = document.getElementById('esc-chart-escaneadora').getContext('2d');
+                if (escChartEscaneadora) escChartEscaneadora.destroy();
+                const escColors = ['#3b82f6','#ec4899','#10b981','#f59e0b','#8b5cf6','#ef4444','#6366f1','#14b8a6'];
+                escChartEscaneadora = new Chart(ctxEsc, {
+                    type: 'bar',
+                    data: {
+                        labels: data.porEscaneadora.map(e => e.nombre),
+                        datasets: [{
+                            label: 'Registros',
+                            data: data.porEscaneadora.map(e => e.registros),
+                            backgroundColor: data.porEscaneadora.map((_, i) => escColors[i % escColors.length]),
+                            borderRadius: 6,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51,65,85,0.5)' } },
+                            x: { ticks: { color: '#94a3b8', maxRotation: 45 }, grid: { display: false } }
+                        }
+                    }
+                });
+
+                // Chart: por turno
+                const ctxTurno = document.getElementById('esc-chart-turno').getContext('2d');
+                if (escChartTurno) escChartTurno.destroy();
+                escChartTurno = new Chart(ctxTurno, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.porTurno.map(t => t.turno),
+                        datasets: [{
+                            data: data.porTurno.map(t => t.registros),
+                            backgroundColor: ['#3b82f6', '#f59e0b', '#10b981', '#ef4444'],
+                            borderWidth: 0,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { color: '#94a3b8', padding: 15 } }
+                        }
+                    }
+                });
+
+                // Table
+                const tbody = document.getElementById('esc-table-body');
+                if (data.ultimosRegistros.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin registros</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.ultimosRegistros.map(r => `
+                    <tr style="border-bottom:1px solid var(--border-color);">
+                        <td style="padding:0.5rem;">${r.fecha}</td>
+                        <td style="padding:0.5rem;font-weight:500;">${r.escaneadora}</td>
+                        <td style="padding:0.5rem;">${r.turno}</td>
+                        <td style="padding:0.5rem;">${r.linea || '-'}</td>
+                        <td style="padding:0.5rem;text-align:center;">${r.palletsEscaneados || 0}</td>
+                        <td style="padding:0.5rem;">${r.horaInicio || '-'}</td>
+                        <td style="padding:0.5rem;">${r.horaFin || '-'}</td>
+                        <td style="padding:0.5rem;color:${r.incidencias ? '#ef4444' : 'var(--text-muted)'};">${r.incidencias || '-'}</td>
+                        <td style="padding:0.5rem;">${r.observaciones || '-'}</td>
+                    </tr>
+                `).join('');
+            })
+            .catch(err => {
+                console.error('[ESC-DASHBOARD] Error:', err);
+            });
+        };
     </script>
 </body>
 
