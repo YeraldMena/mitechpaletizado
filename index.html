@@ -137,6 +137,7 @@
         }
         .card-title { font-size:1rem; font-weight:600; margin-bottom:1rem; display:flex; align-items:center; gap:8px; }
         .card-title i { color:var(--accent); font-size:0.9rem; }
+        .charts-grid .card canvas { max-height:220px; }
 
         /* KPIs */
         .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin-bottom:1.5rem; }
@@ -151,7 +152,7 @@
         .kpi:nth-child(4) { border-left-color:#8b5cf6; }
 
         /* Charts grid */
-        .charts-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+        .charts-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:1rem; margin-bottom:1.5rem; }
 
         /* Tables */
         .table-wrap { overflow-x:auto; }
@@ -232,6 +233,7 @@
             .main { margin-left:0; padding:1rem; }
             .form-row { grid-template-columns:1fr; }
             .charts-grid { grid-template-columns:1fr; }
+            .charts-grid .card canvas { max-height:200px; }
             .kpi-grid { grid-template-columns:repeat(2,1fr); }
         }
 
@@ -554,11 +556,11 @@
             <div class="charts-grid">
                 <div class="card">
                     <div class="card-title"><i class="fa-solid fa-chart-bar"></i> Registros por Escaneadora</div>
-                    <canvas id="chart-escaneadora" height="280"></canvas>
+                    <canvas id="chart-escaneadora" height="180"></canvas>
                 </div>
                 <div class="card">
                     <div class="card-title"><i class="fa-solid fa-chart-pie"></i> Distribucion por Destino</div>
-                    <canvas id="chart-destino" height="280"></canvas>
+                    <canvas id="chart-destino" height="180"></canvas>
                 </div>
             </div>
 
@@ -566,11 +568,11 @@
             <div class="charts-grid">
                 <div class="card">
                     <div class="card-title"><i class="fa-solid fa-chart-line"></i> Tendencia Diaria</div>
-                    <canvas id="chart-tendencia" height="280"></canvas>
+                    <canvas id="chart-tendencia" height="180"></canvas>
                 </div>
                 <div class="card">
                     <div class="card-title"><i class="fa-solid fa-clock"></i> Registros por Turno</div>
-                    <canvas id="chart-turno" height="280"></canvas>
+                    <canvas id="chart-turno" height="180"></canvas>
                 </div>
             </div>
 
@@ -582,7 +584,7 @@
                 </div>
                 <div class="card">
                     <div class="card-title"><i class="fa-solid fa-tags"></i> Registros por Condicion</div>
-                    <canvas id="chart-condicion" height="220"></canvas>
+                    <canvas id="chart-condicion" height="180"></canvas>
                 </div>
             </div>
 
