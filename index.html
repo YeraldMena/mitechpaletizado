@@ -99,13 +99,10 @@
 
         /* ── App Shell ── */
         .app { display:none; min-height:100vh; }
-        .app.active { display:flex; }
+        .app.active { display:block; }
 
-        /* Sidebar */
-        .sidebar {
-            width:var(--sidebar-w); background:var(--bg-sidebar); border-right:1px solid var(--border);
-            padding:1.5rem 0; display:flex; flex-direction:column; position:fixed; height:100vh; z-index:10;
-        }
+        /* Sidebar — hidden, navigation via home cards */
+        .sidebar { display:none !important; }
         .sidebar-brand { padding:0 1.5rem 1.5rem; border-bottom:1px solid var(--border); margin-bottom:1rem; }
         .sidebar-brand h2 { font-size:1.15rem; font-weight:700; display:flex; align-items:center; gap:10px; }
         .sidebar-brand h2 i { color:var(--accent); }
@@ -124,7 +121,7 @@
         .btn-logout { width:100%; justify-content:center; font-size:0.85rem; }
 
         /* Main */
-        .main { margin-left:var(--sidebar-w); flex:1; padding:1.5rem 2rem; min-height:100vh; }
+        .main { margin-left:0; flex:1; padding:1.5rem 2rem; min-height:100vh; }
         .page-header { margin-bottom:1.5rem; }
         .page-header h1 { font-size:1.6rem; font-weight:700; display:flex; align-items:center; gap:10px; }
         .page-header h1 i { color:var(--accent); }
@@ -227,12 +224,12 @@
         .checkbox-label input { accent-color:var(--accent); }
 
         /* ── Responsive ── */
-        .mobile-toggle { display:none; position:fixed; top:1rem; left:1rem; z-index:20; background:var(--bg-card); border:1px solid var(--border); color:var(--text-main); padding:0.5rem 0.75rem; border-radius:8px; cursor:pointer; font-size:1.1rem; }
+        .mobile-toggle { display:none !important; }
         @media (max-width:768px) {
             .mobile-toggle { display:block; }
             .sidebar { transform:translateX(-100%); transition:transform 0.3s; }
             .sidebar.open { transform:translateX(0); }
-            .main { margin-left:0; padding:1rem; padding-top:3.5rem; }
+            .main { margin-left:0; padding:1rem; }
             .form-row { grid-template-columns:1fr; }
             .charts-grid { grid-template-columns:1fr; }
             .kpi-grid { grid-template-columns:repeat(2,1fr); }
@@ -244,6 +241,23 @@
         .badge-green { background:rgba(34,197,94,0.15); color:#22c55e; }
         .badge-amber { background:rgba(245,158,11,0.15); color:#f59e0b; }
         .badge-red { background:rgba(239,68,68,0.15); color:#ef4444; }
+
+        /* ── Top Bar ── */
+        .topbar {
+            display:flex; align-items:center; justify-content:space-between;
+            padding:0.75rem 2rem; background:var(--bg-card); border-bottom:1px solid var(--border);
+        }
+        .topbar-brand { display:flex; align-items:center; gap:8px; font-weight:700; font-size:1rem; }
+        .topbar-brand i { color:var(--accent); }
+        .topbar-right { display:flex; align-items:center; gap:1rem; }
+        .topbar-user { font-size:0.85rem; color:var(--text-muted); }
+        .topbar-user strong { color:var(--text-main); }
+        .btn-logout-top {
+            display:inline-flex; align-items:center; gap:5px; padding:0.4rem 0.85rem;
+            background:none; border:1px solid var(--border); border-radius:6px;
+            color:var(--text-muted); font-size:0.8rem; cursor:pointer; transition:all 0.2s;
+        }
+        .btn-logout-top:hover { border-color:var(--danger); color:var(--danger); }
 
         /* ── Home Module Cards ── */
         .home-screen { display:flex; align-items:center; justify-content:center; min-height:calc(100vh - 80px); }
@@ -333,38 +347,19 @@
 <!-- ════════════════════════════════════════ -->
 <!-- APP SHELL                                -->
 <!-- ════════════════════════════════════════ -->
-<button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">
-    <i class="fa-solid fa-bars"></i>
-</button>
-
 <div class="app" id="app">
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-brand">
-            <h2><i class="fa-solid fa-boxes-stacked"></i> PaletTrack</h2>
-            <span>Sistema de Paletizado v3</span>
+    <!-- Top Bar -->
+    <div class="topbar">
+        <div class="topbar-brand" style="cursor:pointer;" onclick="switchView('home')">
+            <i class="fa-solid fa-boxes-stacked"></i> PaletTrack
         </div>
-        <ul class="nav-list">
-            <li class="nav-item active" data-view="home" onclick="switchView('home')">
-                <i class="fa-solid fa-house"></i> Inicio
-            </li>
-            <li class="nav-item" data-view="escaneadoras" onclick="switchView('escaneadoras')">
-                <i class="fa-solid fa-barcode"></i> Escaneadoras
-            </li>
-            <li class="nav-item" data-view="dashboard" onclick="switchView('dashboard')" id="nav-dashboard">
-                <i class="fa-solid fa-chart-pie"></i> Dashboard
-            </li>
-        </ul>
-        <div class="sidebar-footer">
-            <div class="user-info">
-                <strong id="user-display-name">-</strong>
-                <span id="user-display-role">-</span>
-            </div>
-            <button class="btn btn-secondary btn-sm btn-logout" onclick="handleLogout()">
-                <i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesion
+        <div class="topbar-right">
+            <span class="topbar-user"><strong id="user-display-name">-</strong> &middot; <span id="user-display-role">-</span></span>
+            <button class="btn-logout-top" onclick="handleLogout()">
+                <i class="fa-solid fa-right-from-bracket"></i> Salir
             </button>
         </div>
-    </aside>
+    </div>
 
     <!-- Main Content -->
     <main class="main">
@@ -709,14 +704,11 @@ function enterApp() {
     document.getElementById('user-display-name').textContent = currentUser.nombre;
     document.getElementById('user-display-role').textContent = currentUser.role === 'admin' ? 'Administrador' : 'Escaneadora';
 
-    // Role-based navigation
-    const dashNav = document.getElementById('nav-dashboard');
+    // Role-based: hide dashboard card for non-admin
     const dashCard = document.getElementById('home-dash-card');
     if (currentUser.role === 'admin') {
-        dashNav.style.display = 'flex';
         if (dashCard) dashCard.style.display = 'flex';
     } else {
-        dashNav.style.display = 'none';
         if (dashCard) dashCard.style.display = 'none';
     }
 
@@ -736,19 +728,10 @@ function switchView(viewName) {
     // Role check
     if (viewName === 'dashboard' && (!currentUser || currentUser.role !== 'admin')) return;
 
-    document.getElementById('sidebar').classList.remove('open');
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
     const view = document.getElementById('view-' + viewName);
     if (view) view.classList.add('active');
-
-    const nav = document.querySelector(`.nav-item[data-view="${viewName}"]`);
-    if (nav) nav.classList.add('active');
-
-    // Home nav highlight
-    const homeNav = document.querySelector('.nav-item[data-view="home"]');
-    if (homeNav && viewName === 'home') homeNav.classList.add('active');
 
     if (viewName === 'dashboard') loadDashboard();
     if (viewName === 'escaneadoras') setDefaultDate();
