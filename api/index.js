@@ -92,6 +92,22 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+app.post('/api/auth/nfc', async (req, res) => {
+  try {
+    const { serialNumber } = req.body;
+    if (!serialNumber) return res.status(400).json({ success: false, error: 'Numero de serie NFC requerido' });
+    const db = mongoose.connection.db;
+    const card = await db.collection('nfc_cards').findOne({ serialNumber: serialNumber.toUpperCase().trim(), isActive: true });
+    if (!card) return res.status(401).json({ success: false, error: 'Tarjeta NFC no autorizada' });
+    let user = card.userId ? await User.findById(card.userId) : null;
+    if (!user) user = await User.findOne({ role: card.role, isActive: true });
+    if (!user) return res.status(401).json({ success: false, error: 'No hay usuario asociado a esta tarjeta' });
+    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '12h' });
+    await db.collection('nfc_cards').updateOne({ _id: card._id }, { $set: { lastUsed: new Date() }, $inc: { useCount: 1 } });
+    res.json({ success: true, token, user: { id: user._id, nombre: user.nombre, usuario: user.usuario, role: user.role }, nfc: { serial: card.serialNumber, role: card.role } });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
 app.get('/api/auth/me', auth, (req, res) => {
   res.json({ success: true, user: { id: req.user._id, nombre: req.user.nombre, usuario: req.user.usuario, role: req.user.role } });
 });

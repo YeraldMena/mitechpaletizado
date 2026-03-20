@@ -74,6 +74,29 @@
         .alert-error { background:rgba(239,68,68,0.12); color:#ef4444; border:1px solid rgba(239,68,68,0.3); }
         .alert-success { background:rgba(34,197,94,0.12); color:#22c55e; border:1px solid rgba(34,197,94,0.3); }
 
+        /* NFC Button */
+        .login-divider { display:flex; align-items:center; gap:1rem; margin:1.5rem 0; color:var(--text-muted); font-size:0.85rem; }
+        .login-divider::before, .login-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+        .btn-nfc {
+            width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
+            padding:0.85rem 1.5rem; border:2px solid var(--accent); border-radius:12px;
+            background:transparent; color:var(--accent); font-size:1rem; font-weight:600;
+            cursor:pointer; transition:all 0.3s; position:relative; overflow:hidden;
+        }
+        .btn-nfc:hover { background:var(--accent-glow); border-color:var(--accent-hover); }
+        .btn-nfc:active { transform:scale(0.97); }
+        .btn-nfc.scanning { border-color:var(--warning); color:var(--warning); animation:nfc-pulse 1.5s infinite; }
+        .btn-nfc.scanning .nfc-icon { animation:nfc-wave 1s infinite; }
+        .btn-nfc.nfc-success { border-color:var(--success); color:var(--success); }
+        .btn-nfc.nfc-error { border-color:var(--danger); color:var(--danger); }
+        .btn-nfc .nfc-icon { font-size:1.3rem; }
+        .btn-nfc .nfc-text { display:flex; flex-direction:column; align-items:flex-start; line-height:1.3; }
+        .btn-nfc .nfc-text span:first-child { font-size:0.95rem; font-weight:700; }
+        .btn-nfc .nfc-text span:last-child { font-size:0.75rem; font-weight:400; opacity:0.8; }
+        @keyframes nfc-pulse { 0%,100% { box-shadow:0 0 0 0 rgba(245,158,11,0.3); } 50% { box-shadow:0 0 0 12px rgba(245,158,11,0); } }
+        @keyframes nfc-wave { 0%,100% { transform:scale(1); } 50% { transform:scale(1.2); } }
+        .nfc-unsupported { display:none; text-align:center; color:var(--text-muted); font-size:0.8rem; margin-top:0.5rem; }
+
         /* ── App Shell ── */
         .app { display:none; min-height:100vh; }
         .app.active { display:flex; }
@@ -210,6 +233,17 @@
                 <i class="fa-solid fa-right-to-bracket"></i> Iniciar Sesion
             </button>
         </form>
+
+        <div class="login-divider">o</div>
+
+        <button class="btn-nfc" id="nfc-btn" onclick="handleNfcScan()">
+            <i class="fa-solid fa-wifi nfc-icon" style="transform:rotate(90deg);"></i>
+            <div class="nfc-text">
+                <span>Acceder con NFC</span>
+                <span>Pulsa para leer</span>
+            </div>
+        </button>
+        <p class="nfc-unsupported" id="nfc-unsupported">NFC no disponible en este navegador</p>
     </div>
 </div>
 
@@ -946,8 +980,116 @@ async function loadCatalogos() {
 }
 
 // ══════════════════════════════════════════════
+// NFC
+// ══════════════════════════════════════════════
+
+function initNfc() {
+    if (!('NDEFReader' in window)) {
+        document.getElementById('nfc-unsupported').style.display = 'block';
+        document.getElementById('nfc-btn').style.opacity = '0.4';
+        document.getElementById('nfc-btn').style.cursor = 'not-allowed';
+        return false;
+    }
+    return true;
+}
+
+async function handleNfcScan() {
+    if (!('NDEFReader' in window)) {
+        const errEl = document.getElementById('login-error');
+        errEl.textContent = 'NFC no soportado en este navegador. Usa Chrome en Android.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    const btn = document.getElementById('nfc-btn');
+    const errEl = document.getElementById('login-error');
+    errEl.style.display = 'none';
+
+    btn.classList.remove('nfc-error', 'nfc-success');
+    btn.classList.add('scanning');
+    btn.querySelector('.nfc-text span:first-child').textContent = 'Esperando tarjeta...';
+    btn.querySelector('.nfc-text span:last-child').textContent = 'Acerca tu tarjeta NFC al dispositivo';
+
+    try {
+        const ndef = new NDEFReader();
+        await ndef.scan();
+
+        const controller = new AbortController();
+
+        // Timeout after 30 seconds
+        const timeout = setTimeout(() => {
+            controller.abort();
+            resetNfcBtn();
+            errEl.textContent = 'Tiempo agotado. Intenta de nuevo.';
+            errEl.style.display = 'block';
+        }, 30000);
+
+        ndef.addEventListener('reading', async ({ serialNumber }) => {
+            clearTimeout(timeout);
+            controller.abort();
+
+            // Format serial: some readers give lowercase without colons
+            const serial = serialNumber.toUpperCase().trim();
+
+            btn.querySelector('.nfc-text span:first-child').textContent = 'Tarjeta detectada';
+            btn.querySelector('.nfc-text span:last-child').textContent = serial;
+
+            try {
+                const data = await fetch(`${API}/api/auth/nfc`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ serialNumber: serial })
+                }).then(r => r.json());
+
+                if (!data.success) throw new Error(data.error || 'Tarjeta no autorizada');
+
+                btn.classList.remove('scanning');
+                btn.classList.add('nfc-success');
+                btn.querySelector('.nfc-text span:first-child').textContent = 'Acceso concedido';
+                btn.querySelector('.nfc-text span:last-child').textContent = data.user.nombre + ' (' + data.user.role + ')';
+
+                authToken = data.token;
+                localStorage.setItem('mitech_token', authToken);
+                currentUser = data.user;
+
+                setTimeout(() => {
+                    resetNfcBtn();
+                    enterApp();
+                }, 800);
+            } catch (err) {
+                btn.classList.remove('scanning');
+                btn.classList.add('nfc-error');
+                btn.querySelector('.nfc-text span:first-child').textContent = 'Acceso denegado';
+                btn.querySelector('.nfc-text span:last-child').textContent = err.message;
+                setTimeout(resetNfcBtn, 3000);
+            }
+        }, { signal: controller.signal });
+
+    } catch (err) {
+        btn.classList.remove('scanning');
+        btn.classList.add('nfc-error');
+        if (err.name === 'NotAllowedError') {
+            btn.querySelector('.nfc-text span:first-child').textContent = 'Permiso denegado';
+            btn.querySelector('.nfc-text span:last-child').textContent = 'Permite el acceso NFC en tu navegador';
+        } else {
+            btn.querySelector('.nfc-text span:first-child').textContent = 'Error NFC';
+            btn.querySelector('.nfc-text span:last-child').textContent = err.message;
+        }
+        setTimeout(resetNfcBtn, 3000);
+    }
+}
+
+function resetNfcBtn() {
+    const btn = document.getElementById('nfc-btn');
+    btn.classList.remove('scanning', 'nfc-success', 'nfc-error');
+    btn.querySelector('.nfc-text span:first-child').textContent = 'Acceder con NFC';
+    btn.querySelector('.nfc-text span:last-child').textContent = 'Pulsa para leer';
+}
+
+// ══════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════
+initNfc();
 checkSession();
 </script>
 </body>
