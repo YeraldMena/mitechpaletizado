@@ -244,6 +244,52 @@
         .badge-green { background:rgba(34,197,94,0.15); color:#22c55e; }
         .badge-amber { background:rgba(245,158,11,0.15); color:#f59e0b; }
         .badge-red { background:rgba(239,68,68,0.15); color:#ef4444; }
+
+        /* ── Home Module Cards ── */
+        .home-screen { display:flex; align-items:center; justify-content:center; min-height:calc(100vh - 80px); }
+        .home-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 340px)); gap:2rem; justify-content:center; padding:2rem; }
+        .module-card {
+            background:var(--bg-card); border:1px solid var(--border); border-radius:20px;
+            padding:3rem 2.5rem; text-align:center; cursor:pointer; transition:all 0.3s ease;
+            position:relative; overflow:hidden; min-height:280px;
+            display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.25rem;
+        }
+        .module-card::before {
+            content:''; position:absolute; top:0; left:0; right:0; height:4px;
+            border-radius:20px 20px 0 0; transition:height 0.3s;
+        }
+        .module-card:hover { transform:translateY(-6px); box-shadow:0 16px 48px rgba(0,0,0,0.3); }
+        .module-card:hover::before { height:6px; }
+        .module-card:active { transform:translateY(-2px); }
+        .module-card .module-icon {
+            width:80px; height:80px; border-radius:20px; display:flex; align-items:center; justify-content:center;
+            font-size:2.2rem; margin-bottom:0.5rem;
+        }
+        .module-card .module-title { font-size:1.4rem; font-weight:700; letter-spacing:-0.3px; }
+        .module-card .module-desc { font-size:0.9rem; color:var(--text-muted); line-height:1.5; max-width:240px; }
+        .module-card .module-arrow {
+            font-size:1.1rem; color:var(--text-muted); transition:all 0.3s;
+            margin-top:0.5rem; opacity:0.5;
+        }
+        .module-card:hover .module-arrow { opacity:1; transform:translateX(4px); }
+
+        /* Escaneadoras card */
+        .module-card.mod-esc::before { background:linear-gradient(90deg, #4f7cff, #6366f1); }
+        .module-card.mod-esc .module-icon { background:rgba(79,124,255,0.12); color:#4f7cff; }
+        .module-card.mod-esc:hover { border-color:rgba(79,124,255,0.3); }
+
+        /* Dashboard card */
+        .module-card.mod-dash::before { background:linear-gradient(90deg, #22c55e, #14b8a6); }
+        .module-card.mod-dash .module-icon { background:rgba(34,197,94,0.12); color:#22c55e; }
+        .module-card.mod-dash:hover { border-color:rgba(34,197,94,0.3); }
+
+        /* Back button inside modules */
+        .back-btn {
+            display:inline-flex; align-items:center; gap:6px; color:var(--text-muted); font-size:0.85rem;
+            cursor:pointer; padding:0.4rem 0.75rem; border-radius:6px; transition:all 0.2s;
+            background:none; border:1px solid transparent; font-weight:500; margin-bottom:1rem;
+        }
+        .back-btn:hover { color:var(--text-main); background:var(--accent-glow); border-color:var(--border); }
     </style>
 </head>
 <body>
@@ -299,7 +345,10 @@
             <span>Sistema de Paletizado v3</span>
         </div>
         <ul class="nav-list">
-            <li class="nav-item active" data-view="escaneadoras" onclick="switchView('escaneadoras')">
+            <li class="nav-item active" data-view="home" onclick="switchView('home')">
+                <i class="fa-solid fa-house"></i> Inicio
+            </li>
+            <li class="nav-item" data-view="escaneadoras" onclick="switchView('escaneadoras')">
                 <i class="fa-solid fa-barcode"></i> Escaneadoras
             </li>
             <li class="nav-item" data-view="dashboard" onclick="switchView('dashboard')" id="nav-dashboard">
@@ -321,9 +370,36 @@
     <main class="main">
 
         <!-- ══════════════════════════════════════ -->
+        <!-- VIEW: HOME (Module selection)          -->
+        <!-- ══════════════════════════════════════ -->
+        <div class="view active" id="view-home">
+            <div class="page-header" style="text-align:center;">
+                <h1 style="font-size:1.8rem;"><i class="fa-solid fa-boxes-stacked"></i> MI-TECH Paletizado</h1>
+                <p id="home-greeting">Selecciona un modulo para continuar</p>
+            </div>
+            <div class="home-screen">
+                <div class="home-grid">
+                    <div class="module-card mod-esc" onclick="switchView('escaneadoras')">
+                        <div class="module-icon"><i class="fa-solid fa-barcode"></i></div>
+                        <div class="module-title">Escaneadoras</div>
+                        <div class="module-desc">Registro operativo de pallets escaneados</div>
+                        <div class="module-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                    </div>
+                    <div class="module-card mod-dash" onclick="switchView('dashboard')" id="home-dash-card">
+                        <div class="module-icon"><i class="fa-solid fa-chart-pie"></i></div>
+                        <div class="module-title">Dashboard</div>
+                        <div class="module-desc">Resumen completo de la operacion</div>
+                        <div class="module-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════ -->
         <!-- VIEW: ESCANEADORAS (Formulario)        -->
         <!-- ══════════════════════════════════════ -->
-        <div class="view active" id="view-escaneadoras">
+        <div class="view" id="view-escaneadoras">
+            <button class="back-btn" onclick="switchView('home')"><i class="fa-solid fa-arrow-left"></i> Volver al inicio</button>
             <div class="page-header" style="text-align:center;">
                 <h1><i class="fa-solid fa-barcode"></i> Registro de Escaneo</h1>
                 <p>Captura operativa de pallets escaneados</p>
@@ -425,6 +501,7 @@
         <!-- VIEW: DASHBOARD (Solo admin)           -->
         <!-- ══════════════════════════════════════ -->
         <div class="view" id="view-dashboard">
+            <button class="back-btn" onclick="switchView('home')"><i class="fa-solid fa-arrow-left"></i> Volver al inicio</button>
             <div class="page-header">
                 <h1><i class="fa-solid fa-chart-pie"></i> Dashboard Operativo</h1>
                 <p>Resumen completo de la operacion de paletizado</p>
@@ -634,14 +711,21 @@ function enterApp() {
 
     // Role-based navigation
     const dashNav = document.getElementById('nav-dashboard');
+    const dashCard = document.getElementById('home-dash-card');
     if (currentUser.role === 'admin') {
         dashNav.style.display = 'flex';
+        if (dashCard) dashCard.style.display = 'flex';
     } else {
         dashNav.style.display = 'none';
+        if (dashCard) dashCard.style.display = 'none';
     }
 
+    // Greeting
+    const greeting = document.getElementById('home-greeting');
+    if (greeting) greeting.textContent = `Bienvenido, ${currentUser.nombre}`;
+
     setDefaultDate();
-    switchView('escaneadoras');
+    switchView('home');
 }
 
 // ══════════════════════════════════════════════
@@ -662,7 +746,12 @@ function switchView(viewName) {
     const nav = document.querySelector(`.nav-item[data-view="${viewName}"]`);
     if (nav) nav.classList.add('active');
 
+    // Home nav highlight
+    const homeNav = document.querySelector('.nav-item[data-view="home"]');
+    if (homeNav && viewName === 'home') homeNav.classList.add('active');
+
     if (viewName === 'dashboard') loadDashboard();
+    if (viewName === 'escaneadoras') setDefaultDate();
 }
 
 function setDefaultDate() {
