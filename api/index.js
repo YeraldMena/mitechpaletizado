@@ -1,617 +1,287 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ── Mongoose connection (reuse across invocations) ──
-let isConnected = false;
+const JWT_SECRET = process.env.JWT_SECRET || 'mitech-jwt-secret-2026';
 
+// ── DB Connection (reuse across invocations) ──
+let isConnected = false;
 async function connectDB() {
   if (isConnected) return;
-  const MONGODB_URI = process.env.MONGODB_URI;
-  if (!MONGODB_URI) throw new Error('MONGODB_URI no definida');
-
-  await mongoose.connect(MONGODB_URI);
+  await mongoose.connect(process.env.MONGODB_URI);
   isConnected = true;
 }
 
-// ── Pallet Model ──
-const palletSchema = new mongoose.Schema({
+// ── Models ──
+const userSchema = new mongoose.Schema({
+  nombre: { type: String, required: true },
+  usuario: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  passwordHash: { type: String, required: true },
+  role: { type: String, enum: ['admin', 'escaneadora'], required: true },
+  isActive: { type: Boolean, default: true },
+}, { timestamps: true });
+
+userSchema.methods.comparePassword = async function(p) { return bcrypt.compare(p, this.passwordHash); };
+userSchema.set('toJSON', { transform: (d, r) => { delete r.passwordHash; return r; } });
+
+const escRegSchema = new mongoose.Schema({
   palletId: { type: String, required: true, index: true },
   cantidad: { type: Number, default: 0 },
   condicion: { type: String, default: '' },
   destino: { type: String, required: true },
   turno: { type: String, required: true },
-  escaneadora: { type: String, default: '' },
+  escaneadora: { type: String, required: true, index: true },
+  fecha: { type: String, required: true, index: true },
   pedido: { type: String, default: '' },
-  fecha: { type: String, required: true },
-  producto: { type: String, default: '' },
+  incidencias: { type: String, default: '' },
   observaciones: { type: String, default: '' },
-  source: { type: String, enum: ['migrated-anterior', 'migrated-formulario', 'web', 'mobile'], default: 'web' },
+  capturadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 
-palletSchema.index({ fecha: 1, turno: 1 });
-palletSchema.index({ escaneadora: 1 });
-palletSchema.index({ createdAt: -1 });
+escRegSchema.index({ fecha: 1, turno: 1 });
+escRegSchema.index({ escaneadora: 1, fecha: 1 });
+escRegSchema.index({ createdAt: -1 });
 
-const Pallet = mongoose.models.Pallet || mongoose.model('Pallet', palletSchema);
+const User = mongoose.models.User || mongoose.model('User', userSchema);
+const EscReg = mongoose.models.EscaneadoraRegistro || mongoose.model('EscaneadoraRegistro', escRegSchema);
 
-// ── Helper functions ──
+// ── Middleware ──
+async function auth(req, res, next) {
+  const h = req.headers.authorization;
+  if (!h || !h.startsWith('Bearer ')) return res.status(401).json({ success: false, error: 'Token requerido' });
+  try {
+    const decoded = jwt.verify(h.split(' ')[1], JWT_SECRET);
+    const user = await User.findById(decoded.id).select('-passwordHash');
+    if (!user || !user.isActive) return res.status(401).json({ success: false, error: 'Usuario invalido' });
+    req.user = user;
+    next();
+  } catch { return res.status(401).json({ success: false, error: 'Token invalido' }); }
+}
+
+function roleGuard(...roles) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ success: false, error: 'No autenticado' });
+    if (!roles.includes(req.user.role)) return res.status(403).json({ success: false, error: 'Sin permisos' });
+    next();
+  };
+}
+
+// Connect DB on every request
+app.use(async (req, res, next) => {
+  try { await connectDB(); next(); }
+  catch (err) { res.status(500).json({ success: false, error: 'DB error: ' + err.message }); }
+});
+
+// ═══════════ AUTH ═══════════
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { usuario, password } = req.body;
+    if (!usuario || !password) return res.status(400).json({ success: false, error: 'Usuario y contrasena requeridos' });
+    const user = await User.findOne({ usuario: usuario.toLowerCase().trim() });
+    if (!user || !user.isActive) return res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
+    const valid = await user.comparePassword(password);
+    if (!valid) return res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
+    const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '12h' });
+    res.json({ success: true, token, user: { id: user._id, nombre: user.nombre, usuario: user.usuario, role: user.role } });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+app.get('/api/auth/me', auth, (req, res) => {
+  res.json({ success: true, user: { id: req.user._id, nombre: req.user.nombre, usuario: req.user.usuario, role: req.user.role } });
+});
+
+// ═══════════ ESCANEADORAS ═══════════
+app.post('/api/escaneadoras', auth, roleGuard('admin', 'escaneadora'), async (req, res) => {
+  try {
+    const { palletId, cantidad, condicion, destino, turno, escaneadora, fecha, pedido, incidencias, observaciones } = req.body;
+    if (!palletId || !destino || !turno || !escaneadora || !fecha) return res.status(400).json({ success: false, error: 'Campos requeridos: palletId, destino, turno, escaneadora, fecha' });
+    const doc = await EscReg.create({ palletId: palletId.trim(), cantidad: parseInt(cantidad) || 0, condicion: condicion || '', destino, turno, escaneadora, fecha, pedido: pedido || '', incidencias: incidencias || '', observaciones: observaciones || '', capturadoPor: req.user._id });
+    res.json({ success: true, id: doc._id, message: 'Registro guardado' });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+app.get('/api/escaneadoras', auth, roleGuard('admin', 'escaneadora'), async (req, res) => {
+  try {
+    const { fecha, escaneadora, turno, limit } = req.query;
+    const filter = {};
+    if (fecha) filter.fecha = fecha;
+    if (escaneadora) filter.escaneadora = { $regex: escaneadora, $options: 'i' };
+    if (turno) filter.turno = { $regex: turno, $options: 'i' };
+    const registros = await EscReg.find(filter).sort({ createdAt: -1 }).limit(parseInt(limit) || 200);
+    res.json({ success: true, data: registros, total: registros.length });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+app.get('/api/escaneadoras/:id', auth, roleGuard('admin', 'escaneadora'), async (req, res) => {
+  try {
+    const doc = await EscReg.findById(req.params.id);
+    if (!doc) return res.status(404).json({ success: false, error: 'No encontrado' });
+    res.json({ success: true, data: doc });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+// ═══════════ DASHBOARD (admin only) ═══════════
 function normalizeTurno(t) {
   if (!t) return 'Otro';
-  const lower = t.toLowerCase();
-  if (lower.includes('noche') || lower.includes('night')) return 'Noche';
-  if (lower.includes('día') || lower.includes('dia') || lower.includes('day')) return 'Día';
+  const l = t.toLowerCase();
+  if (l.includes('noche') || l.includes('night')) return 'Noche';
+  if (l.includes('día') || l.includes('dia') || l.includes('day')) return 'Día';
   return t;
 }
 
-function normalizeDestino(d) {
-  if (!d) return 'Otro';
-  if (/pedido/i.test(d)) return 'TRG';
-  if (/^\d+$/.test(d) || /almac/i.test(d)) return 'Almacén';
-  if (/trg/i.test(d)) return 'TRG';
-  if (/hv/i.test(d)) return 'HV (High Value)';
-  return d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
-}
-
-// ── Middleware: connect DB before every request ──
-app.use(async (req, res, next) => {
+app.get('/api/dashboard/resumen', auth, roleGuard('admin'), async (req, res) => {
   try {
-    await connectDB();
-    next();
-  } catch (err) {
-    res.status(500).json({ success: false, error: 'DB connection failed: ' + err.message });
-  }
-});
-
-// ══════════════════════════════════════════
-// ROUTES — Pallets
-// ══════════════════════════════════════════
-
-app.post('/api/pallets', async (req, res) => {
-  try {
-    const { pallet_id, palletId, cantidad, qty, condicion, destino, turno, escaneadora, pedido, fecha, producto, observaciones, source } = req.body;
-    const id = palletId || pallet_id;
-    if (!id || !destino || !turno) {
-      return res.status(400).json({ success: false, error: 'Campos requeridos: palletId, destino, turno' });
-    }
-    const now = new Date();
-    const defaultFecha = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
-    const pallet = await Pallet.create({
-      palletId: id,
-      cantidad: parseInt(cantidad || qty) || 0,
-      condicion: condicion || '',
-      destino,
-      turno,
-      escaneadora: escaneadora || '',
-      pedido: pedido || '',
-      fecha: fecha || defaultFecha,
-      producto: producto || '',
-      observaciones: observaciones || '',
-      source: source || 'web',
-    });
-    res.json({ success: true, id: pallet._id, palletId: id, message: 'Pallet registrado en MongoDB' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/pallets', async (req, res) => {
-  try {
-    const { fecha, turno, destino, limit } = req.query;
-    const filter = {};
-    if (fecha) filter.fecha = fecha;
-    if (turno) filter.turno = { $regex: turno, $options: 'i' };
-    if (destino) filter.destino = { $regex: destino, $options: 'i' };
-    const pallets = await Pallet.find(filter).sort({ createdAt: -1 }).limit(parseInt(limit) || 0);
-    res.json({ success: true, data: pallets, total: pallets.length });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/pallets/today', async (req, res) => {
-  try {
-    const now = new Date();
-    const todayStr = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
-    const todayISO = now.toISOString().split('T')[0];
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const todayPadded = `${mm}/${dd}/${now.getFullYear()}`;
-    const pallets = await Pallet.find({
-      fecha: { $in: [todayStr, todayISO, todayPadded] }
-    }).sort({ createdAt: -1 });
-    res.json({ success: true, data: pallets, total: pallets.length, fecha: todayStr });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/pallets/by-user/:user', async (req, res) => {
-  try {
-    const pallets = await Pallet.find({
-      escaneadora: { $regex: req.params.user, $options: 'i' }
-    }).sort({ createdAt: -1 }).limit(200);
-    res.json({ success: true, data: pallets, total: pallets.length });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.delete('/api/pallets/:id', async (req, res) => {
-  try {
-    const result = await Pallet.findByIdAndDelete(req.params.id);
-    if (!result) return res.status(404).json({ success: false, error: 'No encontrado' });
-    res.json({ success: true, message: 'Pallet eliminado' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ══════════════════════════════════════════
-// ROUTES — Dashboard
-// ══════════════════════════════════════════
-
-app.get('/api/dashboard', async (req, res) => {
-  try {
-    const { fechas } = req.query;
-    let filter = {};
-    if (fechas) {
-      const fechaList = fechas.split(',').map(f => f.trim());
-      filter.fecha = { $in: fechaList };
-    }
-    const pallets = await Pallet.find(filter).sort({ createdAt: -1 });
-
-    const destinoMap = {};
-    const turnoDestinoMap = { 'Día': {}, 'Noche': {} };
-    const dailyMap = {};
-    let dayPallets = 0, nightPallets = 0;
-    const dayDates = new Set(), nightDates = new Set();
-
-    pallets.forEach(p => {
-      const dest = normalizeDestino(p.destino);
-      const turno = normalizeTurno(p.turno);
-      if (!destinoMap[dest]) destinoMap[dest] = { total_pallets: 0, total_unidades: 0 };
-      destinoMap[dest].total_pallets++;
-      destinoMap[dest].total_unidades += (p.cantidad || 0);
-      if (turnoDestinoMap[turno]) {
-        if (!turnoDestinoMap[turno][dest]) turnoDestinoMap[turno][dest] = 0;
-        turnoDestinoMap[turno][dest]++;
-      }
-      const key = `${p.fecha}|${turno}`;
-      dailyMap[key] = (dailyMap[key] || 0) + 1;
-      if (turno === 'Día') { dayPallets++; dayDates.add(p.fecha); }
-      if (turno === 'Noche') { nightPallets++; nightDates.add(p.fecha); }
-    });
-
-    const resumenDestino = Object.entries(destinoMap).map(([dest, data]) => ({
-      destino_normalizado: dest, ...data
-    }));
-    const turnoDestino = [];
-    for (const [turno, destinos] of Object.entries(turnoDestinoMap)) {
-      for (const [dest, count] of Object.entries(destinos)) {
-        turnoDestino.push({ turno_normalizado: turno, destino_normalizado: dest, total_pallets: count });
-      }
-    }
-    const diarios = Object.entries(dailyMap).map(([key, count]) => {
-      const [fecha, turno] = key.split('|');
-      return { fecha, turno_normalizado: turno, total_pallets: count };
-    }).sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 14);
-
-    const fechasDisponibles = [...new Set(pallets.map(p => p.fecha))].sort();
-    const promedios = [
-      { turno_normalizado: 'Día', total_pallets: dayPallets, total_dias: dayDates.size, promedio: dayDates.size > 0 ? (dayPallets / dayDates.size).toFixed(1) : 0 },
-      { turno_normalizado: 'Noche', total_pallets: nightPallets, total_dias: nightDates.size, promedio: nightDates.size > 0 ? (nightPallets / nightDates.size).toFixed(1) : 0 }
-    ];
-
-    res.json({ success: true, total: pallets.length, resumenDestino, turnoDestino, diarios, promedios, fechas: fechasDisponibles });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/dashboard/fechas', async (req, res) => {
-  try {
-    const fechas = await Pallet.distinct('fecha');
-    res.json({ success: true, data: fechas.sort() });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/dashboard/hoy', async (req, res) => {
-  try {
-    const now = new Date();
-    const todayStr = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
-    const pallets = await Pallet.find({ fecha: todayStr }).sort({ createdAt: -1 });
-    res.json({ success: true, fecha: todayStr, pallets: { data: pallets, total: pallets.length } });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ══════════════════════════════════════════
-// ROUTES — Mobile
-// ══════════════════════════════════════════
-
-app.get('/api/mobile/check/:palletId', async (req, res) => {
-  try {
-    const pallet = await Pallet.findOne({ palletId: req.params.palletId }).sort({ createdAt: -1 });
-    res.json({ exists: !!pallet, data: pallet || null });
-  } catch (error) {
-    res.status(500).json({ exists: false, error: error.message });
-  }
-});
-
-app.post('/api/mobile/register', async (req, res) => {
-  try {
-    const { pallet_id, cantidad, destino, fecha, turno, condicion, operador, pedido, items } = req.body;
-    if (!pallet_id || !destino || !fecha || !turno) {
-      return res.status(400).json({ success: false, error: 'Campos requeridos: pallet_id, destino, fecha, turno' });
-    }
-    const totalQty = (items && items.length > 0)
-      ? items.reduce((sum, i) => sum + (i.cantidad || 1), 0)
-      : (cantidad || 0);
-    const skuSummary = (items && items.length > 0)
-      ? items.map(i => `${i.sku}(${i.cantidad || 1})`).join(', ')
-      : '';
-    const pallet = await Pallet.create({
-      palletId: pallet_id,
-      cantidad: totalQty,
-      producto: skuSummary,
-      destino,
-      fecha,
-      turno,
-      condicion: condicion || '',
-      escaneadora: operador || '',
-      pedido: pedido || '',
-      observaciones: pedido ? `${operador || ''} | Pedido: ${pedido}` : (operador || ''),
-      source: 'mobile',
-    });
-    res.json({ success: true, id: pallet._id, total_qty: totalQty, items_count: items ? items.length : 0, message: 'Pallet registrado desde app movil' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/mobile/recent', async (req, res) => {
-  try {
-    const { operador, limit } = req.query;
-    const filter = {};
-    if (operador) {
-      filter.$or = [
-        { escaneadora: { $regex: operador, $options: 'i' } },
-        { observaciones: { $regex: operador, $options: 'i' } }
-      ];
-    }
-    const pallets = await Pallet.find(filter).sort({ createdAt: -1 }).limit(parseInt(limit) || 50);
-    res.json({ success: true, data: pallets, total: pallets.length });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/mobile/stats', async (req, res) => {
-  try {
-    const { operador } = req.query;
-    const now = new Date();
-    const todayStr = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
-    const filter = { fecha: todayStr };
-    if (operador) {
-      filter.$or = [
-        { escaneadora: { $regex: operador, $options: 'i' } },
-        { observaciones: { $regex: operador, $options: 'i' } }
-      ];
-    }
-    const todayCount = await Pallet.countDocuments(filter);
-    const lastFilter = operador
-      ? { $or: [{ escaneadora: { $regex: operador, $options: 'i' } }, { observaciones: { $regex: operador, $options: 'i' } }] }
-      : {};
-    const lastPallet = await Pallet.findOne(lastFilter).sort({ createdAt: -1 });
-    const destinoCounts = await Pallet.aggregate([
-      { $match: filter },
-      { $group: { _id: '$destino', total: { $sum: 1 } } }
-    ]);
-    res.json({
-      success: true,
-      today: todayCount,
-      last: lastPallet ? { pallet_id: lastPallet.palletId, destino: lastPallet.destino, fecha: lastPallet.fecha, turno: lastPallet.turno } : null,
-      byDestino: destinoCounts.map(d => ({ destino: d._id, total: d.total }))
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// ══════════════════════════════════════════
-// ROUTES — Escaneadoras
-// ══════════════════════════════════════════
-
-const escaneadoraRegistroSchema = new mongoose.Schema({
-  escaneadora: { type: String, required: true, index: true },
-  turno: { type: String, required: true },
-  fecha: { type: String, required: true, index: true },
-  linea: { type: String, default: '' },
-  palletsEscaneados: { type: Number, default: 0 },
-  horaInicio: { type: String, default: '' },
-  horaFin: { type: String, default: '' },
-  incidencias: { type: String, default: '' },
-  observaciones: { type: String, default: '' },
-  datosExtra: { type: mongoose.Schema.Types.Mixed, default: {} },
-  source: { type: String, enum: ['web', 'csv-import', 'mobile'], default: 'web' },
-}, { timestamps: true, strict: false });
-
-escaneadoraRegistroSchema.index({ fecha: 1, turno: 1 });
-escaneadoraRegistroSchema.index({ escaneadora: 1, fecha: 1 });
-escaneadoraRegistroSchema.index({ createdAt: -1 });
-
-const EscaneadoraRegistro = mongoose.models.EscaneadoraRegistro || mongoose.model('EscaneadoraRegistro', escaneadoraRegistroSchema);
-
-app.post('/api/escaneadoras', async (req, res) => {
-  try {
-    const { escaneadora, turno, fecha, linea, palletsEscaneados, horaInicio, horaFin, incidencias, observaciones } = req.body;
-    if (!escaneadora || !turno || !fecha) {
-      return res.status(400).json({ success: false, error: 'Campos requeridos: escaneadora, turno, fecha' });
-    }
-    const doc = await EscaneadoraRegistro.create({
-      escaneadora, turno, fecha,
-      linea: linea || '',
-      palletsEscaneados: parseInt(palletsEscaneados) || 0,
-      horaInicio: horaInicio || '',
-      horaFin: horaFin || '',
-      incidencias: incidencias || '',
-      observaciones: observaciones || '',
-      source: 'web',
-    });
-    res.json({ success: true, id: doc._id, message: 'Registro de escaneadora guardado' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/escaneadoras', async (req, res) => {
-  try {
-    const { fecha, escaneadora, turno, limit, desde } = req.query;
+    const { fecha, fecha_inicio, fecha_fin, escaneadora, turno } = req.query;
     const filter = {};
     if (fecha) filter.fecha = fecha;
     if (escaneadora) filter.escaneadora = { $regex: escaneadora, $options: 'i' };
     if (turno) filter.turno = { $regex: turno, $options: 'i' };
-    if (desde) filter.createdAt = { $gte: new Date(desde) };
-    const registros = await EscaneadoraRegistro.find(filter).sort({ createdAt: -1 }).limit(parseInt(limit) || 200);
-    res.json({ success: true, data: registros, total: registros.length });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
-app.get('/api/escaneadoras/dashboard', async (req, res) => {
-  try {
-    const { fecha, escaneadora, turno } = req.query;
-    const filter = {};
-    filter.createdAt = { $gte: new Date('2026-03-20T00:00:00.000Z') };
-    if (fecha) filter.fecha = fecha;
-    if (escaneadora) filter.escaneadora = { $regex: escaneadora, $options: 'i' };
-    if (turno) filter.turno = { $regex: turno, $options: 'i' };
-    const registros = await EscaneadoraRegistro.find(filter).sort({ createdAt: -1 });
+    let registros = await EscReg.find(filter).sort({ createdAt: -1 });
+
+    if (!fecha && fecha_inicio && fecha_fin) {
+      const start = new Date(fecha_inicio), end = new Date(fecha_fin);
+      end.setHours(23, 59, 59, 999);
+      registros = registros.filter(r => {
+        const p = r.fecha.split('/');
+        if (p.length !== 3) return true;
+        const d = new Date(parseInt(p[2]), parseInt(p[0]) - 1, parseInt(p[1]));
+        return d >= start && d <= end;
+      });
+    }
+
     const now = new Date();
-    const hoyStr = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
+    const hoyStr = `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
     const registrosHoy = registros.filter(r => r.fecha === hoyStr);
-    const porEscaneadora = {};
+
+    const porEscaneadora = {}, porTurno = {}, porDestino = {}, porCondicion = {};
+    let totalUnidades = 0;
+
     registros.forEach(r => {
-      if (!porEscaneadora[r.escaneadora]) porEscaneadora[r.escaneadora] = { registros: 0, pallets: 0 };
-      porEscaneadora[r.escaneadora].registros++;
-      porEscaneadora[r.escaneadora].pallets += (r.palletsEscaneados || 0);
+      const e = r.escaneadora, t = normalizeTurno(r.turno), d = r.destino || 'Otro', c = r.condicion || 'Sin condicion';
+      if (!porEscaneadora[e]) porEscaneadora[e] = { registros: 0, unidades: 0 };
+      porEscaneadora[e].registros++; porEscaneadora[e].unidades += (r.cantidad || 0);
+      if (!porTurno[t]) porTurno[t] = { registros: 0, unidades: 0 };
+      porTurno[t].registros++; porTurno[t].unidades += (r.cantidad || 0);
+      if (!porDestino[d]) porDestino[d] = { registros: 0, unidades: 0 };
+      porDestino[d].registros++; porDestino[d].unidades += (r.cantidad || 0);
+      if (!porCondicion[c]) porCondicion[c] = 0;
+      porCondicion[c]++;
+      totalUnidades += (r.cantidad || 0);
     });
-    const porTurno = {};
-    registros.forEach(r => {
-      const t = r.turno || 'Otro';
-      if (!porTurno[t]) porTurno[t] = { registros: 0, pallets: 0 };
-      porTurno[t].registros++;
-      porTurno[t].pallets += (r.palletsEscaneados || 0);
-    });
-    const porFecha = {};
-    registros.forEach(r => {
-      if (!porFecha[r.fecha]) porFecha[r.fecha] = { registros: 0, pallets: 0 };
-      porFecha[r.fecha].registros++;
-      porFecha[r.fecha].pallets += (r.palletsEscaneados || 0);
-    });
-    const escaneadoras = [...new Set(registros.map(r => r.escaneadora))].sort();
-    const fechas = [...new Set(registros.map(r => r.fecha))].sort();
+
     res.json({
       success: true,
       totalRegistros: registros.length,
       registrosHoy: registrosHoy.length,
+      totalUnidades,
       fechaHoy: hoyStr,
       porEscaneadora: Object.entries(porEscaneadora).map(([nombre, d]) => ({ nombre, ...d })),
       porTurno: Object.entries(porTurno).map(([turno, d]) => ({ turno, ...d })),
-      porFecha: Object.entries(porFecha).map(([fecha, d]) => ({ fecha, ...d })).sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).slice(0, 14),
-      escaneadoras,
-      fechas,
-      ultimosRegistros: registros.slice(0, 50),
+      porDestino: Object.entries(porDestino).map(([destino, d]) => ({ destino, ...d })),
+      porCondicion: Object.entries(porCondicion).map(([condicion, total]) => ({ condicion, total })),
+      escaneadoras: [...new Set(registros.map(r => r.escaneadora))].sort(),
+      fechas: [...new Set(registros.map(r => r.fecha))].sort(),
     });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-app.post('/api/escaneadoras/import', async (req, res) => {
+app.get('/api/dashboard/registros', auth, roleGuard('admin'), async (req, res) => {
   try {
-    const { registros, columnMap } = req.body;
-    if (!registros || !Array.isArray(registros) || registros.length === 0) {
-      return res.status(400).json({ success: false, error: 'Se requiere un array de registros' });
+    const { fecha, fecha_inicio, fecha_fin, escaneadora, turno, busqueda, limit, skip } = req.query;
+    const filter = {};
+    if (fecha) filter.fecha = fecha;
+    if (escaneadora) filter.escaneadora = { $regex: escaneadora, $options: 'i' };
+    if (turno) filter.turno = { $regex: turno, $options: 'i' };
+    if (busqueda) {
+      filter.$or = [
+        { palletId: { $regex: busqueda, $options: 'i' } },
+        { escaneadora: { $regex: busqueda, $options: 'i' } },
+        { destino: { $regex: busqueda, $options: 'i' } },
+        { pedido: { $regex: busqueda, $options: 'i' } },
+        { observaciones: { $regex: busqueda, $options: 'i' } },
+      ];
     }
-    const defaultMap = {
-      escaneadora: ['escaneadora', 'scanner', 'operador', 'operadora', 'nombre'],
-      turno: ['turno', 'shift'],
-      fecha: ['fecha', 'date', 'marca temporal', 'timestamp'],
-      linea: ['linea', 'línea', 'line', 'area', 'área'],
-      palletsEscaneados: ['pallets', 'pallets_escaneados', 'cantidad', 'qty', 'total'],
-      horaInicio: ['hora_inicio', 'horainicio', 'start', 'inicio'],
-      horaFin: ['hora_fin', 'horafin', 'end', 'fin'],
-      incidencias: ['incidencias', 'incidencia', 'incidents'],
-      observaciones: ['observaciones', 'observacion', 'notas', 'notes', 'comentarios'],
-    };
-    const map = columnMap || defaultMap;
-    const cutoffDate = new Date('2026-03-20');
-    function findValue(row, fieldPatterns) {
-      if (typeof fieldPatterns === 'string') return row[fieldPatterns] || '';
-      const keys = Object.keys(row);
-      for (const p of fieldPatterns) {
-        const key = keys.find(k => k.toLowerCase().trim() === p.toLowerCase().trim());
-        if (key && row[key]) return row[key];
-      }
-      for (const p of fieldPatterns) {
-        const key = keys.find(k => k.toLowerCase().includes(p.toLowerCase()));
-        if (key && row[key]) return row[key];
-      }
-      return '';
-    }
-    const docs = [];
-    let skipped = 0;
-    for (const row of registros) {
-      const esc = findValue(row, map.escaneadora);
-      const tur = findValue(row, map.turno);
-      const fec = findValue(row, map.fecha);
-      if (!esc || !tur) { skipped++; continue; }
-      const parsedDate = new Date(fec);
-      if (!isNaN(parsedDate) && parsedDate < cutoffDate) { skipped++; continue; }
-      docs.push({
-        escaneadora: esc, turno: tur,
-        fecha: fec ? fec.split(' ')[0] : `${new Date().getMonth()+1}/${new Date().getDate()}/${new Date().getFullYear()}`,
-        linea: findValue(row, map.linea),
-        palletsEscaneados: parseInt(findValue(row, map.palletsEscaneados)) || 0,
-        horaInicio: findValue(row, map.horaInicio),
-        horaFin: findValue(row, map.horaFin),
-        incidencias: findValue(row, map.incidencias),
-        observaciones: findValue(row, map.observaciones),
-        source: 'csv-import',
+    let query = EscReg.find(filter).sort({ createdAt: -1 });
+    if (skip) query = query.skip(parseInt(skip));
+    query = query.limit(parseInt(limit) || 100);
+    let registros = await query.populate('capturadoPor', 'nombre');
+
+    if (!fecha && fecha_inicio && fecha_fin) {
+      const start = new Date(fecha_inicio), end = new Date(fecha_fin);
+      end.setHours(23, 59, 59, 999);
+      registros = registros.filter(r => {
+        const p = r.fecha.split('/');
+        if (p.length !== 3) return true;
+        const d = new Date(parseInt(p[2]), parseInt(p[0]) - 1, parseInt(p[1]));
+        return d >= start && d <= end;
       });
     }
-    let inserted = 0;
-    if (docs.length > 0) {
-      const result = await EscaneadoraRegistro.insertMany(docs);
-      inserted = result.length;
-    }
-    res.json({ success: true, imported: inserted, skipped, total: registros.length, message: `${inserted} registros importados, ${skipped} omitidos` });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+
+    const total = await EscReg.countDocuments(filter);
+    res.json({ success: true, data: registros, total, filteredCount: registros.length });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ══════════════════════════════════════════
-// ROUTES — JSONP compatibility (sheet-proxy, sheet-write)
-// ══════════════════════════════════════════
-
-app.get('/api/sheet-proxy', async (req, res) => {
+app.get('/api/dashboard/tendencias', auth, roleGuard('admin'), async (req, res) => {
   try {
-    const callback = req.query.callback;
-    const pallets = await Pallet.find().sort({ createdAt: 1 });
-    const cols = [
-      { id: 'A', label: 'Marca temporal', type: 'datetime' },
-      { id: 'B', label: 'Número de pallet', type: 'string' },
-      { id: 'C', label: 'Cantidad', type: 'number' },
-      { id: 'D', label: 'CONDICION', type: 'string' },
-      { id: 'E', label: 'Destino', type: 'string' },
-      { id: 'F', label: 'Fecha', type: 'string' },
-      { id: 'G', label: 'Turno', type: 'string' },
-      { id: 'H', label: 'Escaneadora', type: 'string' },
-      { id: 'I', label: 'Pedido', type: 'string' }
-    ];
-    const rows = pallets.map(p => {
-      const d = p.createdAt || new Date();
-      const tsFormatted = `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
-      return {
-        c: [
-          { v: `Date(${d.getFullYear()},${d.getMonth()},${d.getDate()},${d.getHours()},${d.getMinutes()},${d.getSeconds()})`, f: tsFormatted },
-          { v: p.palletId, f: p.palletId },
-          { v: p.cantidad, f: String(p.cantidad) },
-          { v: p.condicion || '', f: p.condicion || '' },
-          { v: p.destino, f: p.destino },
-          { v: p.fecha, f: p.fecha },
-          { v: p.turno, f: p.turno },
-          { v: p.escaneadora || '', f: p.escaneadora || '' },
-          { v: p.pedido || '', f: p.pedido || '' }
-        ]
-      };
+    const numDias = parseInt(req.query.dias) || 14;
+    const registros = await EscReg.find().sort({ createdAt: -1 });
+    const dailyMap = {};
+    registros.forEach(r => {
+      const turno = normalizeTurno(r.turno);
+      const key = `${r.fecha}|${turno}`;
+      if (!dailyMap[key]) dailyMap[key] = { registros: 0, unidades: 0 };
+      dailyMap[key].registros++;
+      dailyMap[key].unidades += (r.cantidad || 0);
     });
-    const data = { version: '0.6', status: 'ok', table: { cols, rows } };
-    const json = JSON.stringify(data);
-    if (callback) {
-      res.type('application/javascript').send(`${callback}(${json});`);
-    } else {
-      res.json(data);
-    }
-  } catch (error) {
-    const errJson = JSON.stringify({ status: 'error', errors: [{ message: error.message }] });
-    const callback = req.query.callback;
-    if (callback) {
-      res.type('application/javascript').send(`${callback}(${errJson});`);
-    } else {
-      res.status(500).json({ success: false, error: error.message });
-    }
-  }
+    const diarios = Object.entries(dailyMap).map(([key, data]) => {
+      const [fecha, turno] = key.split('|');
+      return { fecha, turno, ...data };
+    }).sort((a, b) => {
+      const pa = a.fecha.split('/'), pb = b.fecha.split('/');
+      return new Date(parseInt(pb[2]), parseInt(pb[0])-1, parseInt(pb[1])) - new Date(parseInt(pa[2]), parseInt(pa[0])-1, parseInt(pa[1]));
+    }).slice(0, numDias * 2);
+
+    const turnoStats = {}, turnoDates = {};
+    registros.forEach(r => {
+      const t = normalizeTurno(r.turno);
+      if (!turnoStats[t]) { turnoStats[t] = 0; turnoDates[t] = new Set(); }
+      turnoStats[t]++;
+      turnoDates[t].add(r.fecha);
+    });
+    const promedios = Object.entries(turnoStats).map(([turno, total]) => ({
+      turno, totalRegistros: total, totalDias: turnoDates[turno].size,
+      promedio: turnoDates[turno].size > 0 ? (total / turnoDates[turno].size).toFixed(1) : 0,
+    }));
+
+    res.json({ success: true, diarios, promedios });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-app.get('/api/sheet-write', async (req, res) => {
+app.get('/api/dashboard/catalogos', auth, roleGuard('admin'), async (req, res) => {
   try {
-    const { pallet, qty, condicion, destino, turno, escaneadora, pedido, timestamp, callback } = req.query;
-    if (!pallet) {
-      const errResp = JSON.stringify({ result: 'error', message: 'Falta palletId' });
-      return callback
-        ? res.type('application/javascript').send(`${callback}(${errResp});`)
-        : res.status(400).json({ result: 'error', message: 'Falta palletId' });
-    }
-    const now = new Date();
-    const fecha = timestamp ? timestamp.split(' ')[0] : `${now.getMonth()+1}/${now.getDate()}/${now.getFullYear()}`;
-    const doc = await Pallet.create({
-      palletId: pallet,
-      cantidad: parseInt(qty) || 0,
-      condicion: condicion || '',
-      destino: destino || '',
-      turno: turno || '',
-      escaneadora: escaneadora || '',
-      pedido: pedido || '',
-      fecha,
-      source: 'web',
-    });
-    const resp = JSON.stringify({ result: 'ok', row: doc._id, sheet: 'MongoDB' });
-    if (callback) {
-      res.type('application/javascript').send(`${callback}(${resp});`);
-    } else {
-      res.json({ result: 'ok', id: doc._id });
-    }
-  } catch (error) {
-    const errResp = JSON.stringify({ result: 'error', message: error.message });
-    const callback = req.query.callback;
-    if (callback) {
-      res.type('application/javascript').send(`${callback}(${errResp});`);
-    } else {
-      res.status(500).json({ result: 'error', message: error.message });
-    }
-  }
+    const escaneadoras = await EscReg.distinct('escaneadora');
+    const destinos = await EscReg.distinct('destino');
+    const turnos = await EscReg.distinct('turno');
+    const fechas = await EscReg.distinct('fecha');
+    res.json({ success: true, escaneadoras: escaneadoras.sort(), destinos: destinos.sort(), turnos: turnos.sort(), fechas: fechas.sort() });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-// ══════════════════════════════════════════
-// ROUTES — Health
-// ══════════════════════════════════════════
-
+// ═══════════ HEALTH ═══════════
 app.get('/api/health', async (req, res) => {
   try {
-    const total = await Pallet.countDocuments();
-    res.json({
-      success: true,
-      status: 'OK',
-      database: 'MongoDB Atlas (mitech)',
-      pallets: total,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, status: 'ERROR', error: error.message });
-  }
+    const registros = await EscReg.countDocuments();
+    const usuarios = await User.countDocuments();
+    res.json({ success: true, status: 'OK', database: 'MongoDB Atlas', registros, usuarios, timestamp: new Date().toISOString() });
+  } catch (error) { res.status(500).json({ success: false, status: 'ERROR', error: error.message }); }
 });
 
-// Export for Vercel serverless
 module.exports = app;

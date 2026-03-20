@@ -1,150 +1,225 @@
 const express = require('express');
 const router = express.Router();
-const Pallet = require('../models/Pallet');
+const EscaneadoraRegistro = require('../models/EscaneadoraRegistro');
+const auth = require('../middleware/auth');
+const roleGuard = require('../middleware/roleGuard');
 
-// Helper: normalizar turno
+// Dashboard solo para admin
+router.use(auth, roleGuard('admin'));
+
+// Helper: normalize turno for grouping
 function normalizeTurno(t) {
   if (!t) return 'Otro';
-  const lower = t.toLowerCase();
-  if (lower.includes('noche') || lower.includes('night')) return 'Noche';
-  if (lower.includes('día') || lower.includes('dia') || lower.includes('day')) return 'Día';
+  const l = t.toLowerCase();
+  if (l.includes('noche') || l.includes('night')) return 'Noche';
+  if (l.includes('día') || l.includes('dia') || l.includes('day')) return 'Día';
   return t;
 }
 
-// Helper: normalizar destino
-function normalizeDestino(d) {
-  if (!d) return 'Otro';
-  if (/pedido/i.test(d)) return 'TRG';
-  if (/^\d+$/.test(d) || /almac/i.test(d)) return 'Almacén';
-  if (/trg/i.test(d)) return 'TRG';
-  if (/hv/i.test(d)) return 'HV (High Value)';
-  return d.charAt(0).toUpperCase() + d.slice(1).toLowerCase();
-}
-
-// GET /api/dashboard — Datos completos para el dashboard
-router.get('/', async (req, res) => {
+// GET /api/dashboard/resumen — KPIs y resumen general
+router.get('/resumen', async (req, res) => {
   try {
-    const { fechas } = req.query; // "3/1/2026,3/2/2026"
-    let filter = {};
+    const { fecha, fecha_inicio, fecha_fin, escaneadora, turno } = req.query;
+    const filter = {};
 
-    if (fechas) {
-      const fechaList = fechas.split(',').map(f => f.trim());
-      filter.fecha = { $in: fechaList };
+    if (fecha) {
+      filter.fecha = fecha;
+    } else if (fecha_inicio && fecha_fin) {
+      // Get all records and filter in memory for string dates
+    }
+    if (escaneadora) filter.escaneadora = { $regex: escaneadora, $options: 'i' };
+    if (turno) filter.turno = { $regex: turno, $options: 'i' };
+
+    let registros = await EscaneadoraRegistro.find(filter).sort({ createdAt: -1 });
+
+    // Date range filter (string dates M/D/YYYY)
+    if (!fecha && fecha_inicio && fecha_fin) {
+      const start = new Date(fecha_inicio);
+      const end = new Date(fecha_fin);
+      end.setHours(23, 59, 59, 999);
+      registros = registros.filter(r => {
+        const parts = r.fecha.split('/');
+        if (parts.length !== 3) return true;
+        const d = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+        return d >= start && d <= end;
+      });
     }
 
-    const pallets = await Pallet.find(filter).sort({ createdAt: -1 });
+    const now = new Date();
+    const hoyStr = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
+    const registrosHoy = registros.filter(r => r.fecha === hoyStr);
 
-    // Resumen por destino (para gráfico de anillo)
-    const destinoMap = {};
-    const turnoDestinoMap = { 'Día': {}, 'Noche': {} };
-    const dailyMap = {};
-    let dayPallets = 0, nightPallets = 0;
-    const dayDates = new Set(), nightDates = new Set();
-
-    pallets.forEach(p => {
-      const dest = normalizeDestino(p.destino);
-      const turno = normalizeTurno(p.turno);
-
-      // Resumen destino
-      if (!destinoMap[dest]) destinoMap[dest] = { total_pallets: 0, total_unidades: 0 };
-      destinoMap[dest].total_pallets++;
-      destinoMap[dest].total_unidades += (p.cantidad || 0);
-
-      // Turno × destino
-      if (turnoDestinoMap[turno]) {
-        if (!turnoDestinoMap[turno][dest]) turnoDestinoMap[turno][dest] = 0;
-        turnoDestinoMap[turno][dest]++;
-      }
-
-      // Conteo diario
-      const key = `${p.fecha}|${turno}`;
-      dailyMap[key] = (dailyMap[key] || 0) + 1;
-
-      // Promedios
-      if (turno === 'Día') { dayPallets++; dayDates.add(p.fecha); }
-      if (turno === 'Noche') { nightPallets++; nightDates.add(p.fecha); }
+    // Por escaneadora
+    const porEscaneadora = {};
+    registros.forEach(r => {
+      const key = r.escaneadora;
+      if (!porEscaneadora[key]) porEscaneadora[key] = { registros: 0, unidades: 0 };
+      porEscaneadora[key].registros++;
+      porEscaneadora[key].unidades += (r.cantidad || 0);
     });
 
-    // Formatear resumen destino
-    const resumenDestino = Object.entries(destinoMap).map(([dest, data]) => ({
-      destino_normalizado: dest,
-      ...data
+    // Por turno
+    const porTurno = {};
+    registros.forEach(r => {
+      const t = normalizeTurno(r.turno);
+      if (!porTurno[t]) porTurno[t] = { registros: 0, unidades: 0 };
+      porTurno[t].registros++;
+      porTurno[t].unidades += (r.cantidad || 0);
+    });
+
+    // Por destino
+    const porDestino = {};
+    registros.forEach(r => {
+      const d = r.destino || 'Otro';
+      if (!porDestino[d]) porDestino[d] = { registros: 0, unidades: 0 };
+      porDestino[d].registros++;
+      porDestino[d].unidades += (r.cantidad || 0);
+    });
+
+    // Por condicion
+    const porCondicion = {};
+    registros.forEach(r => {
+      const c = r.condicion || 'Sin condición';
+      if (!porCondicion[c]) porCondicion[c] = 0;
+      porCondicion[c]++;
+    });
+
+    // Total unidades
+    const totalUnidades = registros.reduce((sum, r) => sum + (r.cantidad || 0), 0);
+
+    // Escaneadoras unicas y fechas unicas
+    const escaneadoras = [...new Set(registros.map(r => r.escaneadora))].sort();
+    const fechas = [...new Set(registros.map(r => r.fecha))].sort();
+
+    res.json({
+      success: true,
+      totalRegistros: registros.length,
+      registrosHoy: registrosHoy.length,
+      totalUnidades,
+      fechaHoy: hoyStr,
+      porEscaneadora: Object.entries(porEscaneadora).map(([nombre, d]) => ({ nombre, ...d })),
+      porTurno: Object.entries(porTurno).map(([turno, d]) => ({ turno, ...d })),
+      porDestino: Object.entries(porDestino).map(([destino, d]) => ({ destino, ...d })),
+      porCondicion: Object.entries(porCondicion).map(([condicion, total]) => ({ condicion, total })),
+      escaneadoras,
+      fechas,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/dashboard/registros — Registros con filtros para tabla
+router.get('/registros', async (req, res) => {
+  try {
+    const { fecha, fecha_inicio, fecha_fin, escaneadora, turno, busqueda, limit, skip } = req.query;
+    const filter = {};
+
+    if (fecha) filter.fecha = fecha;
+    if (escaneadora) filter.escaneadora = { $regex: escaneadora, $options: 'i' };
+    if (turno) filter.turno = { $regex: turno, $options: 'i' };
+    if (busqueda) {
+      filter.$or = [
+        { palletId: { $regex: busqueda, $options: 'i' } },
+        { escaneadora: { $regex: busqueda, $options: 'i' } },
+        { destino: { $regex: busqueda, $options: 'i' } },
+        { pedido: { $regex: busqueda, $options: 'i' } },
+        { observaciones: { $regex: busqueda, $options: 'i' } },
+      ];
+    }
+
+    let query = EscaneadoraRegistro.find(filter).sort({ createdAt: -1 });
+    if (skip) query = query.skip(parseInt(skip));
+    query = query.limit(parseInt(limit) || 100);
+
+    let registros = await query.populate('capturadoPor', 'nombre');
+
+    // Date range filter
+    if (!fecha && fecha_inicio && fecha_fin) {
+      const start = new Date(fecha_inicio);
+      const end = new Date(fecha_fin);
+      end.setHours(23, 59, 59, 999);
+      registros = registros.filter(r => {
+        const parts = r.fecha.split('/');
+        if (parts.length !== 3) return true;
+        const d = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+        return d >= start && d <= end;
+      });
+    }
+
+    const total = await EscaneadoraRegistro.countDocuments(filter);
+
+    res.json({ success: true, data: registros, total, filteredCount: registros.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/dashboard/tendencias — Datos para gráficas de tendencia
+router.get('/tendencias', async (req, res) => {
+  try {
+    const { dias } = req.query;
+    const numDias = parseInt(dias) || 14;
+
+    const registros = await EscaneadoraRegistro.find().sort({ createdAt: -1 });
+
+    // Agrupar por fecha + turno
+    const dailyMap = {};
+    registros.forEach(r => {
+      const turno = normalizeTurno(r.turno);
+      const key = `${r.fecha}|${turno}`;
+      if (!dailyMap[key]) dailyMap[key] = { registros: 0, unidades: 0 };
+      dailyMap[key].registros++;
+      dailyMap[key].unidades += (r.cantidad || 0);
+    });
+
+    const diarios = Object.entries(dailyMap).map(([key, data]) => {
+      const [fecha, turno] = key.split('|');
+      return { fecha, turno, ...data };
+    }).sort((a, b) => {
+      const pa = a.fecha.split('/'), pb = b.fecha.split('/');
+      const da = new Date(parseInt(pa[2]), parseInt(pa[0]) - 1, parseInt(pa[1]));
+      const db = new Date(parseInt(pb[2]), parseInt(pb[0]) - 1, parseInt(pb[1]));
+      return db - da;
+    }).slice(0, numDias * 2);
+
+    // Promedios por turno
+    const turnoStats = {};
+    const turnoDates = {};
+    registros.forEach(r => {
+      const t = normalizeTurno(r.turno);
+      if (!turnoStats[t]) { turnoStats[t] = 0; turnoDates[t] = new Set(); }
+      turnoStats[t]++;
+      turnoDates[t].add(r.fecha);
+    });
+
+    const promedios = Object.entries(turnoStats).map(([turno, total]) => ({
+      turno,
+      totalRegistros: total,
+      totalDias: turnoDates[turno].size,
+      promedio: turnoDates[turno].size > 0 ? (total / turnoDates[turno].size).toFixed(1) : 0,
     }));
 
-    // Formatear turno × destino
-    const turnoDestino = [];
-    for (const [turno, destinos] of Object.entries(turnoDestinoMap)) {
-      for (const [dest, count] of Object.entries(destinos)) {
-        turnoDestino.push({ turno_normalizado: turno, destino_normalizado: dest, total_pallets: count });
-      }
-    }
-
-    // Formatear diarios
-    const diarios = Object.entries(dailyMap).map(([key, count]) => {
-      const [fecha, turno] = key.split('|');
-      return { fecha, turno_normalizado: turno, total_pallets: count };
-    }).sort((a, b) => {
-      // Sort by date descending
-      const da = new Date(a.fecha), db = new Date(b.fecha);
-      return db - da;
-    }).slice(0, 14);
-
-    // Fechas disponibles
-    const fechasDisponibles = [...new Set(pallets.map(p => p.fecha))].sort();
-
-    // Promedios
-    const promedios = [
-      {
-        turno_normalizado: 'Día',
-        total_pallets: dayPallets,
-        total_dias: dayDates.size,
-        promedio: dayDates.size > 0 ? (dayPallets / dayDates.size).toFixed(1) : 0
-      },
-      {
-        turno_normalizado: 'Noche',
-        total_pallets: nightPallets,
-        total_dias: nightDates.size,
-        promedio: nightDates.size > 0 ? (nightPallets / nightDates.size).toFixed(1) : 0
-      }
-    ];
-
-    res.json({
-      success: true,
-      total: pallets.length,
-      resumenDestino,
-      turnoDestino,
-      diarios,
-      promedios,
-      fechas: fechasDisponibles,
-    });
-  } catch (error) {
-    console.error('[GET /api/dashboard] Error:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// GET /api/dashboard/fechas
-router.get('/fechas', async (req, res) => {
-  try {
-    const fechas = await Pallet.distinct('fecha');
-    res.json({ success: true, data: fechas.sort() });
+    res.json({ success: true, diarios, promedios });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// GET /api/dashboard/hoy
-router.get('/hoy', async (req, res) => {
+// GET /api/dashboard/catalogos — Listas para filtros
+router.get('/catalogos', async (req, res) => {
   try {
-    const now = new Date();
-    const todayStr = `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
-
-    const pallets = await Pallet.find({ fecha: todayStr }).sort({ createdAt: -1 });
+    const escaneadoras = await EscaneadoraRegistro.distinct('escaneadora');
+    const destinos = await EscaneadoraRegistro.distinct('destino');
+    const turnos = await EscaneadoraRegistro.distinct('turno');
+    const fechas = await EscaneadoraRegistro.distinct('fecha');
 
     res.json({
       success: true,
-      fecha: todayStr,
-      pallets: { data: pallets, total: pallets.length },
+      escaneadoras: escaneadoras.sort(),
+      destinos: destinos.sort(),
+      turnos: turnos.sort(),
+      fechas: fechas.sort(),
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
