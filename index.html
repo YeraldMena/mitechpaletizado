@@ -173,20 +173,57 @@
         .filter-bar .form-input { padding:0.55rem 0.8rem; font-size:0.85rem; }
 
         /* ── Form page ── */
-        .form-panel { max-width:700px; }
-        .form-panel .card { padding:2rem; }
-        .form-header { margin-bottom:1.5rem; border-bottom:1px solid var(--border); padding-bottom:1rem; }
-        .form-header h2 { font-size:1.2rem; font-weight:600; }
-        .form-header p { color:var(--text-muted); font-size:0.85rem; margin-top:4px; }
-        .form-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
-        .form-footer { display:flex; gap:1rem; margin-top:1.5rem; padding-top:1rem; border-top:1px solid var(--border); }
-        .checkbox-group { display:flex; flex-wrap:wrap; gap:0.5rem; }
-        .checkbox-label {
-            display:flex; align-items:center; gap:6px; padding:0.5rem 0.75rem;
-            background:var(--bg-input); border:1px solid var(--border); border-radius:6px;
-            cursor:pointer; font-size:0.85rem; transition:all 0.2s;
+        .form-panel { max-width:640px; margin:0 auto; }
+        .form-panel .card {
+            padding:2.5rem; border-radius:16px;
+            box-shadow:0 4px 24px rgba(0,0,0,0.25), 0 0 0 1px var(--border);
         }
-        .checkbox-label:has(input:checked) { background:var(--accent-glow); border-color:var(--accent); color:var(--accent); font-weight:600; }
+        .form-header { margin-bottom:2rem; border-bottom:1px solid var(--border); padding-bottom:1.25rem; text-align:center; }
+        .form-header h2 { font-size:1.3rem; font-weight:700; letter-spacing:-0.3px; }
+        .form-header p { color:var(--text-muted); font-size:0.85rem; margin-top:6px; }
+        .form-row { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; }
+        .form-group { margin-bottom:1.35rem; }
+        .form-footer { display:flex; gap:1rem; margin-top:2rem; padding-top:1.25rem; border-top:1px solid var(--border); }
+
+        /* ── Condition dropdown (multi-select) ── */
+        .cond-selector { position:relative; }
+        .cond-trigger {
+            width:100%; padding:0.75rem 1rem; background:var(--bg-input); border:1px solid var(--border);
+            border-radius:8px; color:var(--text-main); font-size:0.95rem; cursor:pointer; transition:border-color 0.2s;
+            display:flex; align-items:center; justify-content:space-between; min-height:44px; gap:8px;
+        }
+        .cond-trigger:hover { border-color:var(--accent); }
+        .cond-trigger.open { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); border-radius:8px 8px 0 0; }
+        .cond-trigger .cond-placeholder { color:var(--text-muted); opacity:0.6; }
+        .cond-trigger .cond-chevron { transition:transform 0.2s; color:var(--text-muted); }
+        .cond-trigger.open .cond-chevron { transform:rotate(180deg); }
+        .cond-tags { display:flex; flex-wrap:wrap; gap:4px; flex:1; }
+        .cond-tag {
+            display:inline-flex; align-items:center; gap:4px; padding:3px 10px;
+            border-radius:20px; font-size:0.78rem; font-weight:700; letter-spacing:0.3px;
+        }
+        .cond-tag .cond-tag-x { cursor:pointer; opacity:0.7; font-size:0.7rem; margin-left:2px; }
+        .cond-tag .cond-tag-x:hover { opacity:1; }
+        .cond-dropdown {
+            display:none; position:absolute; top:100%; left:0; right:0; z-index:50;
+            background:var(--bg-card); border:1px solid var(--accent); border-top:none;
+            border-radius:0 0 10px 10px; max-height:260px; overflow-y:auto;
+            box-shadow:0 12px 32px rgba(0,0,0,0.4);
+        }
+        .cond-dropdown.open { display:block; }
+        .cond-option {
+            display:flex; align-items:center; gap:10px; padding:0.65rem 1rem;
+            cursor:pointer; transition:background 0.15s; font-size:0.9rem;
+        }
+        .cond-option:hover { background:rgba(79,124,255,0.08); }
+        .cond-option.selected { background:rgba(79,124,255,0.06); }
+        .cond-option .cond-dot {
+            width:10px; height:10px; border-radius:50%; flex-shrink:0;
+        }
+        .cond-option .cond-check {
+            margin-left:auto; color:var(--accent); font-size:0.8rem; opacity:0;
+        }
+        .cond-option.selected .cond-check { opacity:1; }
         .checkbox-label input { accent-color:var(--accent); }
 
         /* ── Responsive ── */
@@ -287,7 +324,7 @@
         <!-- VIEW: ESCANEADORAS (Formulario)        -->
         <!-- ══════════════════════════════════════ -->
         <div class="view active" id="view-escaneadoras">
-            <div class="page-header">
+            <div class="page-header" style="text-align:center;">
                 <h1><i class="fa-solid fa-barcode"></i> Registro de Escaneo</h1>
                 <p>Captura operativa de pallets escaneados</p>
             </div>
@@ -305,35 +342,32 @@
                     <form id="esc-form" onsubmit="handleEscSubmit(event)">
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Pallet ID <span style="color:var(--danger);">*</span></label>
+                                <label><i class="fa-solid fa-hashtag" style="margin-right:5px;color:var(--accent);font-size:0.8rem;"></i>Pallet ID <span style="color:var(--danger);">*</span></label>
                                 <input type="text" class="form-input" id="esc-palletId" placeholder="Ej: 100234" required>
                             </div>
                             <div class="form-group">
-                                <label>Cantidad <span style="color:var(--danger);">*</span></label>
+                                <label><i class="fa-solid fa-cubes" style="margin-right:5px;color:var(--warning);font-size:0.8rem;"></i>Cantidad <span style="color:var(--danger);">*</span></label>
                                 <input type="number" class="form-input" id="esc-cantidad" placeholder="Ej: 48" min="1" required>
                             </div>
                         </div>
 
+                        <!-- Condicion: dropdown multi-select con colores -->
                         <div class="form-group">
-                            <label>Condicion</label>
-                            <div class="checkbox-group">
-                                <label class="checkbox-label"><input type="checkbox" name="esc-cond" value="GRA"><span>GRA</span></label>
-                                <label class="checkbox-label"><input type="checkbox" name="esc-cond" value="GRB"><span>GRB</span></label>
-                                <label class="checkbox-label"><input type="checkbox" name="esc-cond" value="GRC"><span>GRC</span></label>
-                                <label class="checkbox-label"><input type="checkbox" name="esc-cond" value="ICB"><span>ICB</span></label>
-                                <label class="checkbox-label"><input type="checkbox" name="esc-cond" value="ICC"><span>ICC</span></label>
-                                <label class="checkbox-label"><input type="checkbox" name="esc-cond" value="ICD"><span>ICD</span></label>
-                                <label class="checkbox-label"><input type="checkbox" name="esc-cond" value="ICX"><span>ICX</span></label>
-                                <label class="checkbox-label"><input type="checkbox" name="esc-cond" value="BOX"><span>BOX</span></label>
-                                <label class="checkbox-label"><input type="checkbox" name="esc-cond" value="DNP"><span>DNP</span></label>
-                                <label class="checkbox-label"><input type="checkbox" name="esc-cond" value="DMT"><span>DMT</span></label>
-                                <label class="checkbox-label"><input type="checkbox" name="esc-cond" value="DMA"><span>DMA</span></label>
+                            <label><i class="fa-solid fa-tags" style="margin-right:5px;color:#8b5cf6;font-size:0.8rem;"></i>Condicion</label>
+                            <div class="cond-selector" id="cond-selector">
+                                <div class="cond-trigger" id="cond-trigger" onclick="toggleCondDropdown()">
+                                    <div class="cond-tags" id="cond-tags">
+                                        <span class="cond-placeholder">Seleccionar condiciones...</span>
+                                    </div>
+                                    <i class="fa-solid fa-chevron-down cond-chevron"></i>
+                                </div>
+                                <div class="cond-dropdown" id="cond-dropdown"></div>
                             </div>
                         </div>
 
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Destino <span style="color:var(--danger);">*</span></label>
+                                <label><i class="fa-solid fa-location-dot" style="margin-right:5px;color:var(--success);font-size:0.8rem;"></i>Destino <span style="color:var(--danger);">*</span></label>
                                 <select class="form-input" id="esc-destino" required>
                                     <option value="" disabled selected>Seleccionar...</option>
                                     <option value="TRG">TRG</option>
@@ -344,7 +378,7 @@
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label>Turno <span style="color:var(--danger);">*</span></label>
+                                <label><i class="fa-solid fa-clock" style="margin-right:5px;color:var(--accent);font-size:0.8rem;"></i>Turno <span style="color:var(--danger);">*</span></label>
                                 <select class="form-input" id="esc-turno" required>
                                     <option value="" disabled selected>Seleccionar...</option>
                                     <option value="Day (dia)">Day (Dia)</option>
@@ -355,31 +389,31 @@
 
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Fecha <span style="color:var(--danger);">*</span></label>
+                                <label><i class="fa-solid fa-calendar" style="margin-right:5px;color:#14b8a6;font-size:0.8rem;"></i>Fecha <span style="color:var(--danger);">*</span></label>
                                 <input type="date" class="form-input" id="esc-fecha" required>
                             </div>
                             <div class="form-group">
-                                <label>Pedido <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
+                                <label><i class="fa-solid fa-file-lines" style="margin-right:5px;color:#f97316;font-size:0.8rem;"></i>Pedido <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
                                 <input type="text" class="form-input" id="esc-pedido" placeholder="Ej: PED-456">
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label>Incidencias <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
+                            <label><i class="fa-solid fa-triangle-exclamation" style="margin-right:5px;color:var(--danger);font-size:0.8rem;"></i>Incidencias <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
                             <input type="text" class="form-input" id="esc-incidencias" placeholder="Describir si hubo incidencias">
                         </div>
 
                         <div class="form-group">
-                            <label>Observaciones <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
+                            <label><i class="fa-solid fa-comment" style="margin-right:5px;color:#6366f1;font-size:0.8rem;"></i>Observaciones <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
                             <textarea class="form-input" id="esc-observaciones" placeholder="Notas adicionales..."></textarea>
                         </div>
 
                         <div class="form-footer">
-                            <button type="submit" class="btn btn-primary" id="esc-submit-btn" style="flex:1;">
+                            <button type="submit" class="btn btn-primary" id="esc-submit-btn" style="flex:1;padding:0.85rem;font-size:1rem;">
                                 <i class="fa-solid fa-paper-plane"></i> Registrar
                             </button>
-                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('esc-form').reset(); setDefaultDate();">
-                                Limpiar
+                            <button type="button" class="btn btn-secondary" onclick="resetEscForm()" style="padding:0.85rem 1.25rem;">
+                                <i class="fa-solid fa-rotate-left"></i> Limpiar
                             </button>
                         </div>
                     </form>
@@ -649,7 +683,7 @@ async function handleEscSubmit(e) {
 
     const palletId = document.getElementById('esc-palletId').value.trim();
     const cantidad = document.getElementById('esc-cantidad').value;
-    const condicion = Array.from(document.querySelectorAll('input[name="esc-cond"]:checked')).map(c => c.value).join(', ');
+    const condicion = selectedConditions.join(', ');
     const destino = document.getElementById('esc-destino').value;
     const turno = document.getElementById('esc-turno').value;
     const fechaRaw = document.getElementById('esc-fecha').value;
@@ -693,8 +727,7 @@ async function handleEscSubmit(e) {
 
         okEl.textContent = `Registro guardado correctamente (ID: ${data.id.slice(-6)})`;
         okEl.style.display = 'block';
-        document.getElementById('esc-form').reset();
-        setDefaultDate();
+        resetEscForm();
         setTimeout(() => { okEl.style.display = 'none'; }, 5000);
     } catch (err) {
         errEl.textContent = 'Error: ' + err.message;
@@ -1094,8 +1127,114 @@ function resetNfcBtn() {
 }
 
 // ══════════════════════════════════════════════
+// CONDITION MULTI-SELECT DROPDOWN
+// ══════════════════════════════════════════════
+
+const CONDITIONS = [
+    { code: 'GRA', label: 'GRA', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
+    { code: 'GRB', label: 'GRB', color: '#16a34a', bg: 'rgba(22,163,74,0.15)' },
+    { code: 'GRC', label: 'GRC', color: '#15803d', bg: 'rgba(21,128,61,0.15)' },
+    { code: 'ICB', label: 'ICB', color: '#4f7cff', bg: 'rgba(79,124,255,0.15)' },
+    { code: 'ICC', label: 'ICC', color: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
+    { code: 'ICD', label: 'ICD', color: '#2563eb', bg: 'rgba(37,99,235,0.15)' },
+    { code: 'ICX', label: 'ICX', color: '#6366f1', bg: 'rgba(99,102,241,0.15)' },
+    { code: 'BOX', label: 'BOX', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+    { code: 'DNP', label: 'DNP', color: '#ef4444', bg: 'rgba(239,68,68,0.15)' },
+    { code: 'DMT', label: 'DMT', color: '#ec4899', bg: 'rgba(236,72,153,0.15)' },
+    { code: 'DMA', label: 'DMA', color: '#f97316', bg: 'rgba(249,115,22,0.15)' },
+];
+
+let selectedConditions = [];
+
+function initCondDropdown() {
+    const dropdown = document.getElementById('cond-dropdown');
+    dropdown.innerHTML = CONDITIONS.map(c => `
+        <div class="cond-option" data-code="${c.code}" onclick="toggleCondition('${c.code}')">
+            <span class="cond-dot" style="background:${c.color};"></span>
+            <span>${c.code}</span>
+            <i class="fa-solid fa-check cond-check"></i>
+        </div>
+    `).join('');
+}
+
+function toggleCondDropdown() {
+    const trigger = document.getElementById('cond-trigger');
+    const dropdown = document.getElementById('cond-dropdown');
+    const isOpen = dropdown.classList.contains('open');
+    if (isOpen) {
+        dropdown.classList.remove('open');
+        trigger.classList.remove('open');
+    } else {
+        dropdown.classList.add('open');
+        trigger.classList.add('open');
+    }
+}
+
+function toggleCondition(code) {
+    const idx = selectedConditions.indexOf(code);
+    if (idx >= 0) {
+        selectedConditions.splice(idx, 1);
+    } else {
+        selectedConditions.push(code);
+    }
+    renderCondTags();
+    renderCondOptions();
+}
+
+function removeCondition(code, event) {
+    event.stopPropagation();
+    selectedConditions = selectedConditions.filter(c => c !== code);
+    renderCondTags();
+    renderCondOptions();
+}
+
+function renderCondTags() {
+    const container = document.getElementById('cond-tags');
+    if (selectedConditions.length === 0) {
+        container.innerHTML = '<span class="cond-placeholder">Seleccionar condiciones...</span>';
+        return;
+    }
+    container.innerHTML = selectedConditions.map(code => {
+        const c = CONDITIONS.find(x => x.code === code);
+        return `<span class="cond-tag" style="background:${c.bg};color:${c.color};border:1px solid ${c.color}30;">
+            ${c.code}
+            <span class="cond-tag-x" onclick="removeCondition('${c.code}', event)"><i class="fa-solid fa-xmark"></i></span>
+        </span>`;
+    }).join('');
+}
+
+function renderCondOptions() {
+    document.querySelectorAll('#cond-dropdown .cond-option').forEach(el => {
+        const code = el.getAttribute('data-code');
+        if (selectedConditions.includes(code)) {
+            el.classList.add('selected');
+        } else {
+            el.classList.remove('selected');
+        }
+    });
+}
+
+function resetEscForm() {
+    document.getElementById('esc-form').reset();
+    selectedConditions = [];
+    renderCondTags();
+    renderCondOptions();
+    setDefaultDate();
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    const selector = document.getElementById('cond-selector');
+    if (selector && !selector.contains(e.target)) {
+        document.getElementById('cond-dropdown').classList.remove('open');
+        document.getElementById('cond-trigger').classList.remove('open');
+    }
+});
+
+// ══════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════
+initCondDropdown();
 initNfc();
 checkSession();
 </script>
