@@ -283,6 +283,35 @@
             .record-card { grid-template-columns:1fr 1fr; }
         }
 
+        /* ── Trend Widget ── */
+        .trend-kpi {
+            background:var(--bg-input); border-radius:10px; padding:0.85rem 1rem; text-align:center;
+            border:1px solid var(--border);
+        }
+        .trend-kpi-value { font-size:1.6rem; font-weight:700; line-height:1.2; }
+        .trend-kpi-label { font-size:0.75rem; color:var(--text-muted); margin-top:2px; text-transform:uppercase; letter-spacing:0.3px; }
+        .trend-row {
+            display:flex; align-items:center; gap:0.75rem; padding:0.55rem 0;
+            border-bottom:1px solid var(--border); animation:trend-row-in 0.4s ease both;
+        }
+        .trend-row:last-child { border-bottom:none; }
+        .trend-row-date { width:80px; font-size:0.82rem; font-weight:600; flex-shrink:0; color:var(--text-main); }
+        .trend-row-bars { flex:1; display:flex; flex-direction:column; gap:3px; }
+        .trend-bar-track { height:18px; border-radius:4px; background:var(--bg-input); overflow:hidden; position:relative; }
+        .trend-bar-fill {
+            height:100%; border-radius:4px; display:flex; align-items:center; padding:0 8px;
+            font-size:0.7rem; font-weight:700; color:#fff; min-width:0;
+            transition:width 0.8s cubic-bezier(0.22,1,0.36,1);
+        }
+        .trend-bar-fill.dia { background:linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .trend-bar-fill.noche { background:linear-gradient(90deg, #4f7cff, #6b93ff); }
+        .trend-row-total { width:36px; text-align:right; font-size:0.8rem; font-weight:600; color:var(--text-muted); flex-shrink:0; }
+        .trend-legend {
+            display:flex; gap:1.25rem; justify-content:center; margin-bottom:1rem; font-size:0.8rem; color:var(--text-muted);
+        }
+        .trend-legend-dot { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:middle; }
+        @keyframes trend-row-in { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:translateX(0); } }
+
         /* ── Live indicator ── */
         .live-dot {
             display:inline-block; width:8px; height:8px; background:var(--success); border-radius:50%;
@@ -611,20 +640,13 @@
                 </div>
             </div>
 
-            <!-- Tendencia Diaria -->
+            <!-- Tendencia Diaria — Rediseño completo -->
             <div class="card" style="margin-bottom:1.5rem;padding:1.25rem 1.5rem;">
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;">
-                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-chart-line"></i> Tendencia Diaria — Dia vs Noche</div>
-                    <div class="view-tabs" id="trend-type-tabs">
-                        <button class="view-tab active" onclick="setTrendType('bar')" id="trend-tab-bar"><i class="fa-solid fa-chart-column"></i> Barras</button>
-                        <button class="view-tab" onclick="setTrendType('line')" id="trend-tab-line"><i class="fa-solid fa-chart-line"></i> Linea</button>
-                    </div>
-                </div>
-                <div id="trend-outer" style="display:flex;justify-content:center;">
-                    <div id="trend-wrap" style="position:relative;height:220px;width:100%;">
-                        <canvas id="chart-tendencia"></canvas>
-                    </div>
-                </div>
+                <div class="card-title"><i class="fa-solid fa-chart-line"></i> Tendencia Diaria</div>
+                <!-- Summary KPIs row -->
+                <div id="trend-summary" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:1.25rem;"></div>
+                <!-- Horizontal bars per date -->
+                <div id="trend-bars"></div>
             </div>
 
             <!-- Charts Row 2 -->
@@ -889,7 +911,7 @@ async function handleEscSubmit(e) {
 // DASHBOARD
 // ══════════════════════════════════════════════
 
-let chartEsc = null, chartDest = null, chartTrend = null, chartTurno = null, chartCond = null;
+let chartEsc = null, chartDest = null, chartTurno = null, chartCond = null;
 let fpInstance = null;
 let dashPollTimer = null;
 let currentRecordView = 'grouped';
@@ -1092,157 +1114,70 @@ async function loadResumen() {
     }
 }
 
-let trendType = 'bar';
 let trendCache = null;
 
-function setTrendType(type) {
-    trendType = type;
-    document.getElementById('trend-tab-bar').classList.toggle('active', type === 'bar');
-    document.getElementById('trend-tab-line').classList.toggle('active', type === 'line');
-    if (trendCache) renderTrendChart(trendCache);
-}
-
-function renderTrendChart(dateMap) {
+function renderTrendWidget(dateMap) {
     const dates = Object.keys(dateMap).sort((a, b) => {
         const pa = a.split('/'), pb = b.split('/');
         return new Date(pa[2], pa[0]-1, pa[1]) - new Date(pb[2], pb[0]-1, pb[1]);
     });
 
-    // Adaptive width: ~120px per date group, min 200px, max 100%
-    const wrap = document.getElementById('trend-wrap');
-    const outer = document.getElementById('trend-outer');
-    const outerW = outer.offsetWidth || 800;
-    const idealW = Math.max(200, dates.length * 120 + 80);
-    wrap.style.width = idealW >= outerW ? '100%' : idealW + 'px';
+    // Calculate totals
+    let totalDia = 0, totalNoche = 0;
+    dates.forEach(d => { totalDia += dateMap[d].Dia; totalNoche += dateMap[d].Noche; });
+    const totalAll = totalDia + totalNoche;
+    const maxPerDate = Math.max(1, ...dates.map(d => dateMap[d].Dia + dateMap[d].Noche));
 
-    const ctxL = document.getElementById('chart-tendencia').getContext('2d');
-    if (chartTrend) chartTrend.destroy();
+    // Summary KPIs
+    const summaryEl = document.getElementById('trend-summary');
+    summaryEl.innerHTML = `
+        <div class="trend-kpi">
+            <div class="trend-kpi-value" style="color:#f59e0b;">${totalDia}</div>
+            <div class="trend-kpi-label">Turno Dia</div>
+        </div>
+        <div class="trend-kpi">
+            <div class="trend-kpi-value" style="color:#4f7cff;">${totalNoche}</div>
+            <div class="trend-kpi-label">Turno Noche</div>
+        </div>
+        <div class="trend-kpi">
+            <div class="trend-kpi-value" style="color:var(--text-main);">${totalAll}</div>
+            <div class="trend-kpi-label">Total</div>
+        </div>
+    `;
 
-    const diaData = dates.map(d => dateMap[d].Dia);
-    const nocheData = dates.map(d => dateMap[d].Noche);
-    const tooltipStyle = { backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#e8ecf4', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:12 };
-
-    // Adaptive bar sizing
-    const barPct = dates.length <= 2 ? 0.35 : dates.length <= 5 ? 0.5 : 0.6;
-    const catPct = dates.length <= 2 ? 0.4 : dates.length <= 5 ? 0.55 : 0.65;
-    const maxBar = dates.length <= 2 ? 24 : dates.length <= 5 ? 28 : 32;
-
-    if (trendType === 'bar') {
-        chartTrend = new Chart(ctxL, {
-            type: 'bar',
-            data: {
-                labels: dates,
-                datasets: [
-                    {
-                        label: 'Dia',
-                        data: diaData,
-                        backgroundColor: 'rgba(245,158,11,0.8)',
-                        hoverBackgroundColor: '#f59e0b',
-                        borderRadius: 4,
-                        borderSkipped: false,
-                        maxBarThickness: maxBar,
-                        barPercentage: barPct,
-                        categoryPercentage: catPct,
-                    },
-                    {
-                        label: 'Noche',
-                        data: nocheData,
-                        backgroundColor: 'rgba(79,124,255,0.8)',
-                        hoverBackgroundColor: '#4f7cff',
-                        borderRadius: 4,
-                        borderSkipped: false,
-                        maxBarThickness: maxBar,
-                        barPercentage: barPct,
-                        categoryPercentage: catPct,
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                layout: { padding: { left: 4, right: 4, top: 4, bottom: 0 } },
-                animation: { duration: 1000, easing: 'easeOutQuart', delay: (ctx) => ctx.dataIndex * 80 },
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { labels: { color: '#7b8ba5', usePointStyle: true, pointStyle: 'rectRounded', padding: 16, font: { size: 12, weight: '500' } } },
-                    tooltip: {
-                        ...tooltipStyle, mode: 'index', intersect: false,
-                        callbacks: {
-                            title: (items) => 'Fecha: ' + items[0].label,
-                            afterBody: (items) => {
-                                const total = items.reduce((s, i) => s + i.parsed.y, 0);
-                                return '\nTotal: ' + total + ' registros';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true, stacked: false,
-                        ticks: { color: '#7b8ba5', stepSize: 1, font: { size: 11 } },
-                        grid: { color: 'rgba(30,42,66,0.4)', drawBorder: false },
-                        title: { display: true, text: 'Registros', color: '#7b8ba5', font: { size: 11 } }
-                    },
-                    x: {
-                        ticks: { color: '#7b8ba5', maxRotation: 0, font: { size: 11 } },
-                        grid: { display: false },
-                        title: { display: true, text: 'Fecha', color: '#7b8ba5', font: { size: 11 } }
-                    }
-                }
-            }
-        });
-    } else {
-        // Line mode with gradient
-        // Dia = amber, Noche = blue (consistent with badges)
-        const gradAmber = ctxL.createLinearGradient(0, 0, 0, 200);
-        gradAmber.addColorStop(0, 'rgba(245,158,11,0.3)');
-        gradAmber.addColorStop(1, 'rgba(245,158,11,0.02)');
-        const gradBlue = ctxL.createLinearGradient(0, 0, 0, 200);
-        gradBlue.addColorStop(0, 'rgba(79,124,255,0.3)');
-        gradBlue.addColorStop(1, 'rgba(79,124,255,0.02)');
-
-        chartTrend = new Chart(ctxL, {
-            type: 'line',
-            data: {
-                labels: dates,
-                datasets: [
-                    {
-                        label: 'Dia', data: diaData, borderColor: '#f59e0b', backgroundColor: gradAmber,
-                        fill: true, tension: 0.4, pointRadius: 6, pointHoverRadius: 9,
-                        pointBackgroundColor: '#f59e0b', pointBorderColor: '#0a0f1e', pointBorderWidth: 2, borderWidth: 3,
-                    },
-                    {
-                        label: 'Noche', data: nocheData, borderColor: '#4f7cff', backgroundColor: gradBlue,
-                        fill: true, tension: 0.4, pointRadius: 6, pointHoverRadius: 9,
-                        pointBackgroundColor: '#4f7cff', pointBorderColor: '#0a0f1e', pointBorderWidth: 2, borderWidth: 3,
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: { duration: 1200, easing: 'easeOutQuart' },
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { labels: { color: '#7b8ba5', usePointStyle: true, pointStyle: 'circle', padding: 16, font: { size: 12, weight: '500' } } },
-                    tooltip: {
-                        ...tooltipStyle, mode: 'index', intersect: false,
-                        callbacks: {
-                            title: (items) => 'Fecha: ' + items[0].label,
-                            afterBody: (items) => {
-                                const total = items.reduce((s, i) => s + i.parsed.y, 0);
-                                return '\nTotal: ' + total + ' registros';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    y: { beginAtZero: true, ticks: { color: '#7b8ba5', stepSize: 1 }, grid: { color: 'rgba(30,42,66,0.4)' }, title: { display: true, text: 'Registros', color: '#7b8ba5', font: { size: 11 } } },
-                    x: { ticks: { color: '#7b8ba5', maxRotation: 0 }, grid: { display: false }, title: { display: true, text: 'Fecha', color: '#7b8ba5', font: { size: 11 } } }
-                }
-            }
-        });
+    // Horizontal bars per date
+    const barsEl = document.getElementById('trend-bars');
+    if (dates.length === 0) {
+        barsEl.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Sin datos de tendencia</div>';
+        return;
     }
+
+    barsEl.innerHTML = `
+        <div class="trend-legend">
+            <span><span class="trend-legend-dot" style="background:#f59e0b;"></span>Dia</span>
+            <span><span class="trend-legend-dot" style="background:#4f7cff;"></span>Noche</span>
+        </div>
+    ` + dates.map((fecha, i) => {
+        const dia = dateMap[fecha].Dia;
+        const noche = dateMap[fecha].Noche;
+        const total = dia + noche;
+        const diaPct = total > 0 ? (dia / maxPerDate) * 100 : 0;
+        const nochePct = total > 0 ? (noche / maxPerDate) * 100 : 0;
+        return `
+            <div class="trend-row" style="animation-delay:${i * 60}ms;">
+                <div class="trend-row-date">${fecha}</div>
+                <div class="trend-row-bars">
+                    <div class="trend-bar-track">
+                        <div class="trend-bar-fill dia" style="width:${diaPct}%;">${dia > 0 ? dia : ''}</div>
+                    </div>
+                    <div class="trend-bar-track">
+                        <div class="trend-bar-fill noche" style="width:${nochePct}%;">${noche > 0 ? noche : ''}</div>
+                    </div>
+                </div>
+                <div class="trend-row-total">${total}</div>
+            </div>
+        `;
+    }).join('');
 }
 
 async function loadTendencias() {
@@ -1258,7 +1193,7 @@ async function loadTendencias() {
         });
 
         trendCache = dateMap;
-        renderTrendChart(dateMap);
+        renderTrendWidget(dateMap);
 
         // Promedios
         const promEl = document.getElementById('promedios-container');
