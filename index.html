@@ -1643,7 +1643,7 @@ function renderResumenCard(r) {
         <div class="resumen-stat"><span class="resumen-stat-label">En Proceso</span><span class="resumen-stat-value">${r.palletsEnProceso||0}</span></div>
         <div class="resumen-stat"><span class="resumen-stat-label">Asistencia</span><span class="resumen-stat-value" style="color:var(--success);">${r.asistencia||0}</span></div>
         <div class="resumen-stat"><span class="resumen-stat-label">Absentismo</span><span class="resumen-stat-value" style="color:var(--danger);">${r.absentismo||0}</span></div>
-        <div class="resumen-stat"><span class="resumen-stat-label">Capturado por</span><span class="resumen-stat-value" style="font-size:0.85rem;">${r.nombreCaptura||'-'}</span></div>
+        <div class="resumen-stat"><span class="resumen-stat-label">Registrado por</span><span class="resumen-stat-value" style="font-size:0.85rem;">${r.nombreCaptura||'-'}</span></div>
         <div class="resumen-stat"><span class="resumen-stat-label">Hora</span><span class="resumen-stat-value" style="font-size:0.85rem;">${r.createdAt ? new Date(r.createdAt).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}) : '-'}</span></div>
         ${r.tareasPendientes ? `<div class="resumen-tareas"><strong>Tareas pendientes:</strong> ${r.tareasPendientes}</div>` : ''}
     </div>`;
@@ -1692,7 +1692,7 @@ function exportResumenFecha(fecha) {
     const recs = lastResumenData.filter(r => r.fecha === fecha);
     if (recs.length === 0) return;
     const wb = XLSX.utils.book_new();
-    const headers = ['Fecha','Turno','Pallets Totales','Pallets TRG','En Proceso','Asistencia','Absentismo','Tareas Pendientes','Capturado Por'];
+    const headers = ['Fecha','Turno','Pallets Totales','Pallets TRG','En Proceso','Asistencia','Absentismo','Tareas Pendientes','Registrado Por'];
     const rows = recs.map(r => [r.fecha, r.turno, r.palletsTotales, r.palletsTRG||0, r.palletsEnProceso||0, r.asistencia||0, r.absentismo||0, r.tareasPendientes||'', r.nombreCaptura||'']);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     ws['!cols'] = headers.map(() => ({ wch: 16 }));
