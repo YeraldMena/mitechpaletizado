@@ -1314,6 +1314,10 @@ function renderTrendWidget(dateMap) {
 
     // Format dates for display: YYYY-MM-DD → "DD/MM"
     const dateLabels = dates.map(d => { const p = d.split('-'); return p[2] + '/' + p[1]; });
+    const diaValues = dates.map(d => dateMap[d].Dia);
+    const nocheValues = dates.map(d => dateMap[d].Noche);
+
+    console.log('[TREND] Order:', dateLabels.join(' → '), '(left to right)');
 
     chartTrend = new Chart(ctx, {
         type: 'bar',
@@ -1322,39 +1326,59 @@ function renderTrendWidget(dateMap) {
             datasets: [
                 {
                     label: 'Dia',
-                    data: dates.map(d => dateMap[d].Dia),
+                    data: diaValues,
                     backgroundColor: 'rgba(245,158,11,0.85)',
                     hoverBackgroundColor: '#f59e0b',
-                    borderRadius: 3,
+                    borderRadius: 4,
                     borderSkipped: false,
-                    maxBarThickness: 32,
+                    barPercentage: 0.8,
+                    categoryPercentage: 0.6,
                 },
                 {
                     label: 'Noche',
-                    data: dates.map(d => dateMap[d].Noche),
+                    data: nocheValues,
                     backgroundColor: 'rgba(79,124,255,0.85)',
                     hoverBackgroundColor: '#4f7cff',
-                    borderRadius: 3,
+                    borderRadius: 4,
                     borderSkipped: false,
-                    maxBarThickness: 32,
+                    barPercentage: 0.8,
+                    categoryPercentage: 0.6,
                 }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: { padding: { left: 8, right: 8 } },
             animation: { duration: 800, easing: 'easeOutQuart' },
             interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: { labels: { color: '#7b8ba5', usePointStyle: true, pointStyle: 'rectRounded', padding: 14, font: { size: 11 } } },
+                legend: {
+                    position: 'top',
+                    align: 'end',
+                    labels: { color: '#7b8ba5', usePointStyle: true, pointStyle: 'rectRounded', padding: 16, font: { size: 12 } }
+                },
                 tooltip: {
                     ...tooltipStyle, mode: 'index', intersect: false,
-                    callbacks: { afterBody: (items) => 'Total: ' + items.reduce((s, i) => s + i.parsed.y, 0) }
+                    callbacks: {
+                        title: (items) => items[0].label,
+                        afterBody: (items) => 'Total: ' + items.reduce((s, i) => s + i.parsed.y, 0)
+                    }
                 }
             },
             scales: {
-                y: { beginAtZero: true, ticks: { color: '#7b8ba5', stepSize: 1, font: { size: 10 } }, grid: { color: 'rgba(30,42,66,0.4)' } },
-                x: { ticks: { color: '#7b8ba5', font: { size: 10 } }, grid: { display: false } }
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: '#7b8ba5', stepSize: 1, font: { size: 11 } },
+                    grid: { color: 'rgba(30,42,66,0.4)' },
+                    title: { display: true, text: 'Registros', color: '#7b8ba5', font: { size: 11 } }
+                },
+                x: {
+                    type: 'category',
+                    offset: true,
+                    ticks: { color: '#7b8ba5', font: { size: 12, weight: '500' } },
+                    grid: { display: false }
+                }
             }
         }
     });
