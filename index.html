@@ -904,6 +904,7 @@ let fpInstance = null;
 let dashPollTimer = null;
 let currentRecordView = 'grouped';
 let lastTableData = [];
+let lastResumen = null;
 let searchTimer = null;
 
 const COLORS = ['#4f7cff','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#06b6d4'];
@@ -1003,6 +1004,7 @@ async function loadResumen() {
     try {
         const data = await apiFetch(`${API}/api/dashboard/resumen?${getFilterParams()}`);
         if (!data.success) return;
+        lastResumen = data;
 
         document.getElementById('kpi-total').textContent = data.totalRegistros.toLocaleString();
         document.getElementById('kpi-hoy').textContent = data.registrosHoy.toLocaleString();
@@ -1444,46 +1446,156 @@ function downloadXlsx(wb, filename) {
     XLSX.writeFile(wb, filename);
 }
 
-// Export full dashboard
+// Helper: isDia check
+function isDiaTurno(t) { const l = (t||'').toLowerCase(); return l.includes('day') || l.includes('dia'); }
+
+// Export full dashboard as professional report
 async function exportDashboardExcel() {
     const wb = XLSX.utils.book_new();
+    const today = new Date();
+    const todayStr = today.toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' });
+    const res = lastResumen || {};
 
-    // Sheet 1: All records
+    // ── Sheet 1: Resumen Ejecutivo ──
+    const s1 = [];
+    s1.push(['MI-TECH PALETIZADO — REPORTE DE DASHBOARD']);
+    s1.push(['Generado: ' + todayStr]);
+    s1.push([]);
+    s1.push(['INDICADORES PRINCIPALES']);
+    s1.push(['Metrica', 'Valor']);
+    s1.push(['Total Registros', res.totalRegistros || lastTableData.length]);
+    s1.push(['Registros Hoy', res.registrosHoy || 0]);
+    s1.push(['Unidades Totales', res.totalUnidades || 0]);
+    s1.push(['Escaneadoras Activas', (res.escaneadoras || []).length]);
+    s1.push([]);
+    s1.push(['RESUMEN POR TURNO']);
+    s1.push(['Turno', 'Registros', 'Unidades']);
+    (res.porTurno || []).forEach(t => s1.push([t.turno, t.registros, t.unidades]));
+    s1.push([]);
+    s1.push(['RESUMEN POR DESTINO']);
+    s1.push(['Destino', 'Registros', 'Unidades']);
+    (res.porDestino || []).forEach(d => s1.push([d.destino, d.registros, d.unidades]));
+    s1.push([]);
+    s1.push(['RESUMEN POR ESCANEADORA']);
+    s1.push(['Escaneadora', 'Registros', 'Unidades']);
+    (res.porEscaneadora || []).forEach(e => s1.push([e.nombre, e.registros, e.unidades]));
+    s1.push([]);
+    s1.push(['RESUMEN POR CONDICION']);
+    s1.push(['Condicion', 'Registros']);
+    (res.porCondicion || []).forEach(c => s1.push([c.condicion, c.total]));
+
+    const ws1 = XLSX.utils.aoa_to_sheet(s1);
+    ws1['!cols'] = [{ wch: 28 }, { wch: 16 }, { wch: 14 }];
+    // Merge title row
+    ws1['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:2} }, { s:{r:1,c:0}, e:{r:1,c:2} }];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Resumen Ejecutivo');
+
+    // ── Sheet 2: Registros Completos ──
     const rows = lastTableData.map(recordToRow);
-    const ws1 = XLSX.utils.aoa_to_sheet([EXPORT_COLS, ...rows]);
-    ws1['!cols'] = EXPORT_COLS.map(() => ({ wch: 16 }));
-    XLSX.utils.book_append_sheet(wb, ws1, 'Registros');
+    const ws2 = XLSX.utils.aoa_to_sheet([EXPORT_COLS, ...rows]);
+    ws2['!cols'] = EXPORT_COLS.map(() => ({ wch: 16 }));
+    ws2['!autofilter'] = { ref: XLSX.utils.encode_range({ s:{r:0,c:0}, e:{r:rows.length,c:EXPORT_COLS.length-1} }) };
+    XLSX.utils.book_append_sheet(wb, ws2, 'Registros');
 
-    // Sheet 2: Resumen por dia
+    // ── Sheet 3: Tendencia Diaria ──
     const byDate = {};
     lastTableData.forEach(r => {
-        if (!byDate[r.fecha]) byDate[r.fecha] = { dia: 0, noche: 0, unidades: 0 };
-        const isDia = r.turno.toLowerCase().includes('day') || r.turno.toLowerCase().includes('dia');
-        if (isDia) byDate[r.fecha].dia++; else byDate[r.fecha].noche++;
-        byDate[r.fecha].unidades += (r.cantidad || 0);
+        if (!byDate[r.fecha]) byDate[r.fecha] = { dia: 0, noche: 0, uDia: 0, uNoche: 0 };
+        if (isDiaTurno(r.turno)) { byDate[r.fecha].dia++; byDate[r.fecha].uDia += (r.cantidad||0); }
+        else { byDate[r.fecha].noche++; byDate[r.fecha].uNoche += (r.cantidad||0); }
     });
-    const dateRows = Object.entries(byDate).sort().map(([f, d]) => [f, d.dia, d.noche, d.dia + d.noche, d.unidades]);
-    const ws2 = XLSX.utils.aoa_to_sheet([['Fecha','Dia','Noche','Total','Unidades'], ...dateRows]);
-    ws2['!cols'] = [{ wch: 14 },{ wch: 8 },{ wch: 8 },{ wch: 8 },{ wch: 10 }];
-    XLSX.utils.book_append_sheet(wb, ws2, 'Por Dia');
+    const s3 = [['TENDENCIA DIARIA'], []];
+    s3.push(['Fecha', 'Reg. Dia', 'Reg. Noche', 'Total Reg.', 'Uds. Dia', 'Uds. Noche', 'Total Uds.']);
+    let sumRD=0, sumRN=0, sumUD=0, sumUN=0;
+    Object.entries(byDate).sort().forEach(([f, d]) => {
+        s3.push([f, d.dia, d.noche, d.dia+d.noche, d.uDia, d.uNoche, d.uDia+d.uNoche]);
+        sumRD+=d.dia; sumRN+=d.noche; sumUD+=d.uDia; sumUN+=d.uNoche;
+    });
+    s3.push([]);
+    s3.push(['TOTALES', sumRD, sumRN, sumRD+sumRN, sumUD, sumUN, sumUD+sumUN]);
 
-    // Sheet 3: Resumen por turno
-    let tDia = 0, tNoche = 0, uDia = 0, uNoche = 0;
+    const ws3 = XLSX.utils.aoa_to_sheet(s3);
+    ws3['!cols'] = [{ wch: 14 },{ wch: 11 },{ wch: 12 },{ wch: 11 },{ wch: 11 },{ wch: 12 },{ wch: 11 }];
+    ws3['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:6} }];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Tendencia Diaria');
+
+    // ── Sheet 4: Por Escaneadora ──
+    const byEsc = {};
     lastTableData.forEach(r => {
-        const isDia = r.turno.toLowerCase().includes('day') || r.turno.toLowerCase().includes('dia');
-        if (isDia) { tDia++; uDia += (r.cantidad || 0); } else { tNoche++; uNoche += (r.cantidad || 0); }
+        if (!byEsc[r.escaneadora]) byEsc[r.escaneadora] = { reg: 0, uds: 0, dias: new Set(), destinos: {} };
+        byEsc[r.escaneadora].reg++;
+        byEsc[r.escaneadora].uds += (r.cantidad||0);
+        byEsc[r.escaneadora].dias.add(r.fecha);
+        const d = r.destino || 'Otro';
+        byEsc[r.escaneadora].destinos[d] = (byEsc[r.escaneadora].destinos[d]||0) + 1;
     });
-    const ws3 = XLSX.utils.aoa_to_sheet([
-        ['Turno','Registros','Unidades'],
-        ['Dia', tDia, uDia],
-        ['Noche', tNoche, uNoche],
-        ['Total', tDia + tNoche, uDia + uNoche]
-    ]);
-    ws3['!cols'] = [{ wch: 10 },{ wch: 12 },{ wch: 12 }];
-    XLSX.utils.book_append_sheet(wb, ws3, 'Por Turno');
+    const s4 = [['REPORTE POR ESCANEADORA'], []];
+    s4.push(['Escaneadora', 'Registros', 'Unidades', 'Dias Activos', 'Promedio Reg/Dia', 'Destino Principal']);
+    Object.entries(byEsc).sort((a,b)=>b[1].reg-a[1].reg).forEach(([name, d]) => {
+        const topDest = Object.entries(d.destinos).sort((a,b)=>b[1]-a[1])[0];
+        s4.push([name, d.reg, d.uds, d.dias.size, d.dias.size > 0 ? +(d.reg/d.dias.size).toFixed(1) : 0, topDest ? topDest[0] : '-']);
+    });
+    const ws4 = XLSX.utils.aoa_to_sheet(s4);
+    ws4['!cols'] = [{ wch: 22 },{ wch: 11 },{ wch: 11 },{ wch: 13 },{ wch: 16 },{ wch: 18 }];
+    ws4['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:5} }];
+    XLSX.utils.book_append_sheet(wb, ws4, 'Por Escaneadora');
 
-    const today = new Date().toISOString().split('T')[0];
-    downloadXlsx(wb, `Dashboard_${today}.xlsx`);
+    // ── Sheet 5: Por Destino ──
+    const byDest = {};
+    lastTableData.forEach(r => {
+        const d = r.destino || 'Otro';
+        if (!byDest[d]) byDest[d] = { reg: 0, uds: 0, dia: 0, noche: 0 };
+        byDest[d].reg++;
+        byDest[d].uds += (r.cantidad||0);
+        if (isDiaTurno(r.turno)) byDest[d].dia++; else byDest[d].noche++;
+    });
+    const s5 = [['REPORTE POR DESTINO'], []];
+    s5.push(['Destino', 'Registros', 'Unidades', 'Turno Dia', 'Turno Noche', '% del Total']);
+    const totalReg = lastTableData.length || 1;
+    Object.entries(byDest).sort((a,b)=>b[1].reg-a[1].reg).forEach(([name, d]) => {
+        s5.push([name, d.reg, d.uds, d.dia, d.noche, +((d.reg/totalReg)*100).toFixed(1) + '%']);
+    });
+    const ws5 = XLSX.utils.aoa_to_sheet(s5);
+    ws5['!cols'] = [{ wch: 20 },{ wch: 11 },{ wch: 11 },{ wch: 11 },{ wch: 13 },{ wch: 12 }];
+    ws5['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:5} }];
+    XLSX.utils.book_append_sheet(wb, ws5, 'Por Destino');
+
+    // ── Sheet 6: Métricas e Indicadores ──
+    const s6 = [['MI-TECH PALETIZADO — METRICAS E INDICADORES'], []];
+    s6.push(['METRICAS GENERALES']);
+    s6.push(['', '']);
+    s6.push(['Total de registros', res.totalRegistros || lastTableData.length]);
+    s6.push(['Registros de hoy', res.registrosHoy || 0]);
+    s6.push(['Unidades totales procesadas', res.totalUnidades || 0]);
+    s6.push(['Escaneadoras activas', (res.escaneadoras || []).length]);
+    s6.push(['Fechas con actividad', Object.keys(byDate).length]);
+    s6.push(['Promedio registros por dia', Object.keys(byDate).length > 0 ? +((lastTableData.length / Object.keys(byDate).length).toFixed(1)) : 0]);
+    s6.push([]);
+    s6.push(['DISTRIBUCION POR TURNO']);
+    s6.push(['', 'Registros', '% Registros', 'Unidades', '% Unidades']);
+    const tR = lastTableData.length || 1;
+    const tU = (res.totalUnidades || 0) || 1;
+    s6.push(['Dia', sumRD, +((sumRD/tR)*100).toFixed(1) + '%', sumUD, +((sumUD/tU)*100).toFixed(1) + '%']);
+    s6.push(['Noche', sumRN, +((sumRN/tR)*100).toFixed(1) + '%', sumUN, +((sumUN/tU)*100).toFixed(1) + '%']);
+    s6.push([]);
+    s6.push(['TOP ESCANEADORAS (por registros)']);
+    s6.push(['Posicion', 'Escaneadora', 'Registros', 'Unidades']);
+    Object.entries(byEsc).sort((a,b)=>b[1].reg-a[1].reg).slice(0,5).forEach(([name, d], i) => {
+        s6.push([i+1, name, d.reg, d.uds]);
+    });
+    s6.push([]);
+    s6.push(['CONDICIONES REGISTRADAS']);
+    s6.push(['Condicion', 'Cantidad', '% del Total']);
+    (res.porCondicion || []).sort((a,b)=>b.total-a.total).forEach(c => {
+        s6.push([c.condicion, c.total, +((c.total/tR)*100).toFixed(1) + '%']);
+    });
+
+    const ws6 = XLSX.utils.aoa_to_sheet(s6);
+    ws6['!cols'] = [{ wch: 32 },{ wch: 16 },{ wch: 14 },{ wch: 14 },{ wch: 14 }];
+    ws6['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:4} }];
+    XLSX.utils.book_append_sheet(wb, ws6, 'Metricas');
+
+    downloadXlsx(wb, `Dashboard_MI-TECH_${today.toISOString().split('T')[0]}.xlsx`);
 }
 
 // Export records for a specific date
