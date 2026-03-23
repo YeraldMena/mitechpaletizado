@@ -244,6 +244,53 @@
         .badge-amber { background:rgba(245,158,11,0.15); color:#f59e0b; }
         .badge-red { background:rgba(239,68,68,0.15); color:#ef4444; }
 
+        /* ── View Toggle Tabs ── */
+        .view-tabs { display:flex; gap:4px; background:var(--bg-input); border-radius:8px; padding:3px; width:fit-content; }
+        .view-tab {
+            padding:0.4rem 1rem; border-radius:6px; border:none; background:none;
+            color:var(--text-muted); font-size:0.82rem; font-weight:500; cursor:pointer; transition:all 0.2s;
+        }
+        .view-tab.active { background:var(--accent); color:#fff; }
+        .view-tab:hover:not(.active) { color:var(--text-main); }
+
+        /* ── Grouped Records ── */
+        .date-group { margin-bottom:1.25rem; }
+        .date-group-header {
+            display:flex; align-items:center; justify-content:space-between; padding:0.6rem 1rem;
+            background:var(--bg-input); border-radius:8px; cursor:pointer; user-select:none; transition:all 0.2s;
+        }
+        .date-group-header:hover { background:rgba(79,124,255,0.08); }
+        .date-group-header .dg-left { display:flex; align-items:center; gap:10px; }
+        .date-group-header .dg-date { font-weight:700; font-size:0.95rem; }
+        .date-group-header .dg-count { font-size:0.78rem; color:var(--text-muted); }
+        .date-group-header .dg-chevron { color:var(--text-muted); transition:transform 0.2s; font-size:0.8rem; }
+        .date-group-header.collapsed .dg-chevron { transform:rotate(-90deg); }
+        .date-group-body { padding:0.5rem 0 0; }
+        .date-group-body.hidden { display:none; }
+        .record-card {
+            display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:0.5rem 1rem;
+            padding:0.75rem 1rem; margin-bottom:6px; background:var(--bg-card);
+            border:1px solid var(--border); border-radius:8px; font-size:0.83rem;
+            transition:border-color 0.2s;
+        }
+        .record-card:hover { border-color:rgba(79,124,255,0.3); }
+        .record-card .rc-field { display:flex; flex-direction:column; gap:2px; }
+        .record-card .rc-label { font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.3px; }
+        .record-card .rc-value { font-weight:500; }
+        .record-card .rc-value.bold { font-weight:700; }
+        .record-card .rc-row { grid-column:1/-1; display:flex; gap:1rem; flex-wrap:wrap; }
+        @media (max-width:768px) {
+            .record-card { grid-template-columns:1fr 1fr; }
+        }
+
+        /* ── Live indicator ── */
+        .live-dot {
+            display:inline-block; width:8px; height:8px; background:var(--success); border-radius:50%;
+            animation:live-blink 2s infinite; margin-right:6px; vertical-align:middle;
+        }
+        @keyframes live-blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+        .live-label { font-size:0.78rem; color:var(--success); font-weight:500; }
+
         /* ── Top Bar ── */
         .topbar {
             display:flex; align-items:center; justify-content:space-between;
@@ -588,34 +635,48 @@
                 </div>
             </div>
 
-            <!-- Tabla general con busqueda -->
+            <!-- Records section -->
             <div class="card">
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
-                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-table"></i> Registros</div>
-                    <div style="display:flex;gap:0.5rem;">
-                        <input type="text" class="form-input" id="dash-busqueda" placeholder="Buscar..." style="width:220px;padding:0.5rem 0.8rem;font-size:0.85rem;" oninput="loadTableData()">
+                    <div style="display:flex;align-items:center;gap:1rem;">
+                        <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-table"></i> Registros</div>
+                        <span><span class="live-dot"></span><span class="live-label">En vivo</span></span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <input type="text" class="form-input" id="dash-busqueda" placeholder="Buscar..." style="width:200px;padding:0.5rem 0.8rem;font-size:0.85rem;" oninput="debouncedSearch()">
+                        <div class="view-tabs">
+                            <button class="view-tab active" onclick="setRecordView('grouped')" id="tab-grouped"><i class="fa-solid fa-layer-group"></i> Agrupado</button>
+                            <button class="view-tab" onclick="setRecordView('table')" id="tab-table"><i class="fa-solid fa-table-list"></i> Tabla</button>
+                        </div>
                     </div>
                 </div>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Pallet ID</th>
-                                <th>Cantidad</th>
-                                <th>Condicion</th>
-                                <th>Destino</th>
-                                <th>Turno</th>
-                                <th>Escaneadora</th>
-                                <th>Pedido</th>
-                                <th>Incidencias</th>
-                                <th>Obs.</th>
-                            </tr>
-                        </thead>
-                        <tbody id="dash-table-body">
-                            <tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted);">Cargando...</td></tr>
-                        </tbody>
-                    </table>
+
+                <!-- Grouped view (default) -->
+                <div id="records-grouped"></div>
+
+                <!-- Table view (hidden by default) -->
+                <div id="records-table" style="display:none;">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Pallet ID</th>
+                                    <th>Cantidad</th>
+                                    <th>Condicion</th>
+                                    <th>Destino</th>
+                                    <th>Turno</th>
+                                    <th>Escaneadora</th>
+                                    <th>Pedido</th>
+                                    <th>Incidencias</th>
+                                    <th>Obs.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dash-table-body">
+                                <tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted);">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div><!-- /view-dashboard -->
@@ -735,7 +796,8 @@ function switchView(viewName) {
     const view = document.getElementById('view-' + viewName);
     if (view) view.classList.add('active');
 
-    if (viewName === 'dashboard') loadDashboard();
+    if (viewName === 'dashboard') { loadDashboard(); }
+    else { stopPolling(); }
     if (viewName === 'escaneadoras') setDefaultDate();
 }
 
@@ -818,8 +880,16 @@ async function handleEscSubmit(e) {
 
 let chartEsc = null, chartDest = null, chartTrend = null, chartTurno = null, chartCond = null;
 let fpInstance = null;
+let dashPollTimer = null;
+let currentRecordView = 'grouped';
+let lastTableData = [];
+let searchTimer = null;
 
 const COLORS = ['#4f7cff','#22c55e','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#06b6d4'];
+
+// Chart.js global animation defaults
+Chart.defaults.animation.duration = 800;
+Chart.defaults.animation.easing = 'easeOutQuart';
 
 function initFlatpickr() {
     if (fpInstance) return;
@@ -834,6 +904,25 @@ function initFlatpickr() {
 async function loadDashboard() {
     initFlatpickr();
     await Promise.all([loadResumen(), loadTendencias(), loadTableData(), loadCatalogos()]);
+    startPolling();
+}
+
+function startPolling() {
+    stopPolling();
+    dashPollTimer = setInterval(async () => {
+        const dashView = document.getElementById('view-dashboard');
+        if (!dashView || !dashView.classList.contains('active')) { stopPolling(); return; }
+        await Promise.all([loadResumen(), loadTendencias(), loadTableData()]);
+    }, 5000);
+}
+
+function stopPolling() {
+    if (dashPollTimer) { clearInterval(dashPollTimer); dashPollTimer = null; }
+}
+
+function debouncedSearch() {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => loadTableData(), 300);
 }
 
 function getFilterParams() {
@@ -861,6 +950,24 @@ function clearFilters() {
     loadDashboard();
 }
 
+// ── Record view toggle ──
+function setRecordView(mode) {
+    currentRecordView = mode;
+    document.getElementById('tab-grouped').classList.toggle('active', mode === 'grouped');
+    document.getElementById('tab-table').classList.toggle('active', mode === 'table');
+    document.getElementById('records-grouped').style.display = mode === 'grouped' ? '' : 'none';
+    document.getElementById('records-table').style.display = mode === 'table' ? '' : 'none';
+    renderRecords(lastTableData);
+}
+
+function toggleDateGroup(fecha) {
+    const header = document.querySelector(`[data-dg="${fecha}"]`);
+    const body = document.getElementById('dg-body-' + fecha.replace(/\//g, '-'));
+    if (!header || !body) return;
+    header.classList.toggle('collapsed');
+    body.classList.toggle('hidden');
+}
+
 async function loadResumen() {
     try {
         const data = await apiFetch(`${API}/api/dashboard/resumen?${getFilterParams()}`);
@@ -870,6 +977,15 @@ async function loadResumen() {
         document.getElementById('kpi-hoy').textContent = data.registrosHoy.toLocaleString();
         document.getElementById('kpi-unidades').textContent = data.totalUnidades.toLocaleString();
         document.getElementById('kpi-operadoras').textContent = data.escaneadoras.length;
+
+        const chartOpts = (extra = {}) => ({
+            responsive: true,
+            animation: { duration: 800, easing: 'easeOutQuart' },
+            transitions: { active: { animation: { duration: 200 } } },
+            ...extra
+        });
+        const scaleOpts = { y: { beginAtZero:true, ticks:{color:'#7b8ba5'}, grid:{color:'rgba(30,42,66,0.5)'} }, x: { ticks:{color:'#7b8ba5',maxRotation:45}, grid:{display:false} } };
+        const tooltipStyle = { backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#94a3b8', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:10 };
 
         // Chart: por escaneadora (bar)
         const ctxE = document.getElementById('chart-escaneadora').getContext('2d');
@@ -881,18 +997,12 @@ async function loadResumen() {
                 datasets: [{
                     label: 'Registros',
                     data: data.porEscaneadora.map(e => e.registros),
-                    backgroundColor: data.porEscaneadora.map((_, i) => COLORS[i % COLORS.length]),
-                    borderRadius: 6,
+                    backgroundColor: data.porEscaneadora.map((_, i) => COLORS[i % COLORS.length] + 'cc'),
+                    hoverBackgroundColor: data.porEscaneadora.map((_, i) => COLORS[i % COLORS.length]),
+                    borderRadius: 6, borderSkipped: false,
                 }]
             },
-            options: {
-                responsive: true,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { beginAtZero: true, ticks: { color: '#7b8ba5' }, grid: { color: 'rgba(30,42,66,0.8)' } },
-                    x: { ticks: { color: '#7b8ba5', maxRotation: 45 }, grid: { display: false } }
-                }
-            }
+            options: chartOpts({ plugins: { legend:{display:false}, tooltip:tooltipStyle }, scales: scaleOpts })
         });
 
         // Chart: por destino (doughnut)
@@ -902,17 +1012,9 @@ async function loadResumen() {
             type: 'doughnut',
             data: {
                 labels: data.porDestino.map(d => d.destino),
-                datasets: [{
-                    data: data.porDestino.map(d => d.registros),
-                    backgroundColor: COLORS,
-                    borderWidth: 0,
-                }]
+                datasets: [{ data: data.porDestino.map(d => d.registros), backgroundColor: COLORS, borderWidth: 0, hoverOffset: 8 }]
             },
-            options: {
-                responsive: true,
-                cutout: '55%',
-                plugins: { legend: { position: 'bottom', labels: { color: '#7b8ba5', padding: 12, font: { size: 11 } } } }
-            }
+            options: chartOpts({ cutout:'55%', plugins: { legend:{position:'bottom',labels:{color:'#7b8ba5',padding:12,font:{size:11}}}, tooltip:tooltipStyle } })
         });
 
         // Chart: por turno (doughnut)
@@ -922,17 +1024,9 @@ async function loadResumen() {
             type: 'doughnut',
             data: {
                 labels: data.porTurno.map(t => t.turno),
-                datasets: [{
-                    data: data.porTurno.map(t => t.registros),
-                    backgroundColor: ['#4f7cff', '#f59e0b', '#22c55e', '#ef4444'],
-                    borderWidth: 0,
-                }]
+                datasets: [{ data: data.porTurno.map(t => t.registros), backgroundColor: ['#4f7cff','#f59e0b','#22c55e','#ef4444'], borderWidth: 0, hoverOffset: 8 }]
             },
-            options: {
-                responsive: true,
-                cutout: '55%',
-                plugins: { legend: { position: 'bottom', labels: { color: '#7b8ba5', padding: 12, font: { size: 11 } } } }
-            }
+            options: chartOpts({ cutout:'55%', plugins: { legend:{position:'bottom',labels:{color:'#7b8ba5',padding:12,font:{size:11}}}, tooltip:tooltipStyle } })
         });
 
         // Chart: por condicion (horizontal bar)
@@ -946,19 +1040,12 @@ async function loadResumen() {
                     datasets: [{
                         label: 'Registros',
                         data: data.porCondicion.map(c => c.total),
-                        backgroundColor: data.porCondicion.map((_, i) => COLORS[i % COLORS.length]),
-                        borderRadius: 4,
+                        backgroundColor: data.porCondicion.map((_, i) => COLORS[i % COLORS.length] + 'cc'),
+                        hoverBackgroundColor: data.porCondicion.map((_, i) => COLORS[i % COLORS.length]),
+                        borderRadius: 4, borderSkipped: false,
                     }]
                 },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { beginAtZero: true, ticks: { color: '#7b8ba5' }, grid: { color: 'rgba(30,42,66,0.8)' } },
-                        y: { ticks: { color: '#7b8ba5' }, grid: { display: false } }
-                    }
-                }
+                options: chartOpts({ indexAxis:'y', plugins:{legend:{display:false}, tooltip:tooltipStyle}, scales:{x:{beginAtZero:true,ticks:{color:'#7b8ba5'},grid:{color:'rgba(30,42,66,0.5)'}},y:{ticks:{color:'#7b8ba5'},grid:{display:false}}} })
             });
         }
 
@@ -997,6 +1084,15 @@ async function loadTendencias() {
 
         const ctxL = document.getElementById('chart-tendencia').getContext('2d');
         if (chartTrend) chartTrend.destroy();
+
+        // Gradient fills
+        const gradBlue = ctxL.createLinearGradient(0, 0, 0, 220);
+        gradBlue.addColorStop(0, 'rgba(79,124,255,0.25)');
+        gradBlue.addColorStop(1, 'rgba(79,124,255,0.01)');
+        const gradAmber = ctxL.createLinearGradient(0, 0, 0, 220);
+        gradAmber.addColorStop(0, 'rgba(245,158,11,0.25)');
+        gradAmber.addColorStop(1, 'rgba(245,158,11,0.01)');
+
         chartTrend = new Chart(ctxL, {
             type: 'line',
             data: {
@@ -1006,28 +1102,43 @@ async function loadTendencias() {
                         label: 'Dia',
                         data: dates.map(d => dateMap[d].Dia),
                         borderColor: '#4f7cff',
-                        backgroundColor: 'rgba(79,124,255,0.1)',
+                        backgroundColor: gradBlue,
                         fill: true,
-                        tension: 0.3,
-                        pointRadius: 4,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 8,
+                        pointBackgroundColor: '#4f7cff',
+                        pointBorderColor: '#0a0f1e',
+                        pointBorderWidth: 2,
+                        borderWidth: 2.5,
                     },
                     {
                         label: 'Noche',
                         data: dates.map(d => dateMap[d].Noche),
                         borderColor: '#f59e0b',
-                        backgroundColor: 'rgba(245,158,11,0.1)',
+                        backgroundColor: gradAmber,
                         fill: true,
-                        tension: 0.3,
-                        pointRadius: 4,
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointHoverRadius: 8,
+                        pointBackgroundColor: '#f59e0b',
+                        pointBorderColor: '#0a0f1e',
+                        pointBorderWidth: 2,
+                        borderWidth: 2.5,
                     }
                 ]
             },
             options: {
                 responsive: true,
-                plugins: { legend: { labels: { color: '#7b8ba5' } } },
+                animation: { duration: 1200, easing: 'easeOutQuart' },
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { labels: { color: '#7b8ba5', usePointStyle: true, pointStyle: 'circle' } },
+                    tooltip: { backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#94a3b8', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:10, mode:'index', intersect:false }
+                },
                 scales: {
-                    y: { beginAtZero: true, ticks: { color: '#7b8ba5' }, grid: { color: 'rgba(30,42,66,0.8)' } },
-                    x: { ticks: { color: '#7b8ba5', maxRotation: 45 }, grid: { display: false } }
+                    y: { beginAtZero:true, ticks:{color:'#7b8ba5'}, grid:{color:'rgba(30,42,66,0.5)'} },
+                    x: { ticks:{color:'#7b8ba5',maxRotation:45}, grid:{display:false} }
                 }
             }
         });
@@ -1061,37 +1172,104 @@ async function loadTableData() {
         const busqueda = document.getElementById('dash-busqueda').value;
         const params = getFilterParams();
         const extra = busqueda ? `&busqueda=${encodeURIComponent(busqueda)}` : '';
-        const data = await apiFetch(`${API}/api/dashboard/registros?${params}${extra}&limit=100`);
+        const data = await apiFetch(`${API}/api/dashboard/registros?${params}${extra}&limit=200`);
         if (!data.success) return;
-
-        const tbody = document.getElementById('dash-table-body');
-        if (data.data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin registros</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = data.data.map(r => `
-            <tr>
-                <td>${r.fecha}</td>
-                <td style="font-weight:600;">${r.palletId}</td>
-                <td>${r.cantidad}</td>
-                <td>${r.condicion ? `<span class="badge badge-blue">${r.condicion}</span>` : '-'}</td>
-                <td>${r.destino}</td>
-                <td><span class="badge ${r.turno.toLowerCase().includes('day') || r.turno.toLowerCase().includes('dia') ? 'badge-amber' : 'badge-blue'}">${r.turno}</span></td>
-                <td>${r.escaneadora}</td>
-                <td>${r.pedido || '-'}</td>
-                <td style="color:${r.incidencias ? 'var(--danger)' : 'var(--text-muted)'};">${r.incidencias || '-'}</td>
-                <td>${r.observaciones || '-'}</td>
-            </tr>
-        `).join('');
+        lastTableData = data.data;
+        renderRecords(data.data);
     } catch (err) {
         console.error('[TABLE]', err);
     }
 }
 
-async function loadCatalogos() {
-    // Already populated from resumen, but this ensures filter dropdowns are ready
+function renderRecords(records) {
+    renderGroupedView(records);
+    renderTableView(records);
 }
+
+function turnoBadge(turno) {
+    const isDia = turno.toLowerCase().includes('day') || turno.toLowerCase().includes('dia');
+    return `<span class="badge ${isDia ? 'badge-amber' : 'badge-blue'}">${turno}</span>`;
+}
+
+function renderGroupedView(records) {
+    const container = document.getElementById('records-grouped');
+    if (records.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted);">Sin registros</div>';
+        return;
+    }
+
+    // Group by fecha
+    const groups = {};
+    records.forEach(r => {
+        const key = r.fecha || 'Sin fecha';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(r);
+    });
+
+    // Sort dates descending
+    const sortedDates = Object.keys(groups).sort((a, b) => {
+        const pa = a.split('/'), pb = b.split('/');
+        if (pa.length !== 3 || pb.length !== 3) return 0;
+        return new Date(pb[2], pb[0]-1, pb[1]) - new Date(pa[2], pa[0]-1, pa[1]);
+    });
+
+    container.innerHTML = sortedDates.map(fecha => {
+        const recs = groups[fecha];
+        const safeId = fecha.replace(/\//g, '-');
+        const totalQty = recs.reduce((s, r) => s + (r.cantidad || 0), 0);
+        return `
+            <div class="date-group">
+                <div class="date-group-header" data-dg="${fecha}" onclick="toggleDateGroup('${fecha}')">
+                    <div class="dg-left">
+                        <i class="fa-solid fa-calendar-day" style="color:var(--accent);"></i>
+                        <span class="dg-date">${fecha}</span>
+                        <span class="dg-count">${recs.length} registro${recs.length !== 1 ? 's' : ''} &middot; ${totalQty} uds</span>
+                    </div>
+                    <i class="fa-solid fa-chevron-down dg-chevron"></i>
+                </div>
+                <div class="date-group-body" id="dg-body-${safeId}">
+                    ${recs.map(r => `
+                        <div class="record-card">
+                            <div class="rc-field"><span class="rc-label">Pallet</span><span class="rc-value bold">${r.palletId}</span></div>
+                            <div class="rc-field"><span class="rc-label">Cantidad</span><span class="rc-value">${r.cantidad}</span></div>
+                            <div class="rc-field"><span class="rc-label">Destino</span><span class="rc-value">${r.destino}</span></div>
+                            <div class="rc-field"><span class="rc-label">Turno</span><span class="rc-value">${turnoBadge(r.turno)}</span></div>
+                            <div class="rc-field"><span class="rc-label">Escaneadora</span><span class="rc-value">${r.escaneadora}</span></div>
+                            <div class="rc-field"><span class="rc-label">Condicion</span><span class="rc-value">${r.condicion ? `<span class="badge badge-blue">${r.condicion}</span>` : '-'}</span></div>
+                            <div class="rc-field"><span class="rc-label">Pedido</span><span class="rc-value">${r.pedido || '-'}</span></div>
+                            <div class="rc-field"><span class="rc-label">Incidencias</span><span class="rc-value" style="color:${r.incidencias ? 'var(--danger)' : 'var(--text-muted)'};">${r.incidencias || '-'}</span></div>
+                            ${r.observaciones ? `<div class="rc-row"><div class="rc-field"><span class="rc-label">Observaciones</span><span class="rc-value" style="color:var(--text-muted);">${r.observaciones}</span></div></div>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderTableView(records) {
+    const tbody = document.getElementById('dash-table-body');
+    if (records.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin registros</td></tr>';
+        return;
+    }
+    tbody.innerHTML = records.map(r => `
+        <tr>
+            <td>${r.fecha}</td>
+            <td style="font-weight:600;">${r.palletId}</td>
+            <td>${r.cantidad}</td>
+            <td>${r.condicion ? `<span class="badge badge-blue">${r.condicion}</span>` : '-'}</td>
+            <td>${r.destino}</td>
+            <td>${turnoBadge(r.turno)}</td>
+            <td>${r.escaneadora}</td>
+            <td>${r.pedido || '-'}</td>
+            <td style="color:${r.incidencias ? 'var(--danger)' : 'var(--text-muted)'};">${r.incidencias || '-'}</td>
+            <td>${r.observaciones || '-'}</td>
+        </tr>
+    `).join('');
+}
+
+async function loadCatalogos() {}
 
 // ══════════════════════════════════════════════
 // NFC
