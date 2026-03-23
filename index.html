@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="https://npmcdn.com/flatpickr/dist/themes/dark.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
     <style>
         :root {
@@ -1694,153 +1695,207 @@ function downloadXlsx(wb, filename) {
 // Helper: isDia check
 function isDiaTurno(t) { const l = (t||'').toLowerCase(); return l.includes('day') || l.includes('dia'); }
 
-// Export full dashboard as professional report
+// Capture chart canvas as base64 PNG
+function captureChart(id) {
+    const c = document.getElementById(id);
+    if (!c) return null;
+    try { return c.toDataURL('image/png'); } catch(e) { return null; }
+}
+
+// ExcelJS helper: add styled title row
+function addTitle(ws, text, row, cols) {
+    ws.getRow(row).getCell(1).value = text;
+    ws.getRow(row).getCell(1).font = { bold: true, size: 14, color: { argb: 'FF1E293B' } };
+    ws.getRow(row).height = 24;
+    if (cols > 1) ws.mergeCells(row, 1, row, cols);
+}
+function addSection(ws, text, row, cols) {
+    ws.getRow(row).getCell(1).value = text;
+    ws.getRow(row).getCell(1).font = { bold: true, size: 11, color: { argb: 'FF4F7CFF' } };
+    ws.getRow(row).getCell(1).border = { bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } } };
+    if (cols > 1) ws.mergeCells(row, 1, row, cols);
+}
+function addHeaders(ws, headers, row) {
+    headers.forEach((h, i) => {
+        const cell = ws.getRow(row).getCell(i + 1);
+        cell.value = h;
+        cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+        cell.alignment = { horizontal: 'center' };
+    });
+    ws.getRow(row).height = 20;
+}
+function addDataRow(ws, values, row) {
+    values.forEach((v, i) => {
+        const cell = ws.getRow(row).getCell(i + 1);
+        cell.value = v;
+        cell.font = { size: 10 };
+        cell.border = { bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } } };
+    });
+}
+
+// Export full dashboard with embedded chart images
 async function exportDashboardExcel() {
-    const wb = XLSX.utils.book_new();
+    const EJS = window.ExcelJS;
+    if (!EJS) { alert('Error: ExcelJS no cargado'); return; }
+
+    const wb = new EJS.Workbook();
+    wb.creator = 'MI-TECH Paletizado';
+    wb.created = new Date();
+
     const today = new Date();
     const todayStr = today.toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' });
     const res = lastResumen || {};
 
-    // ── Sheet 1: Resumen Ejecutivo ──
-    const s1 = [];
-    s1.push(['MI-TECH PALETIZADO — REPORTE DE DASHBOARD']);
-    s1.push(['Generado: ' + todayStr]);
-    s1.push([]);
-    s1.push(['INDICADORES PRINCIPALES']);
-    s1.push(['Metrica', 'Valor']);
-    s1.push(['Total Registros', res.totalRegistros || lastTableData.length]);
-    s1.push(['Registros Hoy', res.registrosHoy || 0]);
-    s1.push(['Unidades Totales', res.totalUnidades || 0]);
-    s1.push(['Escaneadoras Activas', (res.escaneadoras || []).length]);
-    s1.push([]);
-    s1.push(['RESUMEN POR TURNO']);
-    s1.push(['Turno', 'Registros', 'Unidades']);
-    (res.porTurno || []).forEach(t => s1.push([t.turno, t.registros, t.unidades]));
-    s1.push([]);
-    s1.push(['RESUMEN POR DESTINO']);
-    s1.push(['Destino', 'Registros', 'Unidades']);
-    (res.porDestino || []).forEach(d => s1.push([d.destino, d.registros, d.unidades]));
-    s1.push([]);
-    s1.push(['RESUMEN POR ESCANEADORA']);
-    s1.push(['Escaneadora', 'Registros', 'Unidades']);
-    (res.porEscaneadora || []).forEach(e => s1.push([e.nombre, e.registros, e.unidades]));
-    s1.push([]);
-    s1.push(['RESUMEN POR CONDICION']);
-    s1.push(['Condicion', 'Registros']);
-    (res.porCondicion || []).forEach(c => s1.push([c.condicion, c.total]));
-
-    const ws1 = XLSX.utils.aoa_to_sheet(s1);
-    ws1['!cols'] = [{ wch: 28 }, { wch: 16 }, { wch: 14 }];
-    // Merge title row
-    ws1['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:2} }, { s:{r:1,c:0}, e:{r:1,c:2} }];
-    XLSX.utils.book_append_sheet(wb, ws1, 'Resumen Ejecutivo');
-
-    // ── Sheet 2: Registros Completos ──
-    const rows = lastTableData.map(recordToRow);
-    const ws2 = XLSX.utils.aoa_to_sheet([EXPORT_COLS, ...rows]);
-    ws2['!cols'] = EXPORT_COLS.map(() => ({ wch: 16 }));
-    ws2['!autofilter'] = { ref: XLSX.utils.encode_range({ s:{r:0,c:0}, e:{r:rows.length,c:EXPORT_COLS.length-1} }) };
-    XLSX.utils.book_append_sheet(wb, ws2, 'Registros');
-
-    // ── Sheet 3: Tendencia Diaria ──
-    const byDate = {};
-    lastTableData.forEach(r => {
-        if (!byDate[r.fecha]) byDate[r.fecha] = { dia: 0, noche: 0, uDia: 0, uNoche: 0 };
-        if (isDiaTurno(r.turno)) { byDate[r.fecha].dia++; byDate[r.fecha].uDia += (r.cantidad||0); }
-        else { byDate[r.fecha].noche++; byDate[r.fecha].uNoche += (r.cantidad||0); }
+    // Capture all chart images
+    const charts = {};
+    ['chart-escaneadora','chart-destino','chart-tendencia','chart-turno','chart-condicion'].forEach(id => {
+        const img = captureChart(id);
+        if (img) charts[id] = img;
     });
-    const s3 = [['TENDENCIA DIARIA'], []];
-    s3.push(['Fecha', 'Reg. Dia', 'Reg. Noche', 'Total Reg.', 'Uds. Dia', 'Uds. Noche', 'Total Uds.']);
+
+    // Helper to embed image
+    async function embedChart(ws, chartId, startRow, startCol, w, h) {
+        const b64 = charts[chartId];
+        if (!b64) return;
+        const imgId = wb.addImage({ base64: b64.split(',')[1], extension: 'png' });
+        ws.addImage(imgId, {
+            tl: { col: startCol - 1, row: startRow - 1 },
+            ext: { width: w, height: h }
+        });
+    }
+
+    // ═══ Sheet 1: Resumen Ejecutivo + Charts ═══
+    const ws1 = wb.addWorksheet('Resumen Ejecutivo');
+    ws1.columns = [{ width:28 },{ width:16 },{ width:16 },{ width:16 },{ width:16 },{ width:16 },{ width:16 }];
+
+    addTitle(ws1, 'MI-TECH PALETIZADO — REPORTE DE DASHBOARD', 1, 7);
+    ws1.getRow(2).getCell(1).value = 'Generado: ' + todayStr;
+    ws1.getRow(2).getCell(1).font = { size: 10, italic: true, color: { argb: 'FF7B8BA5' } };
+    ws1.mergeCells(2, 1, 2, 7);
+
+    let r = 4;
+    addSection(ws1, 'INDICADORES PRINCIPALES', r, 3); r++;
+    addHeaders(ws1, ['Metrica', 'Valor', ''], r); r++;
+    [['Total Registros', res.totalRegistros || lastTableData.length],
+     ['Registros Hoy', res.registrosHoy || 0],
+     ['Unidades Totales', res.totalUnidades || 0],
+     ['Escaneadoras Activas', (res.escaneadoras || []).length]
+    ].forEach(row => { addDataRow(ws1, row, r); r++; });
+
+    r++; addSection(ws1, 'RESUMEN POR TURNO', r, 3); r++;
+    addHeaders(ws1, ['Turno', 'Registros', 'Unidades'], r); r++;
+    (res.porTurno || []).forEach(t => { addDataRow(ws1, [t.turno, t.registros, t.unidades], r); r++; });
+
+    r++; addSection(ws1, 'RESUMEN POR DESTINO', r, 3); r++;
+    addHeaders(ws1, ['Destino', 'Registros', 'Unidades'], r); r++;
+    (res.porDestino || []).forEach(d => { addDataRow(ws1, [d.destino, d.registros, d.unidades], r); r++; });
+
+    r++; addSection(ws1, 'RESUMEN POR ESCANEADORA', r, 3); r++;
+    addHeaders(ws1, ['Escaneadora', 'Registros', 'Unidades'], r); r++;
+    (res.porEscaneadora || []).forEach(e => { addDataRow(ws1, [e.nombre, e.registros, e.unidades], r); r++; });
+
+    // ═══ Sheet 2: Graficas ═══
+    const ws2 = wb.addWorksheet('Graficas');
+    ws2.columns = Array(10).fill({ width: 12 });
+
+    addTitle(ws2, 'GRAFICAS DEL DASHBOARD', 1, 10);
+    let gr = 3;
+    if (charts['chart-escaneadora']) {
+        ws2.getRow(gr).getCell(1).value = 'Registros por Escaneadora';
+        ws2.getRow(gr).getCell(1).font = { bold: true, size: 11 };
+        await embedChart(ws2, 'chart-escaneadora', gr + 1, 1, 480, 260);
+        gr += 18;
+    }
+    if (charts['chart-destino']) {
+        ws2.getRow(gr).getCell(1).value = 'Distribucion por Destino';
+        ws2.getRow(gr).getCell(1).font = { bold: true, size: 11 };
+        await embedChart(ws2, 'chart-destino', gr + 1, 1, 420, 260);
+        gr += 18;
+    }
+    if (charts['chart-tendencia']) {
+        ws2.getRow(gr).getCell(1).value = 'Tendencia Diaria — Dia vs Noche';
+        ws2.getRow(gr).getCell(1).font = { bold: true, size: 11 };
+        await embedChart(ws2, 'chart-tendencia', gr + 1, 1, 520, 240);
+        gr += 17;
+    }
+    if (charts['chart-turno']) {
+        ws2.getRow(gr).getCell(1).value = 'Registros por Turno';
+        ws2.getRow(gr).getCell(1).font = { bold: true, size: 11 };
+        await embedChart(ws2, 'chart-turno', gr + 1, 1, 420, 260);
+        gr += 18;
+    }
+    if (charts['chart-condicion']) {
+        ws2.getRow(gr).getCell(1).value = 'Registros por Condicion';
+        ws2.getRow(gr).getCell(1).font = { bold: true, size: 11 };
+        await embedChart(ws2, 'chart-condicion', gr + 1, 1, 480, 240);
+    }
+
+    // ═══ Sheet 3: Registros Completos ═══
+    const ws3 = wb.addWorksheet('Registros');
+    ws3.columns = EXPORT_COLS.map(h => ({ header: h, width: 16 }));
+    addHeaders(ws3, EXPORT_COLS, 1);
+    lastTableData.forEach((rec, i) => { addDataRow(ws3, recordToRow(rec), i + 2); });
+    ws3.autoFilter = { from: 'A1', to: String.fromCharCode(64 + EXPORT_COLS.length) + '1' };
+
+    // ═══ Sheet 4: Tendencia Diaria ═══
+    const ws4 = wb.addWorksheet('Tendencia Diaria');
+    ws4.columns = [{ width:14 },{ width:12 },{ width:13 },{ width:12 },{ width:12 },{ width:13 },{ width:12 }];
+    addTitle(ws4, 'TENDENCIA DIARIA', 1, 7);
+    if (charts['chart-tendencia']) await embedChart(ws4, 'chart-tendencia', 3, 1, 520, 220);
+    let tr = 18;
+    addHeaders(ws4, ['Fecha','Reg. Dia','Reg. Noche','Total Reg.','Uds. Dia','Uds. Noche','Total Uds.'], tr); tr++;
+    const byDate = {};
     let sumRD=0, sumRN=0, sumUD=0, sumUN=0;
+    lastTableData.forEach(rec => {
+        if (!byDate[rec.fecha]) byDate[rec.fecha] = { dia:0, noche:0, uDia:0, uNoche:0 };
+        if (isDiaTurno(rec.turno)) { byDate[rec.fecha].dia++; byDate[rec.fecha].uDia+=(rec.cantidad||0); }
+        else { byDate[rec.fecha].noche++; byDate[rec.fecha].uNoche+=(rec.cantidad||0); }
+    });
     Object.entries(byDate).sort().forEach(([f, d]) => {
-        s3.push([f, d.dia, d.noche, d.dia+d.noche, d.uDia, d.uNoche, d.uDia+d.uNoche]);
+        addDataRow(ws4, [f, d.dia, d.noche, d.dia+d.noche, d.uDia, d.uNoche, d.uDia+d.uNoche], tr); tr++;
         sumRD+=d.dia; sumRN+=d.noche; sumUD+=d.uDia; sumUN+=d.uNoche;
     });
-    s3.push([]);
-    s3.push(['TOTALES', sumRD, sumRN, sumRD+sumRN, sumUD, sumUN, sumUD+sumUN]);
+    tr++;
+    addDataRow(ws4, ['TOTALES', sumRD, sumRN, sumRD+sumRN, sumUD, sumUN, sumUD+sumUN], tr);
+    ws4.getRow(tr).font = { bold: true };
 
-    const ws3 = XLSX.utils.aoa_to_sheet(s3);
-    ws3['!cols'] = [{ wch: 14 },{ wch: 11 },{ wch: 12 },{ wch: 11 },{ wch: 11 },{ wch: 12 },{ wch: 11 }];
-    ws3['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:6} }];
-    XLSX.utils.book_append_sheet(wb, ws3, 'Tendencia Diaria');
-
-    // ── Sheet 4: Por Escaneadora ──
-    const byEsc = {};
-    lastTableData.forEach(r => {
-        if (!byEsc[r.escaneadora]) byEsc[r.escaneadora] = { reg: 0, uds: 0, dias: new Set(), destinos: {} };
-        byEsc[r.escaneadora].reg++;
-        byEsc[r.escaneadora].uds += (r.cantidad||0);
-        byEsc[r.escaneadora].dias.add(r.fecha);
-        const d = r.destino || 'Otro';
-        byEsc[r.escaneadora].destinos[d] = (byEsc[r.escaneadora].destinos[d]||0) + 1;
-    });
-    const s4 = [['REPORTE POR ESCANEADORA'], []];
-    s4.push(['Escaneadora', 'Registros', 'Unidades', 'Dias Activos', 'Promedio Reg/Dia', 'Destino Principal']);
-    Object.entries(byEsc).sort((a,b)=>b[1].reg-a[1].reg).forEach(([name, d]) => {
-        const topDest = Object.entries(d.destinos).sort((a,b)=>b[1]-a[1])[0];
-        s4.push([name, d.reg, d.uds, d.dias.size, d.dias.size > 0 ? +(d.reg/d.dias.size).toFixed(1) : 0, topDest ? topDest[0] : '-']);
-    });
-    const ws4 = XLSX.utils.aoa_to_sheet(s4);
-    ws4['!cols'] = [{ wch: 22 },{ wch: 11 },{ wch: 11 },{ wch: 13 },{ wch: 16 },{ wch: 18 }];
-    ws4['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:5} }];
-    XLSX.utils.book_append_sheet(wb, ws4, 'Por Escaneadora');
-
-    // ── Sheet 5: Por Destino ──
-    const byDest = {};
-    lastTableData.forEach(r => {
-        const d = r.destino || 'Otro';
-        if (!byDest[d]) byDest[d] = { reg: 0, uds: 0, dia: 0, noche: 0 };
-        byDest[d].reg++;
-        byDest[d].uds += (r.cantidad||0);
-        if (isDiaTurno(r.turno)) byDest[d].dia++; else byDest[d].noche++;
-    });
-    const s5 = [['REPORTE POR DESTINO'], []];
-    s5.push(['Destino', 'Registros', 'Unidades', 'Turno Dia', 'Turno Noche', '% del Total']);
-    const totalReg = lastTableData.length || 1;
-    Object.entries(byDest).sort((a,b)=>b[1].reg-a[1].reg).forEach(([name, d]) => {
-        s5.push([name, d.reg, d.uds, d.dia, d.noche, +((d.reg/totalReg)*100).toFixed(1) + '%']);
-    });
-    const ws5 = XLSX.utils.aoa_to_sheet(s5);
-    ws5['!cols'] = [{ wch: 20 },{ wch: 11 },{ wch: 11 },{ wch: 11 },{ wch: 13 },{ wch: 12 }];
-    ws5['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:5} }];
-    XLSX.utils.book_append_sheet(wb, ws5, 'Por Destino');
-
-    // ── Sheet 6: Métricas e Indicadores ──
-    const s6 = [['MI-TECH PALETIZADO — METRICAS E INDICADORES'], []];
-    s6.push(['METRICAS GENERALES']);
-    s6.push(['', '']);
-    s6.push(['Total de registros', res.totalRegistros || lastTableData.length]);
-    s6.push(['Registros de hoy', res.registrosHoy || 0]);
-    s6.push(['Unidades totales procesadas', res.totalUnidades || 0]);
-    s6.push(['Escaneadoras activas', (res.escaneadoras || []).length]);
-    s6.push(['Fechas con actividad', Object.keys(byDate).length]);
-    s6.push(['Promedio registros por dia', Object.keys(byDate).length > 0 ? +((lastTableData.length / Object.keys(byDate).length).toFixed(1)) : 0]);
-    s6.push([]);
-    s6.push(['DISTRIBUCION POR TURNO']);
-    s6.push(['', 'Registros', '% Registros', 'Unidades', '% Unidades']);
+    // ═══ Sheet 5: Metricas ═══
+    const ws5 = wb.addWorksheet('Metricas');
+    ws5.columns = [{ width:32 },{ width:16 },{ width:14 },{ width:14 },{ width:14 }];
+    addTitle(ws5, 'METRICAS E INDICADORES', 1, 5);
+    let mr = 3;
+    addSection(ws5, 'METRICAS GENERALES', mr, 2); mr++;
+    [['Total de registros', res.totalRegistros || lastTableData.length],
+     ['Registros de hoy', res.registrosHoy || 0],
+     ['Unidades totales', res.totalUnidades || 0],
+     ['Escaneadoras activas', (res.escaneadoras || []).length],
+     ['Fechas con actividad', Object.keys(byDate).length],
+     ['Promedio reg/dia', Object.keys(byDate).length > 0 ? +((lastTableData.length/Object.keys(byDate).length).toFixed(1)) : 0],
+    ].forEach(row => { addDataRow(ws5, row, mr); mr++; });
+    mr++;
     const tR = lastTableData.length || 1;
-    const tU = (res.totalUnidades || 0) || 1;
-    s6.push(['Dia', sumRD, +((sumRD/tR)*100).toFixed(1) + '%', sumUD, +((sumUD/tU)*100).toFixed(1) + '%']);
-    s6.push(['Noche', sumRN, +((sumRN/tR)*100).toFixed(1) + '%', sumUN, +((sumUN/tU)*100).toFixed(1) + '%']);
-    s6.push([]);
-    s6.push(['TOP ESCANEADORAS (por registros)']);
-    s6.push(['Posicion', 'Escaneadora', 'Registros', 'Unidades']);
-    Object.entries(byEsc).sort((a,b)=>b[1].reg-a[1].reg).slice(0,5).forEach(([name, d], i) => {
-        s6.push([i+1, name, d.reg, d.uds]);
-    });
-    s6.push([]);
-    s6.push(['CONDICIONES REGISTRADAS']);
-    s6.push(['Condicion', 'Cantidad', '% del Total']);
-    (res.porCondicion || []).sort((a,b)=>b.total-a.total).forEach(c => {
-        s6.push([c.condicion, c.total, +((c.total/tR)*100).toFixed(1) + '%']);
+    const tU = (res.totalUnidades||0) || 1;
+    addSection(ws5, 'DISTRIBUCION POR TURNO', mr, 5); mr++;
+    addHeaders(ws5, ['','Registros','%','Unidades','%'], mr); mr++;
+    addDataRow(ws5, ['Dia', sumRD, (sumRD/tR*100).toFixed(1)+'%', sumUD, (sumUD/tU*100).toFixed(1)+'%'], mr); mr++;
+    addDataRow(ws5, ['Noche', sumRN, (sumRN/tR*100).toFixed(1)+'%', sumUN, (sumUN/tU*100).toFixed(1)+'%'], mr); mr++;
+    mr++;
+    addSection(ws5, 'CONDICIONES', mr, 3); mr++;
+    addHeaders(ws5, ['Condicion','Cantidad','%'], mr); mr++;
+    (res.porCondicion||[]).sort((a,b)=>b.total-a.total).forEach(c => {
+        addDataRow(ws5, [c.condicion, c.total, (c.total/tR*100).toFixed(1)+'%'], mr); mr++;
     });
 
-    const ws6 = XLSX.utils.aoa_to_sheet(s6);
-    ws6['!cols'] = [{ wch: 32 },{ wch: 16 },{ wch: 14 },{ wch: 14 },{ wch: 14 }];
-    ws6['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:4} }];
-    XLSX.utils.book_append_sheet(wb, ws6, 'Metricas');
-
-    downloadXlsx(wb, `Dashboard_MI-TECH_${today.toISOString().split('T')[0]}.xlsx`);
+    // Generate and download
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Dashboard_MI-TECH_${today.toISOString().split('T')[0]}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
 // Export records for a specific date
