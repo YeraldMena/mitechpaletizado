@@ -1825,17 +1825,55 @@ async function exportDashboardExcel() {
     escData.forEach((e,i)=>{exRow(ws5,[e.nombre,e.registros,e.unidades],i+2);});
     const escLastRow = escData.length+1;
 
+    // ═══ Sheet 6: Por Destino (data for native chart) ═══
+    const ws6 = wb.addWorksheet('Por Destino');
+    ws6.columns=[{width:20},{width:14},{width:14}];
+    exHeaders(ws6,['Destino','Registros','Unidades'],1);
+    const destData = (res.porDestino||[]).sort((a,b)=>b.registros-a.registros);
+    destData.forEach((d,i)=>{exRow(ws6,[d.destino,d.registros,d.unidades],i+2);});
+    const destLastRow = destData.length+1;
+
+    // ═══ Sheet 7: Por Condicion (data for native chart) ═══
+    const ws7 = wb.addWorksheet('Por Condicion');
+    ws7.columns=[{width:18},{width:14}];
+    exHeaders(ws7,['Condicion','Registros'],1);
+    const condData = (res.porCondicion||[]).sort((a,b)=>b.total-a.total);
+    condData.forEach((c,i)=>{exRow(ws7,[c.condicion,c.total],i+2);});
+    const condLastRow = condData.length+1;
+
+    // ═══ Sheet 8: Promedios por Turno ═══
+    const ws8 = wb.addWorksheet('Promedios');
+    ws8.columns=[{width:16},{width:16},{width:14},{width:16}];
+    exHeaders(ws8,['Turno','Total Registros','Promedio Reg/Dia','Dias Trabajados'],1);
+    const dayDates=new Set(),nightDates=new Set();
+    lastTableData.forEach(rec=>{
+        if(isDiaTurno(rec.turno))dayDates.add(rec.fecha);else nightDates.add(rec.fecha);
+    });
+    exRow(ws8,['Dia',sumRD,dayDates.size>0?+(sumRD/dayDates.size).toFixed(1):0,dayDates.size],2);
+    exRow(ws8,['Noche',sumRN,nightDates.size>0?+(sumRN/nightDates.size).toFixed(1):0,nightDates.size],3);
     // Generate ExcelJS buffer
     const buf = await wb.xlsx.writeBuffer();
 
     // ═══ Inject native Excel charts via OOXML + JSZip ═══
     const zip = await JSZip.loadAsync(buf);
 
-    // Chart definitions
+    // Native chart colors
+    const PIE_COLORS = ['4F7CFF','22C55E','F59E0B','EF4444','8B5CF6','EC4899','14B8A6','F97316','6366F1','06B6D4'];
+
+    // Chart definitions — ALL 6 dashboard visualizations
     const chartFiles = [
+        // 1. Tendencia Diaria (grouped column: Dia vs Noche per date)
         { id: 1, xml: chartBarXML('Tendencia', tendLastRow, [{name:'Dia',color:'F59E0B'},{name:'Noche',color:'4F7CFF'}], 'Tendencia Diaria'), sheetIdx: 3, fromCol:0, fromRow:tendLastRow+1, toCol:7, toRow:tendLastRow+16 },
-        { id: 2, xml: chartPieXML('Por Turno', 3, ['F59E0B','4F7CFF'], 'Distribucion por Turno'), sheetIdx: 4, fromCol:0, fromRow:4, toCol:5, toRow:18 },
+        // 2. Registros por Turno (pie)
+        { id: 2, xml: chartPieXML('Por Turno', 3, ['F59E0B','4F7CFF'], 'Registros por Turno'), sheetIdx: 4, fromCol:0, fromRow:4, toCol:5, toRow:18 },
+        // 3. Registros por Escaneadora (bar)
         { id: 3, xml: chartBarXML('Por Escaneadora', escLastRow, [{name:'Registros',color:'4F7CFF'}], 'Registros por Escaneadora'), sheetIdx: 5, fromCol:0, fromRow:escLastRow+1, toCol:5, toRow:escLastRow+16 },
+        // 4. Distribucion por Destino (pie)
+        { id: 4, xml: chartPieXML('Por Destino', destLastRow, PIE_COLORS.slice(0, destData.length), 'Distribucion por Destino'), sheetIdx: 6, fromCol:0, fromRow:destLastRow+1, toCol:5, toRow:destLastRow+15 },
+        // 5. Registros por Condicion (bar)
+        { id: 5, xml: chartBarXML('Por Condicion', condLastRow, [{name:'Registros',color:'8B5CF6'}], 'Registros por Condicion'), sheetIdx: 7, fromCol:0, fromRow:condLastRow+1, toCol:4, toRow:condLastRow+15 },
+        // 6. Promedios por Turno (bar — Total + Promedio)
+        { id: 6, xml: chartBarXML('Promedios', 3, [{name:'Total Registros',color:'4F7CFF'},{name:'Promedio Reg/Dia',color:'22C55E'}], 'Promedios por Turno'), sheetIdx: 8, fromCol:0, fromRow:4, toCol:5, toRow:18 },
     ];
 
     for (const cf of chartFiles) {
