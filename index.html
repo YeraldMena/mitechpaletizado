@@ -1625,56 +1625,90 @@ async function handleResumenSubmit(e) {
     }
 }
 
+const expandedResGroups = new Set();
+let lastResumenData = [];
+
+function toggleResGroup(fecha) {
+    if (expandedResGroups.has(fecha)) expandedResGroups.delete(fecha);
+    else expandedResGroups.add(fecha);
+    renderResumenHistory(lastResumenData);
+}
+
+function renderResumenCard(r) {
+    const isDia = (r.turno||'').toLowerCase().includes('day') || (r.turno||'').toLowerCase().includes('dia');
+    return `<div class="resumen-card">
+        <div class="resumen-stat"><span class="resumen-stat-label">Turno</span><span class="resumen-stat-value"><span class="badge ${isDia?'badge-amber':'badge-blue'}">${r.turno}</span></span></div>
+        <div class="resumen-stat"><span class="resumen-stat-label">Pallets Totales</span><span class="resumen-stat-value" style="color:#f59e0b;font-size:1.15rem;">${r.palletsTotales}</span></div>
+        <div class="resumen-stat"><span class="resumen-stat-label">Pallets TRG</span><span class="resumen-stat-value">${r.palletsTRG||0}</span></div>
+        <div class="resumen-stat"><span class="resumen-stat-label">En Proceso</span><span class="resumen-stat-value">${r.palletsEnProceso||0}</span></div>
+        <div class="resumen-stat"><span class="resumen-stat-label">Asistencia</span><span class="resumen-stat-value" style="color:var(--success);">${r.asistencia||0}</span></div>
+        <div class="resumen-stat"><span class="resumen-stat-label">Absentismo</span><span class="resumen-stat-value" style="color:var(--danger);">${r.absentismo||0}</span></div>
+        <div class="resumen-stat"><span class="resumen-stat-label">Capturado por</span><span class="resumen-stat-value" style="font-size:0.85rem;">${r.nombreCaptura||'-'}</span></div>
+        <div class="resumen-stat"><span class="resumen-stat-label">Hora</span><span class="resumen-stat-value" style="font-size:0.85rem;">${r.createdAt ? new Date(r.createdAt).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}) : '-'}</span></div>
+        ${r.tareasPendientes ? `<div class="resumen-tareas"><strong>Tareas pendientes:</strong> ${r.tareasPendientes}</div>` : ''}
+    </div>`;
+}
+
+function renderResumenHistory(records) {
+    const container = document.getElementById('resumen-history');
+    if (records.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Sin resumenes registrados</div>';
+        return;
+    }
+    // Group by fecha
+    const groups = {};
+    records.forEach(r => { const k = r.fecha||'Sin fecha'; if (!groups[k]) groups[k]=[]; groups[k].push(r); });
+    const sortedDates = Object.keys(groups).sort((a,b) => {
+        const pa=a.split('/'),pb=b.split('/');
+        if(pa.length!==3||pb.length!==3) return 0;
+        return new Date(pb[2],pb[0]-1,pb[1]) - new Date(pa[2],pa[0]-1,pa[1]);
+    });
+
+    container.innerHTML = sortedDates.map(fecha => {
+        const recs = groups[fecha];
+        const isExp = expandedResGroups.has(fecha);
+        const totalPallets = recs.reduce((s,r)=>s+(r.palletsTotales||0),0);
+        const safeId = fecha.replace(/\//g,'-');
+        return `<div class="date-group">
+            <div class="date-group-header ${isExp?'':'collapsed'}" data-dg="${fecha}" onclick="toggleResGroup('${fecha}')">
+                <div class="dg-left">
+                    <i class="fa-solid fa-calendar-day" style="color:var(--accent);"></i>
+                    <span class="dg-date">${fecha}</span>
+                    <span class="dg-count">${recs.length} resumen${recs.length!==1?'es':''} &middot; ${totalPallets} pallets</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <button onclick="event.stopPropagation();exportResumenFecha('${fecha}')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text-muted);cursor:pointer;font-size:0.75rem;display:flex;align-items:center;gap:4px;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'"><i class="fa-solid fa-download"></i>Excel</button>
+                    <i class="fa-solid fa-chevron-down dg-chevron"></i>
+                </div>
+            </div>
+            <div class="date-group-body ${isExp?'':'hidden'}" id="dg-res-${safeId}">
+                ${recs.map(r => renderResumenCard(r)).join('')}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function exportResumenFecha(fecha) {
+    const recs = lastResumenData.filter(r => r.fecha === fecha);
+    if (recs.length === 0) return;
+    const wb = XLSX.utils.book_new();
+    const headers = ['Fecha','Turno','Pallets Totales','Pallets TRG','En Proceso','Asistencia','Absentismo','Tareas Pendientes','Capturado Por'];
+    const rows = recs.map(r => [r.fecha, r.turno, r.palletsTotales, r.palletsTRG||0, r.palletsEnProceso||0, r.asistencia||0, r.absentismo||0, r.tareasPendientes||'', r.nombreCaptura||'']);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    ws['!cols'] = headers.map(() => ({ wch: 16 }));
+    XLSX.utils.book_append_sheet(wb, ws, fecha.replace(/\//g, '-'));
+    XLSX.writeFile(wb, `Resumen_${fecha.replace(/\//g,'-')}.xlsx`);
+}
+
 async function loadResumenes() {
     const container = document.getElementById('resumen-history');
     try {
         const turnoFilter = document.getElementById('res-filter-turno').value;
         const params = turnoFilter ? `?turno=${turnoFilter}` : '';
         const data = await apiFetch(`${API}/api/resumen${params}`);
-        if (!data.success || data.data.length === 0) {
-            container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Sin resumenes registrados</div>';
-            return;
-        }
-        container.innerHTML = data.data.map(r => {
-            const isDia = (r.turno||'').toLowerCase().includes('day') || (r.turno||'').toLowerCase().includes('dia');
-            return `
-                <div class="resumen-card">
-                    <div class="resumen-stat">
-                        <span class="resumen-stat-label">Fecha</span>
-                        <span class="resumen-stat-value">${r.fecha}</span>
-                    </div>
-                    <div class="resumen-stat">
-                        <span class="resumen-stat-label">Turno</span>
-                        <span class="resumen-stat-value"><span class="badge ${isDia ? 'badge-amber' : 'badge-blue'}">${r.turno}</span></span>
-                    </div>
-                    <div class="resumen-stat">
-                        <span class="resumen-stat-label">Pallets Totales</span>
-                        <span class="resumen-stat-value" style="color:#f59e0b;font-size:1.2rem;">${r.palletsTotales}</span>
-                    </div>
-                    <div class="resumen-stat">
-                        <span class="resumen-stat-label">Pallets TRG</span>
-                        <span class="resumen-stat-value">${r.palletsTRG || 0}</span>
-                    </div>
-                    <div class="resumen-stat">
-                        <span class="resumen-stat-label">En Proceso</span>
-                        <span class="resumen-stat-value">${r.palletsEnProceso || 0}</span>
-                    </div>
-                    <div class="resumen-stat">
-                        <span class="resumen-stat-label">Asistencia</span>
-                        <span class="resumen-stat-value" style="color:var(--success);">${r.asistencia || 0}</span>
-                    </div>
-                    <div class="resumen-stat">
-                        <span class="resumen-stat-label">Absentismo</span>
-                        <span class="resumen-stat-value" style="color:var(--danger);">${r.absentismo || 0}</span>
-                    </div>
-                    <div class="resumen-stat">
-                        <span class="resumen-stat-label">Capturado por</span>
-                        <span class="resumen-stat-value" style="font-size:0.85rem;">${r.nombreCaptura || '-'}</span>
-                    </div>
-                    ${r.tareasPendientes ? `<div class="resumen-tareas"><strong>Tareas pendientes:</strong> ${r.tareasPendientes}</div>` : ''}
-                </div>
-            `;
-        }).join('');
+        if (!data.success) { container.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--danger);">Error</div>'; return; }
+        lastResumenData = data.data;
+        renderResumenHistory(data.data);
     } catch (err) {
         container.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--danger);">Error cargando resumenes</div>';
     }
