@@ -504,6 +504,7 @@
                                     <option value="HV (High Value)">HV (High Value)</option>
                                     <option value="HV Televisiones">HV Televisiones</option>
                                     <option value="BOX">BOX</option>
+                                    <option value="BULKY">BULKY</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -863,6 +864,12 @@ async function handleEscSubmit(e) {
         return;
     }
 
+    // BULKY: tag observations with LPN identifier
+    let finalObs = observaciones;
+    if (destino === 'BULKY' && !finalObs.includes('LPN')) {
+        finalObs = finalObs ? 'LPN | BULKY | ' + finalObs : 'LPN | BULKY';
+    }
+
     // Format date M/D/YYYY
     const dp = fechaRaw.split('-');
     const fecha = `${parseInt(dp[1])}/${parseInt(dp[2])}/${dp[0]}`;
@@ -877,7 +884,7 @@ async function handleEscSubmit(e) {
     try {
         const data = await apiFetch(`${API}/api/escaneadoras`, {
             method: 'POST',
-            body: JSON.stringify({ palletId, cantidad: parseInt(cantidad), condicion, destino, turno, escaneadora, fecha, pedido, incidencias, observaciones })
+            body: JSON.stringify({ palletId, cantidad: parseInt(cantidad), condicion, destino, turno, escaneadora, fecha, pedido, incidencias, observaciones: finalObs })
         });
 
         if (!data.success) throw new Error(data.error);
@@ -1731,6 +1738,18 @@ document.addEventListener('click', function(e) {
 initCondDropdown();
 initNfc();
 checkSession();
+
+// BULKY: auto-select GRA/GRB/GRC when BULKY is chosen
+document.getElementById('esc-destino').addEventListener('change', function() {
+    if (this.value === 'BULKY') {
+        const bulkyConds = ['GRA', 'GRB', 'GRC'];
+        bulkyConds.forEach(code => {
+            if (!selectedConditions.includes(code)) selectedConditions.push(code);
+        });
+        renderCondTags();
+        renderCondOptions();
+    }
+});
 </script>
 </body>
 </html>
