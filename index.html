@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="https://npmcdn.com/flatpickr/dist/themes/dark.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
     <style>
         :root {
@@ -290,27 +291,6 @@
         }
         .trend-kpi-value { font-size:1.6rem; font-weight:700; line-height:1.2; }
         .trend-kpi-label { font-size:0.75rem; color:var(--text-muted); margin-top:2px; text-transform:uppercase; letter-spacing:0.3px; }
-        .trend-row {
-            display:flex; align-items:center; gap:0.75rem; padding:0.55rem 0;
-            border-bottom:1px solid var(--border); animation:trend-row-in 0.4s ease both;
-        }
-        .trend-row:last-child { border-bottom:none; }
-        .trend-row-date { width:80px; font-size:0.82rem; font-weight:600; flex-shrink:0; color:var(--text-main); }
-        .trend-row-bars { flex:1; display:flex; flex-direction:column; gap:3px; }
-        .trend-bar-track { height:18px; border-radius:4px; background:var(--bg-input); overflow:hidden; position:relative; }
-        .trend-bar-fill {
-            height:100%; border-radius:4px; display:flex; align-items:center; padding:0 8px;
-            font-size:0.7rem; font-weight:700; color:#fff; min-width:0;
-            transition:width 0.8s cubic-bezier(0.22,1,0.36,1);
-        }
-        .trend-bar-fill.dia { background:linear-gradient(90deg, #f59e0b, #fbbf24); }
-        .trend-bar-fill.noche { background:linear-gradient(90deg, #4f7cff, #6b93ff); }
-        .trend-row-total { width:36px; text-align:right; font-size:0.8rem; font-weight:600; color:var(--text-muted); flex-shrink:0; }
-        .trend-legend {
-            display:flex; gap:1.25rem; justify-content:center; margin-bottom:1rem; font-size:0.8rem; color:var(--text-muted);
-        }
-        .trend-legend-dot { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:middle; }
-        @keyframes trend-row-in { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:translateX(0); } }
 
         /* ── Live indicator ── */
         .live-dot {
@@ -575,9 +555,14 @@
         <!-- ══════════════════════════════════════ -->
         <div class="view" id="view-dashboard">
             <button class="back-btn" onclick="switchView('home')"><i class="fa-solid fa-arrow-left"></i> Volver al inicio</button>
-            <div class="page-header">
-                <h1><i class="fa-solid fa-chart-pie"></i> Dashboard Operativo</h1>
-                <p>Resumen completo de la operacion de paletizado</p>
+            <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;">
+                <div>
+                    <h1><i class="fa-solid fa-chart-pie"></i> Dashboard Operativo</h1>
+                    <p>Resumen completo de la operacion de paletizado</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="exportDashboardExcel()" style="margin-top:0.25rem;">
+                    <i class="fa-solid fa-file-excel"></i> Descargar Dashboard
+                </button>
             </div>
 
             <!-- Filters -->
@@ -640,13 +625,13 @@
                 </div>
             </div>
 
-            <!-- Tendencia Diaria — Rediseño completo -->
+            <!-- Tendencia Diaria -->
             <div class="card" style="margin-bottom:1.5rem;padding:1.25rem 1.5rem;">
                 <div class="card-title"><i class="fa-solid fa-chart-line"></i> Tendencia Diaria</div>
-                <!-- Summary KPIs row -->
                 <div id="trend-summary" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:1.25rem;"></div>
-                <!-- Horizontal bars per date -->
-                <div id="trend-bars"></div>
+                <div id="trend-chart-wrap" style="position:relative;height:200px;">
+                    <canvas id="chart-tendencia"></canvas>
+                </div>
             </div>
 
             <!-- Charts Row 2 -->
@@ -675,12 +660,15 @@
                         <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-table"></i> Registros</div>
                         <span><span class="live-dot"></span><span class="live-label">En vivo</span></span>
                     </div>
-                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
                         <input type="text" class="form-input" id="dash-busqueda" placeholder="Buscar..." style="width:200px;padding:0.5rem 0.8rem;font-size:0.85rem;" oninput="debouncedSearch()">
                         <div class="view-tabs">
                             <button class="view-tab active" onclick="setRecordView('grouped')" id="tab-grouped"><i class="fa-solid fa-layer-group"></i> Agrupado</button>
                             <button class="view-tab" onclick="setRecordView('table')" id="tab-table"><i class="fa-solid fa-table-list"></i> Tabla</button>
                         </div>
+                        <button class="btn btn-secondary btn-sm" onclick="exportFilteredExcel()" title="Descargar lo que estoy viendo">
+                            <i class="fa-solid fa-download"></i> Excel
+                        </button>
                     </div>
                 </div>
 
@@ -911,7 +899,7 @@ async function handleEscSubmit(e) {
 // DASHBOARD
 // ══════════════════════════════════════════════
 
-let chartEsc = null, chartDest = null, chartTurno = null, chartCond = null;
+let chartEsc = null, chartDest = null, chartTrend = null, chartTurno = null, chartCond = null;
 let fpInstance = null;
 let dashPollTimer = null;
 let currentRecordView = 'grouped';
@@ -1122,62 +1110,71 @@ function renderTrendWidget(dateMap) {
         return new Date(pa[2], pa[0]-1, pa[1]) - new Date(pb[2], pb[0]-1, pb[1]);
     });
 
-    // Calculate totals
     let totalDia = 0, totalNoche = 0;
     dates.forEach(d => { totalDia += dateMap[d].Dia; totalNoche += dateMap[d].Noche; });
-    const totalAll = totalDia + totalNoche;
-    const maxPerDate = Math.max(1, ...dates.map(d => dateMap[d].Dia + dateMap[d].Noche));
 
-    // Summary KPIs
-    const summaryEl = document.getElementById('trend-summary');
-    summaryEl.innerHTML = `
-        <div class="trend-kpi">
-            <div class="trend-kpi-value" style="color:#f59e0b;">${totalDia}</div>
-            <div class="trend-kpi-label">Turno Dia</div>
-        </div>
-        <div class="trend-kpi">
-            <div class="trend-kpi-value" style="color:#4f7cff;">${totalNoche}</div>
-            <div class="trend-kpi-label">Turno Noche</div>
-        </div>
-        <div class="trend-kpi">
-            <div class="trend-kpi-value" style="color:var(--text-main);">${totalAll}</div>
-            <div class="trend-kpi-label">Total</div>
-        </div>
+    // KPIs
+    document.getElementById('trend-summary').innerHTML = `
+        <div class="trend-kpi"><div class="trend-kpi-value" style="color:#f59e0b;">${totalDia}</div><div class="trend-kpi-label">Turno Dia</div></div>
+        <div class="trend-kpi"><div class="trend-kpi-value" style="color:#4f7cff;">${totalNoche}</div><div class="trend-kpi-label">Turno Noche</div></div>
+        <div class="trend-kpi"><div class="trend-kpi-value" style="color:var(--text-main);">${totalDia + totalNoche}</div><div class="trend-kpi-label">Total</div></div>
     `;
 
-    // Horizontal bars per date
-    const barsEl = document.getElementById('trend-bars');
+    // Vertical grouped bar chart
+    const ctx = document.getElementById('chart-tendencia').getContext('2d');
+    if (chartTrend) chartTrend.destroy();
+
     if (dates.length === 0) {
-        barsEl.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Sin datos de tendencia</div>';
+        document.getElementById('trend-chart-wrap').style.display = 'none';
         return;
     }
+    document.getElementById('trend-chart-wrap').style.display = '';
 
-    barsEl.innerHTML = `
-        <div class="trend-legend">
-            <span><span class="trend-legend-dot" style="background:#f59e0b;"></span>Dia</span>
-            <span><span class="trend-legend-dot" style="background:#4f7cff;"></span>Noche</span>
-        </div>
-    ` + dates.map((fecha, i) => {
-        const dia = dateMap[fecha].Dia;
-        const noche = dateMap[fecha].Noche;
-        const total = dia + noche;
-        const diaPct = total > 0 ? (dia / maxPerDate) * 100 : 0;
-        const nochePct = total > 0 ? (noche / maxPerDate) * 100 : 0;
-        return `
-            <div class="trend-row" style="animation-delay:${i * 60}ms;">
-                <div class="trend-row-date">${fecha}</div>
-                <div class="trend-row-bars">
-                    <div class="trend-bar-track">
-                        <div class="trend-bar-fill dia" style="width:${diaPct}%;">${dia > 0 ? dia : ''}</div>
-                    </div>
-                    <div class="trend-bar-track">
-                        <div class="trend-bar-fill noche" style="width:${nochePct}%;">${noche > 0 ? noche : ''}</div>
-                    </div>
-                </div>
-                <div class="trend-row-total">${total}</div>
-            </div>
-        `;
-    }).join('');
+    const tooltipStyle = { backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#e8ecf4', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:10 };
+
+    chartTrend = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: dates,
+            datasets: [
+                {
+                    label: 'Dia',
+                    data: dates.map(d => dateMap[d].Dia),
+                    backgroundColor: 'rgba(245,158,11,0.85)',
+                    hoverBackgroundColor: '#f59e0b',
+                    borderRadius: 3,
+                    borderSkipped: false,
+                    maxBarThickness: 32,
+                },
+                {
+                    label: 'Noche',
+                    data: dates.map(d => dateMap[d].Noche),
+                    backgroundColor: 'rgba(79,124,255,0.85)',
+                    hoverBackgroundColor: '#4f7cff',
+                    borderRadius: 3,
+                    borderSkipped: false,
+                    maxBarThickness: 32,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 800, easing: 'easeOutQuart' },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { labels: { color: '#7b8ba5', usePointStyle: true, pointStyle: 'rectRounded', padding: 14, font: { size: 11 } } },
+                tooltip: {
+                    ...tooltipStyle, mode: 'index', intersect: false,
+                    callbacks: { afterBody: (items) => 'Total: ' + items.reduce((s, i) => s + i.parsed.y, 0) }
+                }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { color: '#7b8ba5', stepSize: 1, font: { size: 10 } }, grid: { color: 'rgba(30,42,66,0.4)' } },
+                x: { ticks: { color: '#7b8ba5', font: { size: 10 } }, grid: { display: false } }
+            }
+        }
+    });
 }
 
 async function loadTendencias() {
@@ -1278,7 +1275,10 @@ function renderGroupedView(records) {
                         <span class="dg-date">${fecha}</span>
                         <span class="dg-count">${recs.length} registro${recs.length !== 1 ? 's' : ''} &middot; ${totalQty} uds</span>
                     </div>
-                    <i class="fa-solid fa-chevron-down dg-chevron"></i>
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <button onclick="event.stopPropagation();exportDateExcel('${fecha}')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text-muted);cursor:pointer;font-size:0.75rem;display:flex;align-items:center;gap:4px;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'"><i class="fa-solid fa-download"></i>Excel</button>
+                        <i class="fa-solid fa-chevron-down dg-chevron"></i>
+                    </div>
                 </div>
                 <div class="date-group-body ${isExpanded ? '' : 'hidden'}" id="dg-body-${safeId}">
                     ${recs.map(r => `
@@ -1429,6 +1429,83 @@ function resetNfcBtn() {
     btn.classList.remove('scanning', 'nfc-success', 'nfc-error');
     btn.querySelector('.nfc-text span:first-child').textContent = 'Acceder con NFC';
     btn.querySelector('.nfc-text span:last-child').textContent = 'Pulsa para leer';
+}
+
+// ══════════════════════════════════════════════
+// EXCEL EXPORTS
+// ══════════════════════════════════════════════
+
+const EXPORT_COLS = ['Fecha','Pallet ID','Cantidad','Condicion','Destino','Turno','Escaneadora','Pedido','Incidencias','Observaciones'];
+function recordToRow(r) {
+    return [r.fecha, r.palletId, r.cantidad, r.condicion||'', r.destino, r.turno, r.escaneadora, r.pedido||'', r.incidencias||'', r.observaciones||''];
+}
+
+function downloadXlsx(wb, filename) {
+    XLSX.writeFile(wb, filename);
+}
+
+// Export full dashboard
+async function exportDashboardExcel() {
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: All records
+    const rows = lastTableData.map(recordToRow);
+    const ws1 = XLSX.utils.aoa_to_sheet([EXPORT_COLS, ...rows]);
+    ws1['!cols'] = EXPORT_COLS.map(() => ({ wch: 16 }));
+    XLSX.utils.book_append_sheet(wb, ws1, 'Registros');
+
+    // Sheet 2: Resumen por dia
+    const byDate = {};
+    lastTableData.forEach(r => {
+        if (!byDate[r.fecha]) byDate[r.fecha] = { dia: 0, noche: 0, unidades: 0 };
+        const isDia = r.turno.toLowerCase().includes('day') || r.turno.toLowerCase().includes('dia');
+        if (isDia) byDate[r.fecha].dia++; else byDate[r.fecha].noche++;
+        byDate[r.fecha].unidades += (r.cantidad || 0);
+    });
+    const dateRows = Object.entries(byDate).sort().map(([f, d]) => [f, d.dia, d.noche, d.dia + d.noche, d.unidades]);
+    const ws2 = XLSX.utils.aoa_to_sheet([['Fecha','Dia','Noche','Total','Unidades'], ...dateRows]);
+    ws2['!cols'] = [{ wch: 14 },{ wch: 8 },{ wch: 8 },{ wch: 8 },{ wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Por Dia');
+
+    // Sheet 3: Resumen por turno
+    let tDia = 0, tNoche = 0, uDia = 0, uNoche = 0;
+    lastTableData.forEach(r => {
+        const isDia = r.turno.toLowerCase().includes('day') || r.turno.toLowerCase().includes('dia');
+        if (isDia) { tDia++; uDia += (r.cantidad || 0); } else { tNoche++; uNoche += (r.cantidad || 0); }
+    });
+    const ws3 = XLSX.utils.aoa_to_sheet([
+        ['Turno','Registros','Unidades'],
+        ['Dia', tDia, uDia],
+        ['Noche', tNoche, uNoche],
+        ['Total', tDia + tNoche, uDia + uNoche]
+    ]);
+    ws3['!cols'] = [{ wch: 10 },{ wch: 12 },{ wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Por Turno');
+
+    const today = new Date().toISOString().split('T')[0];
+    downloadXlsx(wb, `Dashboard_${today}.xlsx`);
+}
+
+// Export records for a specific date
+function exportDateExcel(fecha) {
+    const recs = lastTableData.filter(r => r.fecha === fecha);
+    if (recs.length === 0) return;
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([EXPORT_COLS, ...recs.map(recordToRow)]);
+    ws['!cols'] = EXPORT_COLS.map(() => ({ wch: 16 }));
+    XLSX.utils.book_append_sheet(wb, ws, fecha.replace(/\//g, '-'));
+    downloadXlsx(wb, `Registros_${fecha.replace(/\//g, '-')}.xlsx`);
+}
+
+// Export current filtered view
+function exportFilteredExcel() {
+    if (lastTableData.length === 0) return;
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([EXPORT_COLS, ...lastTableData.map(recordToRow)]);
+    ws['!cols'] = EXPORT_COLS.map(() => ({ wch: 16 }));
+    XLSX.utils.book_append_sheet(wb, ws, 'Registros Filtrados');
+    const today = new Date().toISOString().split('T')[0];
+    downloadXlsx(wb, `Registros_Filtrados_${today}.xlsx`);
 }
 
 // ══════════════════════════════════════════════
