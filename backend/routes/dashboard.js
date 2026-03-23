@@ -161,10 +161,11 @@ router.get('/tendencias', async (req, res) => {
     const limit = parseInt(req.query.dias) || 7;
 
     // Aggregation: group by date from createdAt, split by turno
+    // Use 'fecha' field (operator-entered operational date), not createdAt
     const tendencia = await EscaneadoraRegistro.aggregate([
-      { $addFields: { workDate: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'America/Monterrey' } }, turnoLower: { $toLower: '$turno' } } },
+      { $addFields: { turnoLower: { $toLower: '$turno' } } },
       { $group: {
-          _id: '$workDate',
+          _id: '$fecha',
           dia: { $sum: { $cond: [{ $or: [{ $regexMatch: { input: '$turnoLower', regex: /day|día|dia/ } }] }, 1, 0] } },
           noche: { $sum: { $cond: [{ $or: [{ $regexMatch: { input: '$turnoLower', regex: /night|noche/ } }] }, 1, 0] } },
           total: { $sum: 1 }

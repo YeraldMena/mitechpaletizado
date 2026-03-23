@@ -1287,8 +1287,11 @@ async function loadResumen() {
 let trendCache = null;
 
 function renderTrendWidget(dateMap) {
-    // Dates are now YYYY-MM-DD format, sort chronologically
-    const dates = Object.keys(dateMap).sort();
+    // Dates are M/D/YYYY format from 'fecha' field, sort chronologically
+    const dates = Object.keys(dateMap).sort((a, b) => {
+        const pa = a.split('/'), pb = b.split('/');
+        return new Date(pa[2], pa[0]-1, pa[1]) - new Date(pb[2], pb[0]-1, pb[1]);
+    });
 
     let totalDia = 0, totalNoche = 0;
     dates.forEach(d => { totalDia += dateMap[d].Dia; totalNoche += dateMap[d].Noche; });
@@ -1312,8 +1315,8 @@ function renderTrendWidget(dateMap) {
 
     const tooltipStyle = { backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#e8ecf4', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:10 };
 
-    // Format dates for display: YYYY-MM-DD → "DD/MM"
-    const dateLabels = dates.map(d => { const p = d.split('-'); return p[2] + '/' + p[1]; });
+    // Format dates for display: M/D/YYYY → "DD/MM"
+    const dateLabels = dates.map(d => { const p = d.split('/'); return p[1] + '/' + p[0]; });
     const diaValues = dates.map(d => dateMap[d].Dia);
     const nocheValues = dates.map(d => dateMap[d].Noche);
 

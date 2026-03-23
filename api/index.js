@@ -279,9 +279,10 @@ app.get('/api/dashboard/registros', auth, roleGuard('admin'), async (req, res) =
 app.get('/api/dashboard/tendencias', auth, roleGuard('admin'), async (req, res) => {
   try {
     const limit = parseInt(req.query.dias) || 7;
+    // Use 'fecha' field (operator-entered date), not createdAt
     const tendencia = await EscReg.aggregate([
-      { $addFields: { workDate: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'America/Monterrey' } }, turnoLower: { $toLower: '$turno' } } },
-      { $group: { _id: '$workDate', dia: { $sum: { $cond: [{ $or: [{ $regexMatch: { input: '$turnoLower', regex: /day|día|dia/ } }] }, 1, 0] } }, noche: { $sum: { $cond: [{ $or: [{ $regexMatch: { input: '$turnoLower', regex: /night|noche/ } }] }, 1, 0] } }, total: { $sum: 1 } } },
+      { $addFields: { turnoLower: { $toLower: '$turno' } } },
+      { $group: { _id: '$fecha', dia: { $sum: { $cond: [{ $or: [{ $regexMatch: { input: '$turnoLower', regex: /day|día|dia/ } }] }, 1, 0] } }, noche: { $sum: { $cond: [{ $or: [{ $regexMatch: { input: '$turnoLower', regex: /night|noche/ } }] }, 1, 0] } }, total: { $sum: 1 } } },
       { $match: { total: { $gt: 0 } } },
       { $sort: { _id: -1 } },
       { $limit: limit },
