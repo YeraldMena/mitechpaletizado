@@ -1317,7 +1317,9 @@ function renderTrendWidget(dateMap) {
     const diaValues = dates.map(d => dateMap[d].Dia);
     const nocheValues = dates.map(d => dateMap[d].Noche);
 
-    console.log('[TREND] Order:', dateLabels.join(' → '), '(left to right)');
+    console.log('[TREND] Labels L→R:', dateLabels.join(' → '));
+    console.log('[TREND] Dia values:', diaValues.join(', '));
+    console.log('[TREND] Noche values:', nocheValues.join(', '));
 
     chartTrend = new Chart(ctx, {
         type: 'bar',
@@ -1376,6 +1378,7 @@ function renderTrendWidget(dateMap) {
                 x: {
                     type: 'category',
                     offset: true,
+                    reverse: false,
                     ticks: { color: '#7b8ba5', font: { size: 12, weight: '500' } },
                     grid: { display: false }
                 }
