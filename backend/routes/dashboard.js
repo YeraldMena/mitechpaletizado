@@ -155,52 +155,42 @@ router.get('/registros', async (req, res) => {
   }
 });
 
-// GET /api/dashboard/tendencias — Datos para gráficas de tendencia
+// GET /api/dashboard/tendencias — Últimos 7 días TRABAJADOS (con registros reales)
 router.get('/tendencias', async (req, res) => {
   try {
-    const { dias } = req.query;
-    const numDias = parseInt(dias) || 14;
+    const limit = parseInt(req.query.dias) || 7;
 
-    const registros = await EscaneadoraRegistro.find().sort({ createdAt: -1 });
+    // Aggregation: group by date from createdAt, split by turno
+    const tendencia = await EscaneadoraRegistro.aggregate([
+      { $addFields: { workDate: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'America/Monterrey' } }, turnoLower: { $toLower: '$turno' } } },
+      { $group: {
+          _id: '$workDate',
+          dia: { $sum: { $cond: [{ $or: [{ $regexMatch: { input: '$turnoLower', regex: /day|día|dia/ } }] }, 1, 0] } },
+          noche: { $sum: { $cond: [{ $or: [{ $regexMatch: { input: '$turnoLower', regex: /night|noche/ } }] }, 1, 0] } },
+          total: { $sum: 1 }
+      }},
+      { $match: { total: { $gt: 0 } } },
+      { $sort: { _id: -1 } },
+      { $limit: limit },
+      { $sort: { _id: 1 } },
+      { $project: { _id: 0, date: '$_id', dia: 1, noche: 1, total: 1 } }
+    ]);
 
-    // Agrupar por fecha + turno
-    const dailyMap = {};
-    registros.forEach(r => {
-      const turno = normalizeTurno(r.turno);
-      const key = `${r.fecha}|${turno}`;
-      if (!dailyMap[key]) dailyMap[key] = { registros: 0, unidades: 0 };
-      dailyMap[key].registros++;
-      dailyMap[key].unidades += (r.cantidad || 0);
-    });
-
-    const diarios = Object.entries(dailyMap).map(([key, data]) => {
-      const [fecha, turno] = key.split('|');
-      return { fecha, turno, ...data };
-    }).sort((a, b) => {
-      const pa = a.fecha.split('/'), pb = b.fecha.split('/');
-      const da = new Date(parseInt(pa[2]), parseInt(pa[0]) - 1, parseInt(pa[1]));
-      const db = new Date(parseInt(pb[2]), parseInt(pb[0]) - 1, parseInt(pb[1]));
-      return db - da;
-    }).slice(0, numDias * 2);
-
-    // Promedios por turno
-    const turnoStats = {};
-    const turnoDates = {};
+    // Promedios por turno (all-time)
+    const registros = await EscaneadoraRegistro.find();
+    const turnoStats = {}, turnoDates = {};
     registros.forEach(r => {
       const t = normalizeTurno(r.turno);
       if (!turnoStats[t]) { turnoStats[t] = 0; turnoDates[t] = new Set(); }
       turnoStats[t]++;
       turnoDates[t].add(r.fecha);
     });
-
     const promedios = Object.entries(turnoStats).map(([turno, total]) => ({
-      turno,
-      totalRegistros: total,
-      totalDias: turnoDates[turno].size,
+      turno, totalRegistros: total, totalDias: turnoDates[turno].size,
       promedio: turnoDates[turno].size > 0 ? (total / turnoDates[turno].size).toFixed(1) : 0,
     }));
 
-    res.json({ success: true, diarios, promedios });
+    res.json({ success: true, tendencia, promedios });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

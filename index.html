@@ -1287,10 +1287,8 @@ async function loadResumen() {
 let trendCache = null;
 
 function renderTrendWidget(dateMap) {
-    const dates = Object.keys(dateMap).sort((a, b) => {
-        const pa = a.split('/'), pb = b.split('/');
-        return new Date(pa[2], pa[0]-1, pa[1]) - new Date(pb[2], pb[0]-1, pb[1]);
-    });
+    // Dates are now YYYY-MM-DD format, sort chronologically
+    const dates = Object.keys(dateMap).sort();
 
     let totalDia = 0, totalNoche = 0;
     dates.forEach(d => { totalDia += dateMap[d].Dia; totalNoche += dateMap[d].Noche; });
@@ -1361,14 +1359,13 @@ function renderTrendWidget(dateMap) {
 
 async function loadTendencias() {
     try {
-        const data = await apiFetch(`${API}/api/dashboard/tendencias?dias=14`);
+        const data = await apiFetch(`${API}/api/dashboard/tendencias?dias=7`);
         if (!data.success) return;
 
+        // New format: data.tendencia = [{ date, dia, noche, total }]
         const dateMap = {};
-        data.diarios.forEach(d => {
-            if (!dateMap[d.fecha]) dateMap[d.fecha] = { Dia: 0, Noche: 0 };
-            if (d.turno.includes('Día') || d.turno.includes('Dia') || d.turno.includes('Day')) dateMap[d.fecha].Dia += d.registros;
-            else dateMap[d.fecha].Noche += d.registros;
+        (data.tendencia || []).forEach(d => {
+            dateMap[d.date] = { Dia: d.dia, Noche: d.noche };
         });
 
         trendCache = dateMap;
