@@ -9,18 +9,19 @@ router.use(auth, roleGuard('admin', 'escaneadora'));
 // POST /api/resumen — Create
 router.post('/', async (req, res) => {
   try {
-    const { turno, palletsTotales, palletsTRG, palletsEnProceso, asistencia, absentismo, tareasPendientes, fecha } = req.body;
-    if (!turno || palletsTotales === undefined || !fecha) {
-      return res.status(400).json({ success: false, error: 'Campos requeridos: turno, palletsTotales, fecha' });
+    const { turno, palletsTotales, palletsTRG, palletsAlmacen, palletsEnProceso, asistencia, absentismo, tareasPendientes, fecha } = req.body;
+    if (!turno || !fecha || palletsTotales===undefined || palletsTotales==='' || palletsTRG===undefined || palletsTRG==='' || palletsAlmacen===undefined || palletsAlmacen==='' || palletsEnProceso===undefined || palletsEnProceso==='' || asistencia===undefined || asistencia==='' || absentismo===undefined || absentismo==='' || !tareasPendientes) {
+      return res.status(400).json({ success: false, error: 'Todos los campos son obligatorios' });
     }
     const doc = await ResumenPaletizado.create({
       turno,
-      palletsTotales: parseInt(palletsTotales) || 0,
-      palletsTRG: parseInt(palletsTRG) || 0,
-      palletsEnProceso: parseInt(palletsEnProceso) || 0,
-      asistencia: parseInt(asistencia) || 0,
-      absentismo: parseInt(absentismo) || 0,
-      tareasPendientes: tareasPendientes || '',
+      palletsTotales: parseInt(palletsTotales),
+      palletsTRG: parseInt(palletsTRG),
+      palletsAlmacen: parseInt(palletsAlmacen),
+      palletsEnProceso: parseInt(palletsEnProceso),
+      asistencia: parseInt(asistencia),
+      absentismo: parseInt(absentismo),
+      tareasPendientes,
       fecha,
       capturadoPor: req.user._id,
       nombreCaptura: req.user.nombre,

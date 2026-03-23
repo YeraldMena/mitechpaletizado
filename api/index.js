@@ -295,11 +295,12 @@ app.get('/api/dashboard/catalogos', auth, roleGuard('admin'), async (req, res) =
 const resumenSchema = new mongoose.Schema({
   turno: { type: String, required: true },
   palletsTotales: { type: Number, required: true, min: 0 },
-  palletsTRG: { type: Number, default: 0 },
-  palletsEnProceso: { type: Number, default: 0 },
-  asistencia: { type: Number, default: 0 },
-  absentismo: { type: Number, default: 0 },
-  tareasPendientes: { type: String, default: '' },
+  palletsTRG: { type: Number, required: true, min: 0 },
+  palletsAlmacen: { type: Number, required: true, min: 0 },
+  palletsEnProceso: { type: Number, required: true, min: 0 },
+  asistencia: { type: Number, required: true, min: 0 },
+  absentismo: { type: Number, required: true, min: 0 },
+  tareasPendientes: { type: String, required: true },
   fecha: { type: String, required: true },
   capturadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   nombreCaptura: { type: String, default: '' },
@@ -310,12 +311,14 @@ const Resumen = mongoose.models.ResumenPaletizado || mongoose.model('ResumenPale
 
 app.post('/api/resumen', auth, roleGuard('admin', 'escaneadora'), async (req, res) => {
   try {
-    const { turno, palletsTotales, palletsTRG, palletsEnProceso, asistencia, absentismo, tareasPendientes, fecha } = req.body;
-    if (!turno || palletsTotales === undefined || !fecha) return res.status(400).json({ success: false, error: 'Campos requeridos: turno, palletsTotales, fecha' });
+    const { turno, palletsTotales, palletsTRG, palletsAlmacen, palletsEnProceso, asistencia, absentismo, tareasPendientes, fecha } = req.body;
+    if (!turno || !fecha || palletsTotales===undefined || palletsTotales==='' || palletsTRG===undefined || palletsTRG==='' || palletsAlmacen===undefined || palletsAlmacen==='' || palletsEnProceso===undefined || palletsEnProceso==='' || asistencia===undefined || asistencia==='' || absentismo===undefined || absentismo==='' || !tareasPendientes) {
+      return res.status(400).json({ success: false, error: 'Todos los campos son obligatorios' });
+    }
     const doc = await Resumen.create({
-      turno, palletsTotales: parseInt(palletsTotales)||0, palletsTRG: parseInt(palletsTRG)||0,
-      palletsEnProceso: parseInt(palletsEnProceso)||0, asistencia: parseInt(asistencia)||0,
-      absentismo: parseInt(absentismo)||0, tareasPendientes: tareasPendientes||'',
+      turno, palletsTotales: parseInt(palletsTotales), palletsTRG: parseInt(palletsTRG),
+      palletsAlmacen: parseInt(palletsAlmacen), palletsEnProceso: parseInt(palletsEnProceso),
+      asistencia: parseInt(asistencia), absentismo: parseInt(absentismo), tareasPendientes,
       fecha, capturadoPor: req.user._id, nombreCaptura: req.user.nombre,
     });
     res.json({ success: true, id: doc._id, message: 'Resumen guardado' });

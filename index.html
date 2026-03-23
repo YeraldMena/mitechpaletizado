@@ -620,30 +620,36 @@
                                 <input type="number" class="form-input" id="res-pallets-total" placeholder="Ej: 120" min="0" required>
                             </div>
                             <div class="form-group">
-                                <label><i class="fa-solid fa-truck-loading" style="margin-right:5px;color:#22c55e;font-size:0.8rem;"></i>Pallets TRG</label>
-                                <input type="number" class="form-input" id="res-pallets-trg" placeholder="Ej: 30" min="0">
+                                <label><i class="fa-solid fa-truck-loading" style="margin-right:5px;color:#22c55e;font-size:0.8rem;"></i>Pallets TRG <span style="color:var(--danger);">*</span></label>
+                                <input type="number" class="form-input" id="res-pallets-trg" placeholder="Ej: 30" min="0" required>
                             </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label><i class="fa-solid fa-spinner" style="margin-right:5px;color:#8b5cf6;font-size:0.8rem;"></i>Pallets en proceso</label>
-                            <input type="number" class="form-input" id="res-pallets-proceso" placeholder="Ej: 5" min="0">
                         </div>
 
                         <div class="form-row">
                             <div class="form-group">
-                                <label><i class="fa-solid fa-users" style="margin-right:5px;color:var(--accent);font-size:0.8rem;"></i>Total asistencia</label>
-                                <input type="number" class="form-input" id="res-asistencia" placeholder="Ej: 12" min="0">
+                                <label><i class="fa-solid fa-warehouse" style="margin-right:5px;color:#14b8a6;font-size:0.8rem;"></i>Pallets Almacen <span style="color:var(--danger);">*</span></label>
+                                <input type="number" class="form-input" id="res-pallets-almacen" placeholder="Ej: 50" min="0" required>
                             </div>
                             <div class="form-group">
-                                <label><i class="fa-solid fa-user-xmark" style="margin-right:5px;color:var(--danger);font-size:0.8rem;"></i>Total absentismo</label>
-                                <input type="number" class="form-input" id="res-absentismo" placeholder="Ej: 2" min="0">
+                                <label><i class="fa-solid fa-spinner" style="margin-right:5px;color:#8b5cf6;font-size:0.8rem;"></i>Pallets en proceso <span style="color:var(--danger);">*</span></label>
+                                <input type="number" class="form-input" id="res-pallets-proceso" placeholder="Ej: 5" min="0" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-users" style="margin-right:5px;color:var(--accent);font-size:0.8rem;"></i>Total asistencia <span style="color:var(--danger);">*</span></label>
+                                <input type="number" class="form-input" id="res-asistencia" placeholder="Ej: 12" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-user-xmark" style="margin-right:5px;color:var(--danger);font-size:0.8rem;"></i>Total absentismo <span style="color:var(--danger);">*</span></label>
+                                <input type="number" class="form-input" id="res-absentismo" placeholder="Ej: 2" min="0" required>
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label><i class="fa-solid fa-list-check" style="margin-right:5px;color:#f97316;font-size:0.8rem;"></i>Tareas pendientes para el siguiente turno</label>
-                            <textarea class="form-input" id="res-tareas" placeholder="Describir tareas que quedan pendientes..." rows="3"></textarea>
+                            <label><i class="fa-solid fa-list-check" style="margin-right:5px;color:#f97316;font-size:0.8rem;"></i>Tareas pendientes para el siguiente turno <span style="color:var(--danger);">*</span></label>
+                            <textarea class="form-input" id="res-tareas" placeholder="Describir tareas que quedan pendientes..." rows="3" required></textarea>
                         </div>
 
                         <div class="form-footer">
@@ -1586,13 +1592,14 @@ async function handleResumenSubmit(e) {
     const fechaRaw = document.getElementById('res-fecha').value;
     const palletsTotales = document.getElementById('res-pallets-total').value;
     const palletsTRG = document.getElementById('res-pallets-trg').value;
+    const palletsAlmacen = document.getElementById('res-pallets-almacen').value;
     const palletsEnProceso = document.getElementById('res-pallets-proceso').value;
     const asistencia = document.getElementById('res-asistencia').value;
     const absentismo = document.getElementById('res-absentismo').value;
     const tareasPendientes = document.getElementById('res-tareas').value.trim();
 
-    if (!turno || !palletsTotales || !fechaRaw) {
-        errEl.textContent = 'Completa los campos obligatorios: Turno, Pallets totales, Fecha.';
+    if (!turno || !fechaRaw || palletsTotales==='' || palletsTRG==='' || palletsAlmacen==='' || palletsEnProceso==='' || asistencia==='' || absentismo==='' || !tareasPendientes) {
+        errEl.textContent = 'Todos los campos son obligatorios. Completa el formulario.';
         errEl.style.display = 'block';
         return;
     }
@@ -1607,7 +1614,7 @@ async function handleResumenSubmit(e) {
     try {
         const data = await apiFetch(`${API}/api/resumen`, {
             method: 'POST',
-            body: JSON.stringify({ turno, palletsTotales, palletsTRG, palletsEnProceso, asistencia, absentismo, tareasPendientes, fecha })
+            body: JSON.stringify({ turno, palletsTotales, palletsTRG, palletsAlmacen, palletsEnProceso, asistencia, absentismo, tareasPendientes, fecha })
         });
         if (!data.success) throw new Error(data.error);
         okEl.textContent = 'Resumen guardado correctamente.';
@@ -1640,6 +1647,7 @@ function renderResumenCard(r) {
         <div class="resumen-stat"><span class="resumen-stat-label">Turno</span><span class="resumen-stat-value"><span class="badge ${isDia?'badge-amber':'badge-blue'}">${r.turno}</span></span></div>
         <div class="resumen-stat"><span class="resumen-stat-label">Pallets Totales</span><span class="resumen-stat-value" style="color:#f59e0b;font-size:1.15rem;">${r.palletsTotales}</span></div>
         <div class="resumen-stat"><span class="resumen-stat-label">Pallets TRG</span><span class="resumen-stat-value">${r.palletsTRG||0}</span></div>
+        <div class="resumen-stat"><span class="resumen-stat-label">Pallets Almacen</span><span class="resumen-stat-value">${r.palletsAlmacen||0}</span></div>
         <div class="resumen-stat"><span class="resumen-stat-label">En Proceso</span><span class="resumen-stat-value">${r.palletsEnProceso||0}</span></div>
         <div class="resumen-stat"><span class="resumen-stat-label">Asistencia</span><span class="resumen-stat-value" style="color:var(--success);">${r.asistencia||0}</span></div>
         <div class="resumen-stat"><span class="resumen-stat-label">Absentismo</span><span class="resumen-stat-value" style="color:var(--danger);">${r.absentismo||0}</span></div>
@@ -1692,8 +1700,8 @@ function exportResumenFecha(fecha) {
     const recs = lastResumenData.filter(r => r.fecha === fecha);
     if (recs.length === 0) return;
     const wb = XLSX.utils.book_new();
-    const headers = ['Fecha','Turno','Pallets Totales','Pallets TRG','En Proceso','Asistencia','Absentismo','Tareas Pendientes','Registrado Por'];
-    const rows = recs.map(r => [r.fecha, r.turno, r.palletsTotales, r.palletsTRG||0, r.palletsEnProceso||0, r.asistencia||0, r.absentismo||0, r.tareasPendientes||'', r.nombreCaptura||'']);
+    const headers = ['Fecha','Turno','Pallets Totales','Pallets TRG','Pallets Almacen','En Proceso','Asistencia','Absentismo','Tareas Pendientes','Registrado Por'];
+    const rows = recs.map(r => [r.fecha, r.turno, r.palletsTotales, r.palletsTRG||0, r.palletsAlmacen||0, r.palletsEnProceso||0, r.asistencia||0, r.absentismo||0, r.tareasPendientes||'', r.nombreCaptura||'']);
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
     ws['!cols'] = headers.map(() => ({ wch: 16 }));
     XLSX.utils.book_append_sheet(wb, ws, fecha.replace(/\//g, '-'));
