@@ -1025,7 +1025,18 @@ async function handleEscSubmit(e) {
             body: JSON.stringify({ palletId, cantidad: parseInt(cantidad), condicion, destino, turno, escaneadora, fecha, pedido, incidencias, observaciones: finalObs })
         });
 
-        if (!data.success) throw new Error(data.error);
+        if (!data.success) {
+            if (data.duplicate) {
+                errEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;"></i><strong>Pallet duplicado.</strong> El pallet <strong>${palletId}</strong> ya existe en el sistema.`;
+            } else {
+                errEl.textContent = data.error;
+            }
+            errEl.style.display = 'block';
+            document.getElementById('esc-palletId').focus();
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Registrar';
+            return;
+        }
 
         okEl.textContent = `Registro guardado correctamente (ID: ${data.id.slice(-6)})`;
         okEl.style.display = 'block';

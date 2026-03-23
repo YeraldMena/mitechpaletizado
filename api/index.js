@@ -117,6 +117,8 @@ app.post('/api/escaneadoras', auth, roleGuard('admin', 'escaneadora'), async (re
   try {
     const { palletId, cantidad, condicion, destino, turno, escaneadora, fecha, pedido, incidencias, observaciones } = req.body;
     if (!palletId || !destino || !turno || !escaneadora || !fecha) return res.status(400).json({ success: false, error: 'Campos requeridos: palletId, destino, turno, escaneadora, fecha' });
+    const exists = await EscReg.findOne({ palletId: palletId.trim() });
+    if (exists) return res.status(409).json({ success: false, error: `Pallet ID duplicado. El pallet ${palletId.trim()} ya fue registrado.`, duplicate: true });
     const doc = await EscReg.create({ palletId: palletId.trim(), cantidad: parseInt(cantidad) || 0, condicion: condicion || '', destino, turno, escaneadora, fecha, pedido: pedido || '', incidencias: incidencias || '', observaciones: observaciones || '', capturadoPor: req.user._id });
     res.json({ success: true, id: doc._id, message: 'Registro guardado' });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }

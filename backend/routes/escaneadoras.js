@@ -16,6 +16,12 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Campos requeridos: palletId, destino, turno, escaneadora, fecha' });
     }
 
+    // Check duplicate
+    const exists = await EscaneadoraRegistro.findOne({ palletId: palletId.trim() });
+    if (exists) {
+      return res.status(409).json({ success: false, error: `Pallet ID duplicado. El pallet ${palletId.trim()} ya fue registrado.`, duplicate: true });
+    }
+
     const doc = await EscaneadoraRegistro.create({
       palletId: palletId.trim(),
       cantidad: parseInt(cantidad) || 0,
