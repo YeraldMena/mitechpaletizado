@@ -611,17 +611,24 @@
                 </div>
             </div>
 
+            <!-- Tendencia Diaria (full width) -->
+            <div class="card" style="margin-bottom:1.5rem;">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;">
+                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-chart-line"></i> Tendencia Diaria — Dia vs Noche</div>
+                    <div class="view-tabs" id="trend-type-tabs">
+                        <button class="view-tab active" onclick="setTrendType('bar')" id="trend-tab-bar"><i class="fa-solid fa-chart-column"></i> Barras</button>
+                        <button class="view-tab" onclick="setTrendType('line')" id="trend-tab-line"><i class="fa-solid fa-chart-line"></i> Linea</button>
+                    </div>
+                </div>
+                <canvas id="chart-tendencia" height="160"></canvas>
+            </div>
+
             <!-- Charts Row 2 -->
             <div class="charts-grid">
-                <div class="card">
-                    <div class="card-title"><i class="fa-solid fa-chart-line"></i> Tendencia Diaria</div>
-                    <canvas id="chart-tendencia" height="180"></canvas>
-                </div>
                 <div class="card">
                     <div class="card-title"><i class="fa-solid fa-clock"></i> Registros por Turno</div>
                     <canvas id="chart-turno" height="180"></canvas>
                 </div>
-            </div>
 
             <!-- Resumen operativo -->
             <div class="charts-grid">
@@ -960,12 +967,22 @@ function setRecordView(mode) {
     renderRecords(lastTableData);
 }
 
+// Track which groups user has manually expanded (all start collapsed)
+const expandedGroups = new Set();
+
 function toggleDateGroup(fecha) {
     const header = document.querySelector(`[data-dg="${fecha}"]`);
     const body = document.getElementById('dg-body-' + fecha.replace(/\//g, '-'));
     if (!header || !body) return;
-    header.classList.toggle('collapsed');
-    body.classList.toggle('hidden');
+    if (expandedGroups.has(fecha)) {
+        expandedGroups.delete(fecha);
+        header.classList.add('collapsed');
+        body.classList.add('hidden');
+    } else {
+        expandedGroups.add(fecha);
+        header.classList.remove('collapsed');
+        body.classList.remove('hidden');
+    }
 }
 
 async function loadResumen() {
@@ -1064,34 +1081,97 @@ async function loadResumen() {
     }
 }
 
-async function loadTendencias() {
-    try {
-        const data = await apiFetch(`${API}/api/dashboard/tendencias?dias=14`);
-        if (!data.success) return;
+let trendType = 'bar';
+let trendCache = null;
 
-        // Group by date for line chart
-        const dateMap = {};
-        data.diarios.forEach(d => {
-            if (!dateMap[d.fecha]) dateMap[d.fecha] = { Dia: 0, Noche: 0 };
-            if (d.turno.includes('Día') || d.turno.includes('Dia') || d.turno.includes('Day')) dateMap[d.fecha].Dia += d.registros;
-            else dateMap[d.fecha].Noche += d.registros;
+function setTrendType(type) {
+    trendType = type;
+    document.getElementById('trend-tab-bar').classList.toggle('active', type === 'bar');
+    document.getElementById('trend-tab-line').classList.toggle('active', type === 'line');
+    if (trendCache) renderTrendChart(trendCache);
+}
+
+function renderTrendChart(dateMap) {
+    const dates = Object.keys(dateMap).sort((a, b) => {
+        const pa = a.split('/'), pb = b.split('/');
+        return new Date(pa[2], pa[0]-1, pa[1]) - new Date(pb[2], pb[0]-1, pb[1]);
+    });
+
+    const ctxL = document.getElementById('chart-tendencia').getContext('2d');
+    if (chartTrend) chartTrend.destroy();
+
+    const diaData = dates.map(d => dateMap[d].Dia);
+    const nocheData = dates.map(d => dateMap[d].Noche);
+    const tooltipStyle = { backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#e8ecf4', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:12 };
+
+    if (trendType === 'bar') {
+        chartTrend = new Chart(ctxL, {
+            type: 'bar',
+            data: {
+                labels: dates,
+                datasets: [
+                    {
+                        label: 'Dia',
+                        data: diaData,
+                        backgroundColor: '#4f7cff',
+                        hoverBackgroundColor: '#6b93ff',
+                        borderRadius: { topLeft: 4, topRight: 4 },
+                        borderSkipped: false,
+                        barPercentage: 0.7,
+                        categoryPercentage: 0.65,
+                    },
+                    {
+                        label: 'Noche',
+                        data: nocheData,
+                        backgroundColor: '#f59e0b',
+                        hoverBackgroundColor: '#fbbf24',
+                        borderRadius: { topLeft: 4, topRight: 4 },
+                        borderSkipped: false,
+                        barPercentage: 0.7,
+                        categoryPercentage: 0.65,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                animation: { duration: 1000, easing: 'easeOutQuart', delay: (ctx) => ctx.dataIndex * 80 },
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { labels: { color: '#7b8ba5', usePointStyle: true, pointStyle: 'rectRounded', padding: 16, font: { size: 12, weight: '500' } } },
+                    tooltip: {
+                        ...tooltipStyle, mode: 'index', intersect: false,
+                        callbacks: {
+                            title: (items) => 'Fecha: ' + items[0].label,
+                            afterBody: (items) => {
+                                const total = items.reduce((s, i) => s + i.parsed.y, 0);
+                                return '\nTotal: ' + total + ' registros';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true, stacked: false,
+                        ticks: { color: '#7b8ba5', stepSize: 1, font: { size: 11 } },
+                        grid: { color: 'rgba(30,42,66,0.4)', drawBorder: false },
+                        title: { display: true, text: 'Registros', color: '#7b8ba5', font: { size: 11 } }
+                    },
+                    x: {
+                        ticks: { color: '#7b8ba5', maxRotation: 0, font: { size: 11 } },
+                        grid: { display: false },
+                        title: { display: true, text: 'Fecha', color: '#7b8ba5', font: { size: 11 } }
+                    }
+                }
+            }
         });
-
-        const dates = Object.keys(dateMap).sort((a, b) => {
-            const pa = a.split('/'), pb = b.split('/');
-            return new Date(pa[2], pa[0]-1, pa[1]) - new Date(pb[2], pb[0]-1, pb[1]);
-        });
-
-        const ctxL = document.getElementById('chart-tendencia').getContext('2d');
-        if (chartTrend) chartTrend.destroy();
-
-        // Gradient fills
-        const gradBlue = ctxL.createLinearGradient(0, 0, 0, 220);
-        gradBlue.addColorStop(0, 'rgba(79,124,255,0.25)');
-        gradBlue.addColorStop(1, 'rgba(79,124,255,0.01)');
-        const gradAmber = ctxL.createLinearGradient(0, 0, 0, 220);
-        gradAmber.addColorStop(0, 'rgba(245,158,11,0.25)');
-        gradAmber.addColorStop(1, 'rgba(245,158,11,0.01)');
+    } else {
+        // Line mode with gradient
+        const gradBlue = ctxL.createLinearGradient(0, 0, 0, 200);
+        gradBlue.addColorStop(0, 'rgba(79,124,255,0.3)');
+        gradBlue.addColorStop(1, 'rgba(79,124,255,0.02)');
+        const gradAmber = ctxL.createLinearGradient(0, 0, 0, 200);
+        gradAmber.addColorStop(0, 'rgba(245,158,11,0.3)');
+        gradAmber.addColorStop(1, 'rgba(245,158,11,0.02)');
 
         chartTrend = new Chart(ctxL, {
             type: 'line',
@@ -1099,32 +1179,14 @@ async function loadTendencias() {
                 labels: dates,
                 datasets: [
                     {
-                        label: 'Dia',
-                        data: dates.map(d => dateMap[d].Dia),
-                        borderColor: '#4f7cff',
-                        backgroundColor: gradBlue,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 5,
-                        pointHoverRadius: 8,
-                        pointBackgroundColor: '#4f7cff',
-                        pointBorderColor: '#0a0f1e',
-                        pointBorderWidth: 2,
-                        borderWidth: 2.5,
+                        label: 'Dia', data: diaData, borderColor: '#4f7cff', backgroundColor: gradBlue,
+                        fill: true, tension: 0.4, pointRadius: 6, pointHoverRadius: 9,
+                        pointBackgroundColor: '#4f7cff', pointBorderColor: '#0a0f1e', pointBorderWidth: 2, borderWidth: 3,
                     },
                     {
-                        label: 'Noche',
-                        data: dates.map(d => dateMap[d].Noche),
-                        borderColor: '#f59e0b',
-                        backgroundColor: gradAmber,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 5,
-                        pointHoverRadius: 8,
-                        pointBackgroundColor: '#f59e0b',
-                        pointBorderColor: '#0a0f1e',
-                        pointBorderWidth: 2,
-                        borderWidth: 2.5,
+                        label: 'Noche', data: nocheData, borderColor: '#f59e0b', backgroundColor: gradAmber,
+                        fill: true, tension: 0.4, pointRadius: 6, pointHoverRadius: 9,
+                        pointBackgroundColor: '#f59e0b', pointBorderColor: '#0a0f1e', pointBorderWidth: 2, borderWidth: 3,
                     }
                 ]
             },
@@ -1133,15 +1195,41 @@ async function loadTendencias() {
                 animation: { duration: 1200, easing: 'easeOutQuart' },
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    legend: { labels: { color: '#7b8ba5', usePointStyle: true, pointStyle: 'circle' } },
-                    tooltip: { backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#94a3b8', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:10, mode:'index', intersect:false }
+                    legend: { labels: { color: '#7b8ba5', usePointStyle: true, pointStyle: 'circle', padding: 16, font: { size: 12, weight: '500' } } },
+                    tooltip: {
+                        ...tooltipStyle, mode: 'index', intersect: false,
+                        callbacks: {
+                            title: (items) => 'Fecha: ' + items[0].label,
+                            afterBody: (items) => {
+                                const total = items.reduce((s, i) => s + i.parsed.y, 0);
+                                return '\nTotal: ' + total + ' registros';
+                            }
+                        }
+                    }
                 },
                 scales: {
-                    y: { beginAtZero:true, ticks:{color:'#7b8ba5'}, grid:{color:'rgba(30,42,66,0.5)'} },
-                    x: { ticks:{color:'#7b8ba5',maxRotation:45}, grid:{display:false} }
+                    y: { beginAtZero: true, ticks: { color: '#7b8ba5', stepSize: 1 }, grid: { color: 'rgba(30,42,66,0.4)' }, title: { display: true, text: 'Registros', color: '#7b8ba5', font: { size: 11 } } },
+                    x: { ticks: { color: '#7b8ba5', maxRotation: 0 }, grid: { display: false }, title: { display: true, text: 'Fecha', color: '#7b8ba5', font: { size: 11 } } }
                 }
             }
         });
+    }
+}
+
+async function loadTendencias() {
+    try {
+        const data = await apiFetch(`${API}/api/dashboard/tendencias?dias=14`);
+        if (!data.success) return;
+
+        const dateMap = {};
+        data.diarios.forEach(d => {
+            if (!dateMap[d.fecha]) dateMap[d.fecha] = { Dia: 0, Noche: 0 };
+            if (d.turno.includes('Día') || d.turno.includes('Dia') || d.turno.includes('Day')) dateMap[d.fecha].Dia += d.registros;
+            else dateMap[d.fecha].Noche += d.registros;
+        });
+
+        trendCache = dateMap;
+        renderTrendChart(dateMap);
 
         // Promedios
         const promEl = document.getElementById('promedios-container');
@@ -1217,9 +1305,10 @@ function renderGroupedView(records) {
         const recs = groups[fecha];
         const safeId = fecha.replace(/\//g, '-');
         const totalQty = recs.reduce((s, r) => s + (r.cantidad || 0), 0);
+        const isExpanded = expandedGroups.has(fecha);
         return `
             <div class="date-group">
-                <div class="date-group-header" data-dg="${fecha}" onclick="toggleDateGroup('${fecha}')">
+                <div class="date-group-header ${isExpanded ? '' : 'collapsed'}" data-dg="${fecha}" onclick="toggleDateGroup('${fecha}')">
                     <div class="dg-left">
                         <i class="fa-solid fa-calendar-day" style="color:var(--accent);"></i>
                         <span class="dg-date">${fecha}</span>
@@ -1227,7 +1316,7 @@ function renderGroupedView(records) {
                     </div>
                     <i class="fa-solid fa-chevron-down dg-chevron"></i>
                 </div>
-                <div class="date-group-body" id="dg-body-${safeId}">
+                <div class="date-group-body ${isExpanded ? '' : 'hidden'}" id="dg-body-${safeId}">
                     ${recs.map(r => `
                         <div class="record-card">
                             <div class="rc-field"><span class="rc-label">Pallet</span><span class="rc-value bold">${r.palletId}</span></div>
