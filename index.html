@@ -1312,10 +1312,13 @@ function renderTrendWidget(dateMap) {
 
     const tooltipStyle = { backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#e8ecf4', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:10 };
 
+    // Format dates for display: YYYY-MM-DD → "DD/MM"
+    const dateLabels = dates.map(d => { const p = d.split('-'); return p[2] + '/' + p[1]; });
+
     chartTrend = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: dates,
+            labels: dateLabels,
             datasets: [
                 {
                     label: 'Dia',
