@@ -620,8 +620,10 @@
                         <button class="view-tab" onclick="setTrendType('line')" id="trend-tab-line"><i class="fa-solid fa-chart-line"></i> Linea</button>
                     </div>
                 </div>
-                <div style="position:relative;height:220px;">
-                    <canvas id="chart-tendencia"></canvas>
+                <div id="trend-outer" style="display:flex;justify-content:center;">
+                    <div id="trend-wrap" style="position:relative;height:220px;width:100%;">
+                        <canvas id="chart-tendencia"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -1106,12 +1108,24 @@ function renderTrendChart(dateMap) {
         return new Date(pa[2], pa[0]-1, pa[1]) - new Date(pb[2], pb[0]-1, pb[1]);
     });
 
+    // Adaptive width: ~120px per date group, min 200px, max 100%
+    const wrap = document.getElementById('trend-wrap');
+    const outer = document.getElementById('trend-outer');
+    const outerW = outer.offsetWidth || 800;
+    const idealW = Math.max(200, dates.length * 120 + 80);
+    wrap.style.width = idealW >= outerW ? '100%' : idealW + 'px';
+
     const ctxL = document.getElementById('chart-tendencia').getContext('2d');
     if (chartTrend) chartTrend.destroy();
 
     const diaData = dates.map(d => dateMap[d].Dia);
     const nocheData = dates.map(d => dateMap[d].Noche);
     const tooltipStyle = { backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#e8ecf4', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:12 };
+
+    // Adaptive bar sizing
+    const barPct = dates.length <= 2 ? 0.35 : dates.length <= 5 ? 0.5 : 0.6;
+    const catPct = dates.length <= 2 ? 0.4 : dates.length <= 5 ? 0.55 : 0.65;
+    const maxBar = dates.length <= 2 ? 24 : dates.length <= 5 ? 28 : 32;
 
     if (trendType === 'bar') {
         chartTrend = new Chart(ctxL, {
@@ -1126,9 +1140,9 @@ function renderTrendChart(dateMap) {
                         hoverBackgroundColor: '#f59e0b',
                         borderRadius: 4,
                         borderSkipped: false,
-                        maxBarThickness: 28,
-                        barPercentage: 0.45,
-                        categoryPercentage: 0.5,
+                        maxBarThickness: maxBar,
+                        barPercentage: barPct,
+                        categoryPercentage: catPct,
                     },
                     {
                         label: 'Noche',
@@ -1137,9 +1151,9 @@ function renderTrendChart(dateMap) {
                         hoverBackgroundColor: '#4f7cff',
                         borderRadius: 4,
                         borderSkipped: false,
-                        maxBarThickness: 28,
-                        barPercentage: 0.45,
-                        categoryPercentage: 0.5,
+                        maxBarThickness: maxBar,
+                        barPercentage: barPct,
+                        categoryPercentage: catPct,
                     }
                 ]
             },
