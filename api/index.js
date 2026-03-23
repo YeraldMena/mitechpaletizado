@@ -78,15 +78,30 @@ app.use(async (req, res, next) => {
   catch (err) { res.status(500).json({ success: false, error: 'DB error: ' + err.message }); }
 });
 
-// ═══════════ AUTH ═══════════
+// ═══════════ AUTH + SESSION CONTROL ═══════════
+function sessionsCol() { return mongoose.connection.db.collection('active_sessions'); }
+
+async function checkAndSetSession(user, deviceId) {
+  if (user.role !== 'escaneadora') return { allowed: true };
+  if (!deviceId) return { allowed: false, error: 'Se requiere identificador de dispositivo' };
+  const col = sessionsCol();
+  await col.deleteMany({ expiresAt: { $lt: new Date() } });
+  const existing = await col.findOne({ userId: user._id.toString(), deviceId: { $ne: deviceId } });
+  if (existing) return { allowed: false, error: 'Este usuario ya tiene una sesion activa en otro dispositivo. Cierra sesion en el otro dispositivo o pide apoyo al administrador.', sessionConflict: true };
+  await col.updateOne({ userId: user._id.toString() }, { $set: { userId: user._id.toString(), deviceId, createdAt: new Date(), expiresAt: new Date(Date.now()+12*60*60*1000) } }, { upsert: true });
+  return { allowed: true };
+}
+
 app.post('/api/auth/login', async (req, res) => {
   try {
-    const { usuario, password } = req.body;
+    const { usuario, password, deviceId } = req.body;
     if (!usuario || !password) return res.status(400).json({ success: false, error: 'Usuario y contrasena requeridos' });
     const user = await User.findOne({ usuario: usuario.toLowerCase().trim() });
     if (!user || !user.isActive) return res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
     const valid = await user.comparePassword(password);
     if (!valid) return res.status(401).json({ success: false, error: 'Credenciales incorrectas' });
+    const sc = await checkAndSetSession(user, deviceId);
+    if (!sc.allowed) return res.status(403).json({ success: false, error: sc.error, sessionConflict: true });
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '12h' });
     res.json({ success: true, token, user: { id: user._id, nombre: user.nombre, usuario: user.usuario, role: user.role } });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
@@ -94,7 +109,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/auth/nfc', async (req, res) => {
   try {
-    const { serialNumber } = req.body;
+    const { serialNumber, deviceId } = req.body;
     if (!serialNumber) return res.status(400).json({ success: false, error: 'Numero de serie NFC requerido' });
     const db = mongoose.connection.db;
     const card = await db.collection('nfc_cards').findOne({ serialNumber: serialNumber.toUpperCase().trim(), isActive: true });
@@ -102,13 +117,27 @@ app.post('/api/auth/nfc', async (req, res) => {
     let user = card.userId ? await User.findById(card.userId) : null;
     if (!user) user = await User.findOne({ role: card.role, isActive: true });
     if (!user) return res.status(401).json({ success: false, error: 'No hay usuario asociado a esta tarjeta' });
+    const sc = await checkAndSetSession(user, deviceId);
+    if (!sc.allowed) return res.status(403).json({ success: false, error: sc.error, sessionConflict: true });
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '12h' });
     await db.collection('nfc_cards').updateOne({ _id: card._id }, { $set: { lastUsed: new Date() }, $inc: { useCount: 1 } });
     res.json({ success: true, token, user: { id: user._id, nombre: user.nombre, usuario: user.usuario, role: user.role }, nfc: { serial: card.serialNumber, role: card.role } });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
-app.get('/api/auth/me', auth, (req, res) => {
+app.post('/api/auth/logout', auth, async (req, res) => {
+  try {
+    await sessionsCol().deleteMany({ userId: req.user._id.toString() });
+    res.json({ success: true, message: 'Sesion cerrada' });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+app.get('/api/auth/me', auth, async (req, res) => {
+  const deviceId = req.headers['x-device-id'];
+  if (req.user.role === 'escaneadora' && deviceId) {
+    const session = await sessionsCol().findOne({ userId: req.user._id.toString() });
+    if (session && session.deviceId !== deviceId) return res.status(401).json({ success: false, error: 'Sesion invalida para este dispositivo' });
+  }
   res.json({ success: true, user: { id: req.user._id, nombre: req.user.nombre, usuario: req.user.usuario, role: req.user.role } });
 });
 

@@ -849,12 +849,23 @@ const API = window.location.origin;
 let currentUser = null;
 let authToken = localStorage.getItem('mitech_token');
 
+// Persistent device ID
+function getDeviceId() {
+    let id = localStorage.getItem('mitech_device_id');
+    if (!id) {
+        id = 'dev_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('mitech_device_id', id);
+    }
+    return id;
+}
+const DEVICE_ID = getDeviceId();
+
 // ══════════════════════════════════════════════
 // AUTH
 // ══════════════════════════════════════════════
 
 async function apiFetch(url, options = {}) {
-    const headers = { 'Content-Type': 'application/json', ...options.headers };
+    const headers = { 'Content-Type': 'application/json', 'X-Device-Id': DEVICE_ID, ...options.headers };
     if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
     const res = await fetch(url, { ...options, headers });
     if (res.status === 401) { handleLogout(); throw new Error('Sesion expirada'); }
@@ -882,10 +893,13 @@ async function handleLogin(e) {
         const data = await fetch(`${API}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ usuario, password })
+            body: JSON.stringify({ usuario, password, deviceId: DEVICE_ID })
         }).then(r => r.json());
 
-        if (!data.success) throw new Error(data.error || 'Error de autenticacion');
+        if (!data.success) {
+            if (data.sessionConflict) throw new Error(data.error);
+            throw new Error(data.error || 'Error de autenticacion');
+        }
 
         authToken = data.token;
         localStorage.setItem('mitech_token', authToken);
@@ -901,6 +915,13 @@ async function handleLogin(e) {
 }
 
 function handleLogout() {
+    // Clear session on server (fire and forget)
+    if (authToken) {
+        fetch(`${API}/api/auth/logout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }
+        }).catch(() => {});
+    }
     authToken = null;
     currentUser = null;
     localStorage.removeItem('mitech_token');
@@ -1541,7 +1562,7 @@ async function handleNfcScan() {
                 const data = await fetch(`${API}/api/auth/nfc`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ serialNumber: serial })
+                    body: JSON.stringify({ serialNumber: serial, deviceId: DEVICE_ID })
                 }).then(r => r.json());
 
                 if (!data.success) throw new Error(data.error || 'Tarjeta no autorizada');
