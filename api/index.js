@@ -83,13 +83,13 @@ function sessionsCol() { return mongoose.connection.db.collection('active_sessio
 
 async function checkAndSetSession(user, deviceId) {
   if (user.role !== 'escaneadora') return { allowed: true };
-  if (!deviceId) return { allowed: false, error: 'Se requiere identificador de dispositivo' };
+  const did = deviceId || ('srv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8));
   const col = sessionsCol();
   await col.deleteMany({ expiresAt: { $lt: new Date() } });
-  const existing = await col.findOne({ userId: user._id.toString(), deviceId: { $ne: deviceId } });
+  const existing = await col.findOne({ userId: user._id.toString(), deviceId: { $ne: did } });
   if (existing) return { allowed: false, error: 'Este usuario ya tiene una sesion activa en otro dispositivo. Cierra sesion en el otro dispositivo o pide apoyo al administrador.', sessionConflict: true };
-  await col.updateOne({ userId: user._id.toString() }, { $set: { userId: user._id.toString(), deviceId, createdAt: new Date(), expiresAt: new Date(Date.now()+12*60*60*1000) } }, { upsert: true });
-  return { allowed: true };
+  await col.updateOne({ userId: user._id.toString() }, { $set: { userId: user._id.toString(), deviceId: did, createdAt: new Date(), expiresAt: new Date(Date.now()+12*60*60*1000) } }, { upsert: true });
+  return { allowed: true, deviceId: did };
 }
 
 app.post('/api/auth/login', async (req, res) => {
@@ -103,7 +103,7 @@ app.post('/api/auth/login', async (req, res) => {
     const sc = await checkAndSetSession(user, deviceId);
     if (!sc.allowed) return res.status(403).json({ success: false, error: sc.error, sessionConflict: true });
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '12h' });
-    res.json({ success: true, token, user: { id: user._id, nombre: user.nombre, usuario: user.usuario, role: user.role } });
+    res.json({ success: true, token, deviceId: sc.deviceId, user: { id: user._id, nombre: user.nombre, usuario: user.usuario, role: user.role } });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
@@ -121,7 +121,7 @@ app.post('/api/auth/nfc', async (req, res) => {
     if (!sc.allowed) return res.status(403).json({ success: false, error: sc.error, sessionConflict: true });
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: '12h' });
     await db.collection('nfc_cards').updateOne({ _id: card._id }, { $set: { lastUsed: new Date() }, $inc: { useCount: 1 } });
-    res.json({ success: true, token, user: { id: user._id, nombre: user.nombre, usuario: user.usuario, role: user.role }, nfc: { serial: card.serialNumber, role: card.role } });
+    res.json({ success: true, token, deviceId: sc.deviceId, user: { id: user._id, nombre: user.nombre, usuario: user.usuario, role: user.role }, nfc: { serial: card.serialNumber, role: card.role } });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 

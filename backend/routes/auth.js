@@ -12,14 +12,16 @@ function sessions() { return mongoose.connection.db.collection('active_sessions'
 
 async function checkAndSetSession(user, deviceId) {
   if (user.role !== 'escaneadora') return { allowed: true };
-  if (!deviceId) return { allowed: false, error: 'Se requiere identificador de dispositivo' };
+
+  // If no deviceId provided, generate one server-side
+  const did = deviceId || ('srv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8));
 
   const col = sessions();
   // Clean expired sessions (older than 12h)
   await col.deleteMany({ expiresAt: { $lt: new Date() } });
 
   // Check active session on different device
-  const existing = await col.findOne({ userId: user._id.toString(), deviceId: { $ne: deviceId } });
+  const existing = await col.findOne({ userId: user._id.toString(), deviceId: { $ne: did } });
   if (existing) {
     return { allowed: false, error: 'Este usuario ya tiene una sesion activa en otro dispositivo. Cierra sesion en el otro dispositivo o pide apoyo al administrador.' };
   }
@@ -27,10 +29,10 @@ async function checkAndSetSession(user, deviceId) {
   // Upsert session for this device
   await col.updateOne(
     { userId: user._id.toString() },
-    { $set: { userId: user._id.toString(), deviceId, createdAt: new Date(), expiresAt: new Date(Date.now() + 12*60*60*1000) } },
+    { $set: { userId: user._id.toString(), deviceId: did, createdAt: new Date(), expiresAt: new Date(Date.now() + 12*60*60*1000) } },
     { upsert: true }
   );
-  return { allowed: true };
+  return { allowed: true, deviceId: did };
 }
 
 async function clearSession(userId) {
@@ -66,6 +68,7 @@ router.post('/login', async (req, res) => {
     res.json({
       success: true,
       token,
+      deviceId: sessionCheck.deviceId,
       user: { id: user._id, nombre: user.nombre, usuario: user.usuario, role: user.role }
     });
   } catch (error) {
@@ -114,6 +117,7 @@ router.post('/nfc', async (req, res) => {
     res.json({
       success: true,
       token,
+      deviceId: sessionCheck.deviceId,
       user: { id: user._id, nombre: user.nombre, usuario: user.usuario, role: user.role },
       nfc: { serial: card.serialNumber, role: card.role }
     });

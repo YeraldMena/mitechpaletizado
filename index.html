@@ -901,6 +901,9 @@ async function handleLogin(e) {
             throw new Error(data.error || 'Error de autenticacion');
         }
 
+        // Store server-assigned deviceId if provided
+        if (data.deviceId) localStorage.setItem('mitech_device_id', data.deviceId);
+
         authToken = data.token;
         localStorage.setItem('mitech_token', authToken);
         currentUser = data.user;
@@ -1571,6 +1574,9 @@ async function handleNfcScan() {
                 btn.classList.add('nfc-success');
                 btn.querySelector('.nfc-text span:first-child').textContent = 'Acceso concedido';
                 btn.querySelector('.nfc-text span:last-child').textContent = data.user.nombre + ' (' + data.user.role + ')';
+
+                // Store server-assigned deviceId
+                if (data.deviceId) localStorage.setItem('mitech_device_id', data.deviceId);
 
                 authToken = data.token;
                 localStorage.setItem('mitech_token', authToken);
