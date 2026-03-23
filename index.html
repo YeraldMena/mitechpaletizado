@@ -302,6 +302,10 @@
         @keyframes live-blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
         .live-label { font-size:0.78rem; color:var(--success); font-weight:500; }
 
+        /* Admin-only elements (hidden by default, shown via JS) */
+        .admin-only { display:none !important; }
+        .admin-only.visible { display:inline-flex !important; }
+
         /* ── Top Bar ── */
         .topbar {
             display:flex; align-items:center; justify-content:space-between;
@@ -692,7 +696,7 @@
                     <h1><i class="fa-solid fa-chart-pie"></i> Dashboard Operativo</h1>
                     <p>Resumen completo de la operacion de paletizado</p>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="exportDashboardExcel()" style="margin-top:0.25rem;">
+                <button class="btn btn-secondary btn-sm admin-only" onclick="exportDashboardExcel()" style="margin-top:0.25rem;">
                     <i class="fa-solid fa-file-excel"></i> Descargar Dashboard
                 </button>
             </div>
@@ -798,7 +802,7 @@
                             <button class="view-tab active" onclick="setRecordView('grouped')" id="tab-grouped"><i class="fa-solid fa-layer-group"></i> Agrupado</button>
                             <button class="view-tab" onclick="setRecordView('table')" id="tab-table"><i class="fa-solid fa-table-list"></i> Tabla</button>
                         </div>
-                        <button class="btn btn-secondary btn-sm" onclick="exportFilteredExcel()" title="Descargar lo que estoy viendo">
+                        <button class="btn btn-secondary btn-sm admin-only" onclick="exportFilteredExcel()" title="Descargar lo que estoy viendo">
                             <i class="fa-solid fa-download"></i> Excel
                         </button>
                     </div>
@@ -920,12 +924,14 @@ function enterApp() {
     document.getElementById('user-display-name').textContent = currentUser.nombre;
     document.getElementById('user-display-role').textContent = currentUser.role === 'admin' ? 'Administrador' : 'Escaneadora';
 
-    // Role-based: hide dashboard card for non-admin
+    // Role-based: hide dashboard card and export buttons for non-admin
     const dashCard = document.getElementById('home-dash-card');
     if (currentUser.role === 'admin') {
         if (dashCard) dashCard.style.display = 'flex';
+        document.querySelectorAll('.admin-only').forEach(el => el.classList.add('visible'));
     } else {
         if (dashCard) dashCard.style.display = 'none';
+        document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('visible'));
     }
 
     // Greeting
@@ -1417,7 +1423,7 @@ function renderGroupedView(records) {
                         <span class="dg-count">${recs.length} registro${recs.length !== 1 ? 's' : ''} &middot; ${totalQty} uds</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:0.5rem;">
-                        <button onclick="event.stopPropagation();exportDateExcel('${fecha}')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text-muted);cursor:pointer;font-size:0.75rem;display:flex;align-items:center;gap:4px;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'"><i class="fa-solid fa-download"></i>Excel</button>
+                        ${currentUser && currentUser.role==='admin' ? `<button onclick="event.stopPropagation();exportDateExcel('${fecha}')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text-muted);cursor:pointer;font-size:0.75rem;display:flex;align-items:center;gap:4px;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'"><i class="fa-solid fa-download"></i>Excel</button>` : ''}
                         <i class="fa-solid fa-chevron-down dg-chevron"></i>
                     </div>
                 </div>
@@ -1685,7 +1691,7 @@ function renderResumenHistory(records) {
                     <span class="dg-count">${recs.length} resumen${recs.length!==1?'es':''} &middot; ${totalPallets} pallets</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:0.5rem;">
-                    <button onclick="event.stopPropagation();exportResumenFecha('${fecha}')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text-muted);cursor:pointer;font-size:0.75rem;display:flex;align-items:center;gap:4px;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'"><i class="fa-solid fa-download"></i>Excel</button>
+                    ${currentUser && currentUser.role==='admin' ? `<button onclick="event.stopPropagation();exportResumenFecha('${fecha}')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text-muted);cursor:pointer;font-size:0.75rem;display:flex;align-items:center;gap:4px;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'"><i class="fa-solid fa-download"></i>Excel</button>` : ''}
                     <i class="fa-solid fa-chevron-down dg-chevron"></i>
                 </div>
             </div>
@@ -1697,6 +1703,7 @@ function renderResumenHistory(records) {
 }
 
 function exportResumenFecha(fecha) {
+    if (!currentUser || currentUser.role !== 'admin') return;
     const recs = lastResumenData.filter(r => r.fecha === fecha);
     if (recs.length === 0) return;
     const wb = XLSX.utils.book_new();
@@ -1798,6 +1805,7 @@ ${rels.map(r => `<Relationship Id="${r.id}" Type="${r.type}" Target="${r.target}
 
 // Export dashboard with NATIVE Excel charts
 async function exportDashboardExcel() {
+    if (!currentUser || currentUser.role !== 'admin') return;
     const EJS = window.ExcelJS;
     if (!EJS) { alert('ExcelJS no cargado'); return; }
 
@@ -1984,6 +1992,7 @@ async function exportDashboardExcel() {
 
 // Export records for a specific date
 function exportDateExcel(fecha) {
+    if (!currentUser || currentUser.role !== 'admin') return;
     const recs = lastTableData.filter(r => r.fecha === fecha);
     if (recs.length === 0) return;
     const wb = XLSX.utils.book_new();
@@ -1995,6 +2004,7 @@ function exportDateExcel(fecha) {
 
 // Export current filtered view
 function exportFilteredExcel() {
+    if (!currentUser || currentUser.role !== 'admin') return;
     if (lastTableData.length === 0) return;
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([EXPORT_COLS, ...lastTableData.map(recordToRow)]);
