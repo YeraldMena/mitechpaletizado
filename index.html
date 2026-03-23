@@ -611,8 +611,8 @@
                 </div>
             </div>
 
-            <!-- Tendencia Diaria (full width) -->
-            <div class="card" style="margin-bottom:1.5rem;">
+            <!-- Tendencia Diaria -->
+            <div class="card" style="margin-bottom:1.5rem;padding:1.25rem 1.5rem;">
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;">
                     <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-chart-line"></i> Tendencia Diaria — Dia vs Noche</div>
                     <div class="view-tabs" id="trend-type-tabs">
@@ -620,7 +620,9 @@
                         <button class="view-tab" onclick="setTrendType('line')" id="trend-tab-line"><i class="fa-solid fa-chart-line"></i> Linea</button>
                     </div>
                 </div>
-                <canvas id="chart-tendencia" height="160"></canvas>
+                <div style="position:relative;height:240px;">
+                    <canvas id="chart-tendencia"></canvas>
+                </div>
             </div>
 
             <!-- Charts Row 2 -->
@@ -1134,6 +1136,7 @@ function renderTrendChart(dateMap) {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 animation: { duration: 1000, easing: 'easeOutQuart', delay: (ctx) => ctx.dataIndex * 80 },
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
@@ -1192,6 +1195,7 @@ function renderTrendChart(dateMap) {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 animation: { duration: 1200, easing: 'easeOutQuart' },
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
