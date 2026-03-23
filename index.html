@@ -319,7 +319,9 @@
 
         /* ── Home Module Cards ── */
         .home-screen { display:flex; align-items:center; justify-content:center; min-height:calc(100vh - 80px); }
-        .home-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 340px)); gap:2rem; justify-content:center; padding:2rem; }
+        .home-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:2rem; padding:2rem; width:100%; max-width:1000px; }
+        @media (max-width:900px) { .home-grid { grid-template-columns:repeat(2, 1fr); max-width:600px; } }
+        @media (max-width:560px) { .home-grid { grid-template-columns:1fr; max-width:380px; } }
         .module-card {
             background:var(--bg-card); border:1px solid var(--border); border-radius:20px;
             padding:3rem 2.5rem; text-align:center; cursor:pointer; transition:all 0.3s ease;
