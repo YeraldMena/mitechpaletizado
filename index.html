@@ -350,10 +350,27 @@
         .module-card.mod-esc .module-icon { background:rgba(79,124,255,0.12); color:#4f7cff; }
         .module-card.mod-esc:hover { border-color:rgba(79,124,255,0.3); }
 
+        /* Resumen card */
+        .module-card.mod-resumen::before { background:linear-gradient(90deg, #f59e0b, #f97316); }
+        .module-card.mod-resumen .module-icon { background:rgba(245,158,11,0.12); color:#f59e0b; }
+        .module-card.mod-resumen:hover { border-color:rgba(245,158,11,0.3); }
+
         /* Dashboard card */
         .module-card.mod-dash::before { background:linear-gradient(90deg, #22c55e, #14b8a6); }
         .module-card.mod-dash .module-icon { background:rgba(34,197,94,0.12); color:#22c55e; }
         .module-card.mod-dash:hover { border-color:rgba(34,197,94,0.3); }
+
+        /* Resumen history cards */
+        .resumen-card {
+            background:var(--bg-card); border:1px solid var(--border); border-radius:10px;
+            padding:1rem 1.25rem; margin-bottom:0.75rem; display:grid;
+            grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:0.75rem;
+        }
+        .resumen-card:hover { border-color:rgba(79,124,255,0.2); }
+        .resumen-stat { display:flex; flex-direction:column; gap:2px; }
+        .resumen-stat-label { font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.3px; }
+        .resumen-stat-value { font-size:1.05rem; font-weight:600; }
+        .resumen-tareas { grid-column:1/-1; font-size:0.85rem; color:var(--text-muted); border-top:1px solid var(--border); padding-top:0.5rem; margin-top:0.25rem; }
 
         /* Back button inside modules */
         .back-btn {
@@ -436,6 +453,12 @@
                         <div class="module-icon"><i class="fa-solid fa-barcode"></i></div>
                         <div class="module-title">Escaneadoras</div>
                         <div class="module-desc">Registro operativo de pallets escaneados</div>
+                        <div class="module-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                    </div>
+                    <div class="module-card mod-resumen" onclick="switchView('resumen')">
+                        <div class="module-icon"><i class="fa-solid fa-clipboard-check"></i></div>
+                        <div class="module-title">Resumen Turno</div>
+                        <div class="module-desc">Resumen de paletizado por turno</div>
                         <div class="module-arrow"><i class="fa-solid fa-arrow-right"></i></div>
                     </div>
                     <div class="module-card mod-dash" onclick="switchView('dashboard')" id="home-dash-card">
@@ -550,6 +573,104 @@
                 </div>
             </div>
         </div>
+
+        <!-- ══════════════════════════════════════ -->
+        <!-- VIEW: RESUMEN DE PALETIZADO            -->
+        <!-- ══════════════════════════════════════ -->
+        <div class="view" id="view-resumen">
+            <button class="back-btn" onclick="switchView('home')"><i class="fa-solid fa-arrow-left"></i> Volver al inicio</button>
+            <div class="page-header" style="text-align:center;">
+                <h1><i class="fa-solid fa-clipboard-check"></i> Resumen de Paletizado</h1>
+                <p>Captura rapida del resumen de turno</p>
+            </div>
+
+            <div class="form-panel">
+                <div class="card">
+                    <div class="form-header">
+                        <h2>Nuevo Resumen</h2>
+                        <p>Campos requeridos (<span style="color:var(--danger);">*</span>)</p>
+                    </div>
+
+                    <div class="alert alert-error" id="res-error"></div>
+                    <div class="alert alert-success" id="res-success"></div>
+
+                    <form id="resumen-form" onsubmit="handleResumenSubmit(event)">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-clock" style="margin-right:5px;color:var(--accent);font-size:0.8rem;"></i>Turno <span style="color:var(--danger);">*</span></label>
+                                <select class="form-input" id="res-turno" required>
+                                    <option value="" disabled selected>Seleccionar...</option>
+                                    <option value="Day (dia)">Day (Dia)</option>
+                                    <option value="Night (noche)">Night (Noche)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-calendar" style="margin-right:5px;color:#14b8a6;font-size:0.8rem;"></i>Fecha <span style="color:var(--danger);">*</span></label>
+                                <input type="date" class="form-input" id="res-fecha" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-boxes-stacked" style="margin-right:5px;color:#f59e0b;font-size:0.8rem;"></i>Pallets totales del turno <span style="color:var(--danger);">*</span></label>
+                                <input type="number" class="form-input" id="res-pallets-total" placeholder="Ej: 120" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-truck-loading" style="margin-right:5px;color:#22c55e;font-size:0.8rem;"></i>Pallets TRG</label>
+                                <input type="number" class="form-input" id="res-pallets-trg" placeholder="Ej: 30" min="0">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label><i class="fa-solid fa-spinner" style="margin-right:5px;color:#8b5cf6;font-size:0.8rem;"></i>Pallets en proceso</label>
+                            <input type="number" class="form-input" id="res-pallets-proceso" placeholder="Ej: 5" min="0">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-users" style="margin-right:5px;color:var(--accent);font-size:0.8rem;"></i>Total asistencia</label>
+                                <input type="number" class="form-input" id="res-asistencia" placeholder="Ej: 12" min="0">
+                            </div>
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-user-xmark" style="margin-right:5px;color:var(--danger);font-size:0.8rem;"></i>Total absentismo</label>
+                                <input type="number" class="form-input" id="res-absentismo" placeholder="Ej: 2" min="0">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label><i class="fa-solid fa-list-check" style="margin-right:5px;color:#f97316;font-size:0.8rem;"></i>Tareas pendientes para el siguiente turno</label>
+                            <textarea class="form-input" id="res-tareas" placeholder="Describir tareas que quedan pendientes..." rows="3"></textarea>
+                        </div>
+
+                        <div class="form-footer">
+                            <button type="submit" class="btn btn-primary" id="res-submit-btn" style="flex:1;padding:0.85rem;font-size:1rem;">
+                                <i class="fa-solid fa-paper-plane"></i> Guardar Resumen
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="document.getElementById('resumen-form').reset(); setResumenDate();" style="padding:0.85rem 1.25rem;">
+                                <i class="fa-solid fa-rotate-left"></i> Limpiar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Historial -->
+                <div class="card" style="margin-top:1.5rem;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;">
+                        <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-clock-rotate-left"></i> Resumenes Anteriores</div>
+                        <div style="display:flex;gap:0.5rem;">
+                            <select class="form-input" id="res-filter-turno" style="width:auto;padding:0.4rem 0.6rem;font-size:0.82rem;" onchange="loadResumenes()">
+                                <option value="">Todos los turnos</option>
+                                <option value="Day">Dia</option>
+                                <option value="Night">Noche</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="resumen-history">
+                        <div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Cargando...</div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- /view-resumen -->
 
         <!-- ══════════════════════════════════════ -->
         <!-- VIEW: DASHBOARD (Solo admin)           -->
@@ -821,6 +942,7 @@ function switchView(viewName) {
     if (viewName === 'dashboard') { loadDashboard(); }
     else { stopPolling(); }
     if (viewName === 'escaneadoras') setDefaultDate();
+    if (viewName === 'resumen') { setResumenDate(); loadResumenes(); }
 }
 
 function setDefaultDate() {
@@ -1438,6 +1560,120 @@ function resetNfcBtn() {
     btn.classList.remove('scanning', 'nfc-success', 'nfc-error');
     btn.querySelector('.nfc-text span:first-child').textContent = 'Acceder con NFC';
     btn.querySelector('.nfc-text span:last-child').textContent = 'Pulsa para leer';
+}
+
+// ══════════════════════════════════════════════
+// RESUMEN DE PALETIZADO
+// ══════════════════════════════════════════════
+
+function setResumenDate() {
+    const el = document.getElementById('res-fecha');
+    if (el && !el.value) el.value = new Date().toISOString().split('T')[0];
+}
+
+async function handleResumenSubmit(e) {
+    e.preventDefault();
+    const errEl = document.getElementById('res-error');
+    const okEl = document.getElementById('res-success');
+    errEl.style.display = 'none';
+    okEl.style.display = 'none';
+
+    const turno = document.getElementById('res-turno').value;
+    const fechaRaw = document.getElementById('res-fecha').value;
+    const palletsTotales = document.getElementById('res-pallets-total').value;
+    const palletsTRG = document.getElementById('res-pallets-trg').value;
+    const palletsEnProceso = document.getElementById('res-pallets-proceso').value;
+    const asistencia = document.getElementById('res-asistencia').value;
+    const absentismo = document.getElementById('res-absentismo').value;
+    const tareasPendientes = document.getElementById('res-tareas').value.trim();
+
+    if (!turno || !palletsTotales || !fechaRaw) {
+        errEl.textContent = 'Completa los campos obligatorios: Turno, Pallets totales, Fecha.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    const dp = fechaRaw.split('-');
+    const fecha = `${parseInt(dp[1])}/${parseInt(dp[2])}/${dp[0]}`;
+
+    const btn = document.getElementById('res-submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+
+    try {
+        const data = await apiFetch(`${API}/api/resumen`, {
+            method: 'POST',
+            body: JSON.stringify({ turno, palletsTotales, palletsTRG, palletsEnProceso, asistencia, absentismo, tareasPendientes, fecha })
+        });
+        if (!data.success) throw new Error(data.error);
+        okEl.textContent = 'Resumen guardado correctamente.';
+        okEl.style.display = 'block';
+        document.getElementById('resumen-form').reset();
+        setResumenDate();
+        loadResumenes();
+        setTimeout(() => { okEl.style.display = 'none'; }, 5000);
+    } catch (err) {
+        errEl.textContent = 'Error: ' + err.message;
+        errEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Guardar Resumen';
+    }
+}
+
+async function loadResumenes() {
+    const container = document.getElementById('resumen-history');
+    try {
+        const turnoFilter = document.getElementById('res-filter-turno').value;
+        const params = turnoFilter ? `?turno=${turnoFilter}` : '';
+        const data = await apiFetch(`${API}/api/resumen${params}`);
+        if (!data.success || data.data.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Sin resumenes registrados</div>';
+            return;
+        }
+        container.innerHTML = data.data.map(r => {
+            const isDia = (r.turno||'').toLowerCase().includes('day') || (r.turno||'').toLowerCase().includes('dia');
+            return `
+                <div class="resumen-card">
+                    <div class="resumen-stat">
+                        <span class="resumen-stat-label">Fecha</span>
+                        <span class="resumen-stat-value">${r.fecha}</span>
+                    </div>
+                    <div class="resumen-stat">
+                        <span class="resumen-stat-label">Turno</span>
+                        <span class="resumen-stat-value"><span class="badge ${isDia ? 'badge-amber' : 'badge-blue'}">${r.turno}</span></span>
+                    </div>
+                    <div class="resumen-stat">
+                        <span class="resumen-stat-label">Pallets Totales</span>
+                        <span class="resumen-stat-value" style="color:#f59e0b;font-size:1.2rem;">${r.palletsTotales}</span>
+                    </div>
+                    <div class="resumen-stat">
+                        <span class="resumen-stat-label">Pallets TRG</span>
+                        <span class="resumen-stat-value">${r.palletsTRG || 0}</span>
+                    </div>
+                    <div class="resumen-stat">
+                        <span class="resumen-stat-label">En Proceso</span>
+                        <span class="resumen-stat-value">${r.palletsEnProceso || 0}</span>
+                    </div>
+                    <div class="resumen-stat">
+                        <span class="resumen-stat-label">Asistencia</span>
+                        <span class="resumen-stat-value" style="color:var(--success);">${r.asistencia || 0}</span>
+                    </div>
+                    <div class="resumen-stat">
+                        <span class="resumen-stat-label">Absentismo</span>
+                        <span class="resumen-stat-value" style="color:var(--danger);">${r.absentismo || 0}</span>
+                    </div>
+                    <div class="resumen-stat">
+                        <span class="resumen-stat-label">Capturado por</span>
+                        <span class="resumen-stat-value" style="font-size:0.85rem;">${r.nombreCaptura || '-'}</span>
+                    </div>
+                    ${r.tareasPendientes ? `<div class="resumen-tareas"><strong>Tareas pendientes:</strong> ${r.tareasPendientes}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        container.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--danger);">Error cargando resumenes</div>';
+    }
 }
 
 // ══════════════════════════════════════════════

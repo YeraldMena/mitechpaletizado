@@ -291,6 +291,48 @@ app.get('/api/dashboard/catalogos', auth, roleGuard('admin'), async (req, res) =
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// ═══════════ RESUMEN PALETIZADO ═══════════
+const resumenSchema = new mongoose.Schema({
+  turno: { type: String, required: true },
+  palletsTotales: { type: Number, required: true, min: 0 },
+  palletsTRG: { type: Number, default: 0 },
+  palletsEnProceso: { type: Number, default: 0 },
+  asistencia: { type: Number, default: 0 },
+  absentismo: { type: Number, default: 0 },
+  tareasPendientes: { type: String, default: '' },
+  fecha: { type: String, required: true },
+  capturadoPor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  nombreCaptura: { type: String, default: '' },
+}, { timestamps: true });
+resumenSchema.index({ fecha: 1, turno: 1 });
+resumenSchema.index({ createdAt: -1 });
+const Resumen = mongoose.models.ResumenPaletizado || mongoose.model('ResumenPaletizado', resumenSchema);
+
+app.post('/api/resumen', auth, roleGuard('admin', 'escaneadora'), async (req, res) => {
+  try {
+    const { turno, palletsTotales, palletsTRG, palletsEnProceso, asistencia, absentismo, tareasPendientes, fecha } = req.body;
+    if (!turno || palletsTotales === undefined || !fecha) return res.status(400).json({ success: false, error: 'Campos requeridos: turno, palletsTotales, fecha' });
+    const doc = await Resumen.create({
+      turno, palletsTotales: parseInt(palletsTotales)||0, palletsTRG: parseInt(palletsTRG)||0,
+      palletsEnProceso: parseInt(palletsEnProceso)||0, asistencia: parseInt(asistencia)||0,
+      absentismo: parseInt(absentismo)||0, tareasPendientes: tareasPendientes||'',
+      fecha, capturadoPor: req.user._id, nombreCaptura: req.user.nombre,
+    });
+    res.json({ success: true, id: doc._id, message: 'Resumen guardado' });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
+app.get('/api/resumen', auth, roleGuard('admin', 'escaneadora'), async (req, res) => {
+  try {
+    const { fecha, turno, limit } = req.query;
+    const filter = {};
+    if (fecha) filter.fecha = fecha;
+    if (turno) filter.turno = { $regex: turno, $options: 'i' };
+    const docs = await Resumen.find(filter).sort({ createdAt: -1 }).limit(parseInt(limit)||100);
+    res.json({ success: true, data: docs, total: docs.length });
+  } catch (error) { res.status(500).json({ success: false, error: error.message }); }
+});
+
 // ═══════════ HEALTH ═══════════
 app.get('/api/health', async (req, res) => {
   try {

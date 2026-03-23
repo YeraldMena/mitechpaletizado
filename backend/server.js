@@ -18,10 +18,12 @@ app.use(express.static(path.join(__dirname, '..')));
 const authRouter = require('./routes/auth');
 const escaneadorasRouter = require('./routes/escaneadoras');
 const dashboardRouter = require('./routes/dashboard');
+const resumenRouter = require('./routes/resumen');
 
 app.use('/api/auth', authRouter);
 app.use('/api/escaneadoras', escaneadorasRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/resumen', resumenRouter);
 
 // ── Health check (public) ──
 app.get('/api/health', async (req, res) => {
