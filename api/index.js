@@ -211,7 +211,9 @@ app.get('/api/dashboard/resumen', auth, roleGuard('admin'), async (req, res) => 
     let totalUnidades = 0;
 
     registros.forEach(r => {
-      const e = r.escaneadora, t = normalizeTurno(r.turno), d = r.destino || 'Otro', c = r.condicion || 'Sin condicion';
+      const e = r.escaneadora, d = r.destino || 'Otro', c = r.condicion || 'Sin condicion';
+      let t = normalizeTurno(r.turno);
+      if (t === 'Otro' && r.createdAt) t = calcTurnoFromHour(new Date(r.createdAt));
       if (!porEscaneadora[e]) porEscaneadora[e] = { registros: 0, unidades: 0 };
       porEscaneadora[e].registros++; porEscaneadora[e].unidades += (r.cantidad || 0);
       if (!porTurno[t]) porTurno[t] = { registros: 0, unidades: 0 };
@@ -276,11 +278,33 @@ app.get('/api/dashboard/registros', auth, roleGuard('admin'), async (req, res) =
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }
 });
 
+// Helper: calculate turno dynamically from createdAt hour
+function calcTurnoFromHour(date) {
+  if (!date) return 'Otro';
+  const h = date.getHours(), m = date.getMinutes();
+  const mins = h * 60 + m;
+  // Day: 7:00 AM (420) to 5:10 PM (1030)
+  if (mins >= 420 && mins <= 1030) return 'Dia';
+  // Night: 10:00 PM (1320) to 7:00 AM (420 next day)
+  if (mins >= 1320 || mins < 420) return 'Noche';
+  return 'Otro';
+}
+
 app.get('/api/dashboard/tendencias', auth, roleGuard('admin'), async (req, res) => {
   try {
     const limit = parseInt(req.query.dias) || 7;
-    // Use 'fecha' field (operator-entered date), not createdAt
-    const tendencia = await EscReg.aggregate([
+    const { fecha, fecha_inicio, fecha_fin, escaneadora, turno } = req.query;
+
+    // Build match filter for aggregation
+    const matchFilter = {};
+    if (fecha) matchFilter.fecha = fecha;
+    if (escaneadora) matchFilter.escaneadora = { $regex: escaneadora, $options: 'i' };
+    if (turno) matchFilter.turno = { $regex: turno, $options: 'i' };
+
+    const pipeline = [];
+    if (Object.keys(matchFilter).length > 0) pipeline.push({ $match: matchFilter });
+
+    pipeline.push(
       { $addFields: { turnoLower: { $toLower: '$turno' } } },
       { $group: { _id: '$fecha', dia: { $sum: { $cond: [{ $or: [{ $regexMatch: { input: '$turnoLower', regex: /day|día|dia/ } }] }, 1, 0] } }, noche: { $sum: { $cond: [{ $or: [{ $regexMatch: { input: '$turnoLower', regex: /night|noche/ } }] }, 1, 0] } }, total: { $sum: 1 } } },
       { $match: { total: { $gt: 0 } } },
@@ -288,10 +312,48 @@ app.get('/api/dashboard/tendencias', auth, roleGuard('admin'), async (req, res) 
       { $limit: limit },
       { $sort: { _id: 1 } },
       { $project: { _id: 0, date: '$_id', dia: 1, noche: 1, total: 1 } }
-    ]);
-    const registros = await EscReg.find();
+    );
+
+    let tendencia = await EscReg.aggregate(pipeline);
+
+    // Date range filter (string dates M/D/YYYY)
+    if (!fecha && fecha_inicio && fecha_fin) {
+      const start = new Date(fecha_inicio), end = new Date(fecha_fin);
+      end.setHours(23, 59, 59, 999);
+      tendencia = tendencia.filter(t => {
+        const p = t.date.split('/');
+        if (p.length !== 3) return true;
+        const d = new Date(parseInt(p[2]), parseInt(p[0]) - 1, parseInt(p[1]));
+        return d >= start && d <= end;
+      });
+    }
+
+    // Promedios - use same filters
+    const proFilter = {};
+    if (fecha) proFilter.fecha = fecha;
+    if (escaneadora) proFilter.escaneadora = { $regex: escaneadora, $options: 'i' };
+    if (turno) proFilter.turno = { $regex: turno, $options: 'i' };
+
+    let registros = await EscReg.find(proFilter);
+    if (!fecha && fecha_inicio && fecha_fin) {
+      const start = new Date(fecha_inicio), end = new Date(fecha_fin);
+      end.setHours(23, 59, 59, 999);
+      registros = registros.filter(r => {
+        const p = r.fecha.split('/');
+        if (p.length !== 3) return true;
+        const d = new Date(parseInt(p[2]), parseInt(p[0]) - 1, parseInt(p[1]));
+        return d >= start && d <= end;
+      });
+    }
+
     const turnoStats = {}, turnoDates = {};
-    registros.forEach(r => { const t = normalizeTurno(r.turno); if (!turnoStats[t]) { turnoStats[t]=0; turnoDates[t]=new Set(); } turnoStats[t]++; turnoDates[t].add(r.fecha); });
+    registros.forEach(r => {
+      let t = normalizeTurno(r.turno);
+      // Dynamic turno calculation if turno is empty/unknown
+      if (t === 'Otro' && r.createdAt) t = calcTurnoFromHour(new Date(r.createdAt));
+      if (!turnoStats[t]) { turnoStats[t]=0; turnoDates[t]=new Set(); }
+      turnoStats[t]++; turnoDates[t].add(r.fecha);
+    });
     const promedios = Object.entries(turnoStats).map(([turno, total]) => ({ turno, totalRegistros: total, totalDias: turnoDates[turno].size, promedio: turnoDates[turno].size > 0 ? (total / turnoDates[turno].size).toFixed(1) : 0 }));
     res.json({ success: true, tendencia, promedios });
   } catch (error) { res.status(500).json({ success: false, error: error.message }); }

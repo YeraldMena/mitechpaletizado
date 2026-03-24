@@ -1184,8 +1184,41 @@ function initFlatpickr() {
 }
 
 async function loadDashboard() {
+    // Validate date range
+    const fi = document.getElementById('dash-fecha-inicio').value;
+    const ff = document.getElementById('dash-fecha-fin').value;
+    if (fi && ff && fi > ff) {
+        alert('La fecha de inicio no puede ser mayor que la fecha fin.');
+        return;
+    }
+
     initFlatpickr();
-    await Promise.all([loadResumen(), loadTendencias(), loadTableData(), loadCatalogos()]);
+
+    // Show loading state
+    const filterBtn = document.querySelector('.filter-bar .btn-primary');
+    const origHTML = filterBtn ? filterBtn.innerHTML : '';
+    if (filterBtn) {
+        filterBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Cargando...';
+        filterBtn.disabled = true;
+    }
+
+    // Show loading in KPIs
+    ['kpi-total', 'kpi-hoy', 'kpi-unidades', 'kpi-operadoras'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '...';
+    });
+
+    try {
+        await Promise.all([loadResumen(), loadTendencias(), loadTableData(), loadCatalogos()]);
+    } catch (err) {
+        console.error('[DASHBOARD] Error loading:', err);
+    } finally {
+        // Restore button
+        if (filterBtn) {
+            filterBtn.innerHTML = origHTML;
+            filterBtn.disabled = false;
+        }
+    }
     startPolling();
 }
 
@@ -1349,16 +1382,7 @@ async function loadResumen() {
             });
         }
 
-        // Populate escaneadora filter
-        const sel = document.getElementById('dash-escaneadora');
-        const curVal = sel.value;
-        sel.innerHTML = '<option value="">Todas</option>';
-        data.escaneadoras.forEach(e => {
-            const o = document.createElement('option');
-            o.value = e; o.textContent = e;
-            if (e === curVal) o.selected = true;
-            sel.appendChild(o);
-        });
+        // Escaneadora dropdown is populated by loadCatalogos() with ALL values from DB
     } catch (err) {
         console.error('[DASHBOARD]', err);
     }
@@ -1474,7 +1498,9 @@ function renderTrendWidget(dateMap) {
 
 async function loadTendencias() {
     try {
-        const data = await apiFetch(`${API}/api/dashboard/tendencias?dias=7`);
+        const filterParams = getFilterParams();
+        const separator = filterParams ? '&' : '';
+        const data = await apiFetch(`${API}/api/dashboard/tendencias?dias=7${separator}${filterParams}`);
         if (!data.success) return;
 
         // New format: data.tendencia = [{ date, dia, noche, total }]
@@ -1616,7 +1642,26 @@ function renderTableView(records) {
     `).join('');
 }
 
-async function loadCatalogos() {}
+async function loadCatalogos() {
+    try {
+        const data = await apiFetch(`${API}/api/dashboard/catalogos`);
+        if (!data.success) return;
+
+        // Populate escaneadora dropdown with ALL values from DB
+        const sel = document.getElementById('dash-escaneadora');
+        const curVal = sel.value;
+        sel.innerHTML = '<option value="">Todas</option>';
+        (data.escaneadoras || []).forEach(e => {
+            if (!e) return;
+            const o = document.createElement('option');
+            o.value = e; o.textContent = e;
+            if (e === curVal) o.selected = true;
+            sel.appendChild(o);
+        });
+    } catch (err) {
+        console.error('[CATALOGOS]', err);
+    }
+}
 
 // ══════════════════════════════════════════════
 // NFC

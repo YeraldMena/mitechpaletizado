@@ -16,6 +16,18 @@ function normalizeTurno(t) {
   return t;
 }
 
+// Helper: calculate turno dynamically from createdAt hour
+function calcTurnoFromHour(date) {
+  if (!date) return 'Otro';
+  const h = date.getHours(), m = date.getMinutes();
+  const mins = h * 60 + m;
+  // Day: 7:00 AM (420) to 5:10 PM (1030)
+  if (mins >= 420 && mins <= 1030) return 'Dia';
+  // Night: 10:00 PM (1320) to 7:00 AM (420 next day)
+  if (mins >= 1320 || mins < 420) return 'Noche';
+  return 'Otro';
+}
+
 // GET /api/dashboard/resumen — KPIs y resumen general
 router.get('/resumen', async (req, res) => {
   try {
@@ -58,10 +70,11 @@ router.get('/resumen', async (req, res) => {
       porEscaneadora[key].unidades += (r.cantidad || 0);
     });
 
-    // Por turno
+    // Por turno (with dynamic calculation fallback)
     const porTurno = {};
     registros.forEach(r => {
-      const t = normalizeTurno(r.turno);
+      let t = normalizeTurno(r.turno);
+      if (t === 'Otro' && r.createdAt) t = calcTurnoFromHour(new Date(r.createdAt));
       if (!porTurno[t]) porTurno[t] = { registros: 0, unidades: 0 };
       porTurno[t].registros++;
       porTurno[t].unidades += (r.cantidad || 0);
@@ -159,10 +172,18 @@ router.get('/registros', async (req, res) => {
 router.get('/tendencias', async (req, res) => {
   try {
     const limit = parseInt(req.query.dias) || 7;
+    const { fecha, fecha_inicio, fecha_fin, escaneadora, turno } = req.query;
 
-    // Aggregation: group by date from createdAt, split by turno
-    // Use 'fecha' field (operator-entered operational date), not createdAt
-    const tendencia = await EscaneadoraRegistro.aggregate([
+    // Build match filter for aggregation
+    const matchFilter = {};
+    if (fecha) matchFilter.fecha = fecha;
+    if (escaneadora) matchFilter.escaneadora = { $regex: escaneadora, $options: 'i' };
+    if (turno) matchFilter.turno = { $regex: turno, $options: 'i' };
+
+    const pipeline = [];
+    if (Object.keys(matchFilter).length > 0) pipeline.push({ $match: matchFilter });
+
+    pipeline.push(
       { $addFields: { turnoLower: { $toLower: '$turno' } } },
       { $group: {
           _id: '$fecha',
@@ -175,13 +196,44 @@ router.get('/tendencias', async (req, res) => {
       { $limit: limit },
       { $sort: { _id: 1 } },
       { $project: { _id: 0, date: '$_id', dia: 1, noche: 1, total: 1 } }
-    ]);
+    );
 
-    // Promedios por turno (all-time)
-    const registros = await EscaneadoraRegistro.find();
+    let tendencia = await EscaneadoraRegistro.aggregate(pipeline);
+
+    // Date range filter (string dates M/D/YYYY)
+    if (!fecha && fecha_inicio && fecha_fin) {
+      const start = new Date(fecha_inicio), end = new Date(fecha_fin);
+      end.setHours(23, 59, 59, 999);
+      tendencia = tendencia.filter(t => {
+        const p = t.date.split('/');
+        if (p.length !== 3) return true;
+        const d = new Date(parseInt(p[2]), parseInt(p[0]) - 1, parseInt(p[1]));
+        return d >= start && d <= end;
+      });
+    }
+
+    // Promedios - use same filters
+    const proFilter = {};
+    if (fecha) proFilter.fecha = fecha;
+    if (escaneadora) proFilter.escaneadora = { $regex: escaneadora, $options: 'i' };
+    if (turno) proFilter.turno = { $regex: turno, $options: 'i' };
+
+    let registros = await EscaneadoraRegistro.find(proFilter);
+    if (!fecha && fecha_inicio && fecha_fin) {
+      const start = new Date(fecha_inicio), end = new Date(fecha_fin);
+      end.setHours(23, 59, 59, 999);
+      registros = registros.filter(r => {
+        const p = r.fecha.split('/');
+        if (p.length !== 3) return true;
+        const d = new Date(parseInt(p[2]), parseInt(p[0]) - 1, parseInt(p[1]));
+        return d >= start && d <= end;
+      });
+    }
+
     const turnoStats = {}, turnoDates = {};
     registros.forEach(r => {
-      const t = normalizeTurno(r.turno);
+      let t = normalizeTurno(r.turno);
+      if (t === 'Otro' && r.createdAt) t = calcTurnoFromHour(new Date(r.createdAt));
       if (!turnoStats[t]) { turnoStats[t] = 0; turnoDates[t] = new Set(); }
       turnoStats[t]++;
       turnoDates[t].add(r.fecha);
