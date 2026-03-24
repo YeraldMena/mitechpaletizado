@@ -7,6 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="https://npmcdn.com/flatpickr/dist/themes/dark.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -714,7 +715,7 @@
             <button class="back-btn" onclick="switchView('home')"><i class="fa-solid fa-arrow-left"></i> Volver al inicio</button>
             <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;">
                 <div>
-                    <h1><i class="fa-solid fa-chart-pie"></i> Dashboard Operativo</h1>
+                    <h1><i class="fa-solid fa-chart-pie"></i> Dashboard Paletizado FFT</h1>
                     <p>Resumen completo de la operacion de paletizado</p>
                 </div>
                 <button class="btn btn-secondary btn-sm admin-only" onclick="exportDashboardExcel()" style="margin-top:0.25rem;">
@@ -770,7 +771,19 @@
                 <div class="kpi"><div class="kpi-value" id="kpi-operadoras">-</div><div class="kpi-label">Escaneadoras Activas</div></div>
             </div>
 
-            <!-- Charts Row 1 -->
+            <!-- Charts Row 1: New pie charts -->
+            <div class="charts-grid">
+                <div class="card">
+                    <div class="card-title"><i class="fa-solid fa-boxes-stacked"></i> Total Pallets Procesados</div>
+                    <canvas id="chart-pallets-pie" height="240"></canvas>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fa-solid fa-cubes"></i> Piezas Total Paletizadas</div>
+                    <canvas id="chart-piezas-pie" height="240"></canvas>
+                </div>
+            </div>
+
+            <!-- Charts Row 2: Escaneadoras (horizontal) + Destino -->
             <div class="charts-grid">
                 <div class="card">
                     <div class="card-title"><i class="fa-solid fa-chart-bar"></i> Registros por Escaneadora</div>
@@ -791,21 +804,22 @@
                 </div>
             </div>
 
-            <!-- Charts Row 2 -->
+            <!-- Charts Row 3: Turno + Promedios -->
             <div class="charts-grid">
                 <div class="card">
                     <div class="card-title"><i class="fa-solid fa-clock"></i> Registros por Turno</div>
                     <canvas id="chart-turno" height="200"></canvas>
                 </div>
-
-            <!-- Resumen operativo -->
-            <div class="charts-grid">
                 <div class="card">
                     <div class="card-title"><i class="fa-solid fa-ranking-star"></i> Promedios por Turno</div>
                     <div id="promedios-container" style="font-size:0.9rem;color:var(--text-muted);">Cargando...</div>
                 </div>
-                <div class="card">
-                    <div class="card-title"><i class="fa-solid fa-tags"></i> Registros por Condicion</div>
+            </div>
+
+            <!-- Condicion agrupada por fecha -->
+            <div class="card" style="margin-bottom:1.5rem;padding:1.25rem 1.5rem;">
+                <div class="card-title"><i class="fa-solid fa-tags"></i> Registros por Condicion</div>
+                <div id="condicion-by-date-container">
                     <canvas id="chart-condicion" height="200"></canvas>
                 </div>
             </div>
@@ -1160,6 +1174,12 @@ async function handleEscSubmit(e) {
 // ══════════════════════════════════════════════
 
 let chartEsc = null, chartDest = null, chartTrend = null, chartTurno = null, chartCond = null;
+let chartPalletsPie = null, chartPiezasPie = null;
+
+// Register datalabels plugin globally
+Chart.register(ChartDataLabels);
+// Disable datalabels by default (enable per-chart)
+Chart.defaults.plugins.datalabels = { display: false };
 let fpInstance = null;
 let dashPollTimer = null;
 let currentRecordView = 'grouped';
@@ -1310,10 +1330,50 @@ async function loadResumen() {
             transitions: { active: { animation: { duration: 200 } } },
             ...extra
         });
-        const scaleOpts = { y: { beginAtZero:true, ticks:{color:'#7b8ba5'}, grid:{color:'rgba(30,42,66,0.5)'} }, x: { ticks:{color:'#7b8ba5',maxRotation:45}, grid:{display:false} } };
         const tooltipStyle = { backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#94a3b8', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:10 };
+        const datalabelWhite = { display: true, color: '#fff', font: { weight: 'bold', size: 11 }, formatter: (v) => v > 0 ? v : '' };
 
-        // Chart: por escaneadora (bar)
+        // ── PIE: Total Pallets Procesados (by escaneadora) ──
+        const ctxPP = document.getElementById('chart-pallets-pie').getContext('2d');
+        if (chartPalletsPie) chartPalletsPie.destroy();
+        if (data.porEscaneadora.length > 0) {
+            chartPalletsPie = new Chart(ctxPP, {
+                type: 'pie',
+                data: {
+                    labels: data.porEscaneadora.map(e => e.nombre),
+                    datasets: [{ data: data.porEscaneadora.map(e => e.registros), backgroundColor: COLORS, borderWidth: 2, borderColor: '#0f172a', hoverOffset: 10 }]
+                },
+                options: chartOpts({
+                    plugins: {
+                        legend: { position:'bottom', labels: { color:'#7b8ba5', padding:10, font:{size:11}, usePointStyle:true, pointStyle:'circle' } },
+                        tooltip: { ...tooltipStyle, callbacks: { label: (ctx) => `${ctx.label}: ${ctx.parsed} pallets` } },
+                        datalabels: { display: true, color: '#fff', font: { weight:'bold', size:12 }, formatter: (v, ctx) => { const total = ctx.dataset.data.reduce((a,b)=>a+b,0); const pct = total > 0 ? Math.round(v/total*100) : 0; return pct >= 5 ? `${v}\n(${pct}%)` : ''; }, textAlign:'center' }
+                    }
+                })
+            });
+        }
+
+        // ── PIE: Piezas Total Paletizadas (by escaneadora) ──
+        const ctxPZ = document.getElementById('chart-piezas-pie').getContext('2d');
+        if (chartPiezasPie) chartPiezasPie.destroy();
+        if (data.porEscaneadora.length > 0) {
+            chartPiezasPie = new Chart(ctxPZ, {
+                type: 'pie',
+                data: {
+                    labels: data.porEscaneadora.map(e => e.nombre),
+                    datasets: [{ data: data.porEscaneadora.map(e => e.unidades), backgroundColor: COLORS, borderWidth: 2, borderColor: '#0f172a', hoverOffset: 10 }]
+                },
+                options: chartOpts({
+                    plugins: {
+                        legend: { position:'bottom', labels: { color:'#7b8ba5', padding:10, font:{size:11}, usePointStyle:true, pointStyle:'circle' } },
+                        tooltip: { ...tooltipStyle, callbacks: { label: (ctx) => `${ctx.label}: ${ctx.parsed.toLocaleString()} piezas` } },
+                        datalabels: { display: true, color: '#fff', font: { weight:'bold', size:12 }, formatter: (v, ctx) => { const total = ctx.dataset.data.reduce((a,b)=>a+b,0); const pct = total > 0 ? Math.round(v/total*100) : 0; return pct >= 5 ? `${v.toLocaleString()}\n(${pct}%)` : ''; }, textAlign:'center' }
+                    }
+                })
+            });
+        }
+
+        // ── BAR HORIZONTAL: Registros por Escaneadora ──
         const ctxE = document.getElementById('chart-escaneadora').getContext('2d');
         if (chartEsc) chartEsc.destroy();
         chartEsc = new Chart(ctxE, {
@@ -1325,13 +1385,24 @@ async function loadResumen() {
                     data: data.porEscaneadora.map(e => e.registros),
                     backgroundColor: data.porEscaneadora.map((_, i) => COLORS[i % COLORS.length] + 'cc'),
                     hoverBackgroundColor: data.porEscaneadora.map((_, i) => COLORS[i % COLORS.length]),
-                    borderRadius: 5, borderSkipped: false, maxBarThickness: 52,
+                    borderRadius: 5, borderSkipped: false, maxBarThickness: 32,
                 }]
             },
-            options: chartOpts({ plugins: { legend:{display:false}, tooltip:tooltipStyle }, scales: scaleOpts })
+            options: chartOpts({
+                indexAxis: 'y',
+                plugins: {
+                    legend: { display:false },
+                    tooltip: tooltipStyle,
+                    datalabels: { display: true, anchor:'end', align:'end', color:'#e8ecf4', font:{weight:'bold',size:11}, formatter:(v)=>v>0?v:'' }
+                },
+                scales: {
+                    x: { beginAtZero:true, ticks:{color:'#7b8ba5'}, grid:{color:'rgba(30,42,66,0.5)'} },
+                    y: { ticks:{color:'#7b8ba5'}, grid:{display:false} }
+                }
+            })
         });
 
-        // Chart: por destino (doughnut)
+        // ── DOUGHNUT: Distribucion por Destino ──
         const ctxD = document.getElementById('chart-destino').getContext('2d');
         if (chartDest) chartDest.destroy();
         chartDest = new Chart(ctxD, {
@@ -1340,11 +1411,17 @@ async function loadResumen() {
                 labels: data.porDestino.map(d => d.destino),
                 datasets: [{ data: data.porDestino.map(d => d.registros), backgroundColor: COLORS, borderWidth: 0, hoverOffset: 8 }]
             },
-            options: chartOpts({ cutout:'40%', plugins: { legend:{position:'bottom',labels:{color:'#7b8ba5',padding:12,font:{size:11}}}, tooltip:tooltipStyle } })
+            options: chartOpts({
+                cutout:'40%',
+                plugins: {
+                    legend: { position:'bottom', labels:{color:'#7b8ba5',padding:12,font:{size:11}} },
+                    tooltip: tooltipStyle,
+                    datalabels: { display: true, color:'#fff', font:{weight:'bold',size:12}, formatter:(v,ctx)=>{ const t=ctx.dataset.data.reduce((a,b)=>a+b,0); return t>0&&Math.round(v/t*100)>=5?v:''; } }
+                }
+            })
         });
 
-        // Chart: por turno (doughnut)
-        // Turno doughnut — map colors by turno name
+        // ── DOUGHNUT: Registros por Turno ──
         const turnoColorMap = (name) => {
             const n = name.toLowerCase();
             if (n.includes('día') || n.includes('dia') || n.includes('day')) return '#f59e0b';
@@ -1359,32 +1436,129 @@ async function loadResumen() {
                 labels: data.porTurno.map(t => t.turno),
                 datasets: [{ data: data.porTurno.map(t => t.registros), backgroundColor: data.porTurno.map(t => turnoColorMap(t.turno)), borderWidth: 0, hoverOffset: 8 }]
             },
-            options: chartOpts({ cutout:'40%', plugins: { legend:{position:'bottom',labels:{color:'#7b8ba5',padding:12,font:{size:11}}}, tooltip:tooltipStyle } })
+            options: chartOpts({
+                cutout:'40%',
+                plugins: {
+                    legend: { position:'bottom', labels:{color:'#7b8ba5',padding:12,font:{size:11}} },
+                    tooltip: tooltipStyle,
+                    datalabels: { display: true, color:'#fff', font:{weight:'bold',size:13}, formatter:(v)=>v>0?v:'' }
+                }
+            })
         });
 
-        // Chart: por condicion (horizontal bar)
-        const ctxC = document.getElementById('chart-condicion').getContext('2d');
-        if (chartCond) chartCond.destroy();
-        if (data.porCondicion.length > 0) {
-            chartCond = new Chart(ctxC, {
-                type: 'bar',
-                data: {
-                    labels: data.porCondicion.map(c => c.condicion),
-                    datasets: [{
-                        label: 'Registros',
-                        data: data.porCondicion.map(c => c.total),
-                        backgroundColor: data.porCondicion.map((_, i) => COLORS[i % COLORS.length] + 'cc'),
-                        hoverBackgroundColor: data.porCondicion.map((_, i) => COLORS[i % COLORS.length]),
-                        borderRadius: 4, borderSkipped: false, maxBarThickness: 28,
-                    }]
-                },
-                options: chartOpts({ indexAxis:'y', plugins:{legend:{display:false}, tooltip:tooltipStyle}, scales:{x:{beginAtZero:true,ticks:{color:'#7b8ba5'},grid:{color:'rgba(30,42,66,0.5)'}},y:{ticks:{color:'#7b8ba5'},grid:{display:false}}} })
-            });
-        }
+        // ── CONDICION grouped by date ──
+        renderCondicionByDate(data);
 
         // Escaneadora dropdown is populated by loadCatalogos() with ALL values from DB
     } catch (err) {
         console.error('[DASHBOARD]', err);
+    }
+}
+
+function renderCondicionByDate(data) {
+    const container = document.getElementById('condicion-by-date-container');
+    const ctxC = document.getElementById('chart-condicion');
+    if (chartCond) chartCond.destroy();
+
+    if (!data.porCondicion || data.porCondicion.length === 0) {
+        container.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text-muted);">Sin datos de condicion</div>';
+        return;
+    }
+
+    // If we have table data with dates, render grouped view
+    if (lastTableData && lastTableData.length > 0) {
+        // Group condition counts by fecha
+        const dateCondMap = {};
+        lastTableData.forEach(r => {
+            const fecha = r.fecha || 'Sin fecha';
+            const cond = r.condicion || 'Sin condicion';
+            if (!dateCondMap[fecha]) dateCondMap[fecha] = {};
+            if (!dateCondMap[fecha][cond]) dateCondMap[fecha][cond] = 0;
+            dateCondMap[fecha][cond]++;
+        });
+
+        // Get all unique conditions
+        const allConds = [...new Set(lastTableData.map(r => r.condicion || 'Sin condicion'))].sort();
+
+        // Sort dates descending
+        const sortedDates = Object.keys(dateCondMap).sort((a, b) => {
+            const pa = a.split('/'), pb = b.split('/');
+            if (pa.length !== 3 || pb.length !== 3) return 0;
+            return new Date(pb[2], pb[0]-1, pb[1]) - new Date(pa[2], pa[0]-1, pa[1]);
+        });
+
+        // Build grouped HTML + a stacked bar chart
+        let html = '<div style="margin-bottom:1rem;">';
+        sortedDates.forEach(fecha => {
+            const conds = dateCondMap[fecha];
+            const total = Object.values(conds).reduce((s,v) => s+v, 0);
+            html += `<div style="margin-bottom:0.75rem;padding:0.75rem 1rem;background:rgba(15,23,42,0.5);border:1px solid var(--border);border-radius:8px;">`;
+            html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">`;
+            html += `<span style="font-weight:600;color:var(--text-main);"><i class="fa-solid fa-calendar-day" style="color:var(--accent);margin-right:6px;"></i>${fecha}</span>`;
+            html += `<span style="font-size:0.8rem;color:var(--text-muted);">${total} registros</span></div>`;
+            html += `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;">`;
+            Object.entries(conds).sort((a,b) => b[1]-a[1]).forEach(([cond, count], i) => {
+                const color = COLORS[allConds.indexOf(cond) % COLORS.length];
+                html += `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:0.8rem;font-weight:600;background:${color}22;color:${color};border:1px solid ${color}44;">`;
+                html += `<span style="width:8px;height:8px;border-radius:50%;background:${color};"></span>${cond}: ${count}</span>`;
+            });
+            html += '</div></div>';
+        });
+        html += '</div>';
+
+        container.innerHTML = html + '<canvas id="chart-condicion" height="180"></canvas>';
+
+        // Stacked bar chart by date
+        const newCtx = document.getElementById('chart-condicion').getContext('2d');
+        const datasets = allConds.map((cond, i) => ({
+            label: cond,
+            data: sortedDates.map(f => dateCondMap[f][cond] || 0),
+            backgroundColor: COLORS[i % COLORS.length] + 'cc',
+            hoverBackgroundColor: COLORS[i % COLORS.length],
+            borderRadius: 3, borderSkipped: false,
+        }));
+
+        const dateLabels = sortedDates.map(d => { const p = d.split('/'); return p[1]+'/'+p[0]; });
+
+        chartCond = new Chart(newCtx, {
+            type: 'bar',
+            data: { labels: dateLabels, datasets },
+            options: {
+                responsive: true,
+                animation: { duration: 800, easing: 'easeOutQuart' },
+                plugins: {
+                    legend: { position:'bottom', labels:{color:'#7b8ba5',padding:10,font:{size:11},usePointStyle:true,pointStyle:'rectRounded'} },
+                    tooltip: { ...{ backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#94a3b8', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:10 }, mode:'index', intersect:false },
+                    datalabels: { display: true, color:'#fff', font:{weight:'bold',size:10}, formatter:(v)=>v>0?v:'' }
+                },
+                scales: {
+                    x: { stacked:true, ticks:{color:'#7b8ba5'}, grid:{display:false} },
+                    y: { stacked:true, beginAtZero:true, ticks:{color:'#7b8ba5'}, grid:{color:'rgba(30,42,66,0.5)'} }
+                }
+            }
+        });
+    } else {
+        // Fallback: simple horizontal bar (original behavior)
+        container.innerHTML = '<canvas id="chart-condicion" height="200"></canvas>';
+        const newCtx = document.getElementById('chart-condicion').getContext('2d');
+        chartCond = new Chart(newCtx, {
+            type: 'bar',
+            data: {
+                labels: data.porCondicion.map(c => c.condicion),
+                datasets: [{
+                    label: 'Registros',
+                    data: data.porCondicion.map(c => c.total),
+                    backgroundColor: data.porCondicion.map((_, i) => COLORS[i % COLORS.length] + 'cc'),
+                    hoverBackgroundColor: data.porCondicion.map((_, i) => COLORS[i % COLORS.length]),
+                    borderRadius: 4, borderSkipped: false, maxBarThickness: 28,
+                }]
+            },
+            options: {
+                responsive: true, indexAxis:'y',
+                plugins: { legend:{display:false}, tooltip:{ backgroundColor:'#1e293b', titleColor:'#e8ecf4', bodyColor:'#94a3b8', borderColor:'#334155', borderWidth:1, cornerRadius:8, padding:10 }, datalabels:{ display:true, anchor:'end', align:'end', color:'#e8ecf4', font:{weight:'bold',size:11}, formatter:(v)=>v>0?v:'' } },
+                scales: { x:{beginAtZero:true,ticks:{color:'#7b8ba5'},grid:{color:'rgba(30,42,66,0.5)'}}, y:{ticks:{color:'#7b8ba5'},grid:{display:false}} }
+            }
+        });
     }
 }
 
@@ -1475,7 +1649,8 @@ function renderTrendWidget(dateMap) {
                         title: (items) => items[0].label,
                         afterBody: (items) => 'Total: ' + items.reduce((s, i) => s + i.parsed.y, 0)
                     }
-                }
+                },
+                datalabels: { display: true, anchor:'end', align:'end', color:'#e8ecf4', font:{weight:'bold',size:10}, formatter:(v)=>v>0?v:'' }
             },
             scales: {
                 y: {
@@ -1545,6 +1720,8 @@ async function loadTableData() {
         if (!data.success) return;
         lastTableData = data.data;
         renderRecords(data.data);
+        // Re-render condicion chart now that table data is available for date grouping
+        if (lastResumen) renderCondicionByDate(lastResumen);
     } catch (err) {
         console.error('[TABLE]', err);
     }
