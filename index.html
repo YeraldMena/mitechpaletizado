@@ -2514,7 +2514,7 @@ document.getElementById('esc-destino').addEventListener('change', function() {
 (async function() {
     if (!new URLSearchParams(window.location.search).has('demo')) return;
     try {
-        const r = await fetch(`${API}/api/auth/demo-token`);
+        const r = await fetch(`${API}/api/auth/demo-token`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const d = await r.json();
         if (!d.success) return;
         authToken = d.token;

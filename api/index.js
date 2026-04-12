@@ -92,8 +92,8 @@ async function checkAndSetSession(user, deviceId) {
   return { allowed: true, deviceId: did };
 }
 
-// Demo token — public read-only access for portfolio
-app.get('/api/auth/demo-token', (req, res) => {
+// Demo token — public read-only access for portfolio (POST + GET)
+app.all('/api/auth/demo-token', (req, res) => {
   const token = jwt.sign({ sub: 'demo', role: 'admin', demo: true }, JWT_SECRET, { expiresIn: '1h' });
   res.json({ success: true, token, user: { nombre: 'Visitante Demo', role: 'admin', usuario: 'demo', demo: true } });
 });
