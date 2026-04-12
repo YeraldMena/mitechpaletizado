@@ -2509,6 +2509,20 @@ document.getElementById('esc-destino').addEventListener('change', function() {
         renderCondOptions();
     }
 });
+
+// ── DEMO MODE: auto-login when ?demo=1 in URL ──
+(async function() {
+    if (!new URLSearchParams(window.location.search).has('demo')) return;
+    try {
+        const r = await fetch(`${API}/api/auth/demo-token`);
+        const d = await r.json();
+        if (!d.success) return;
+        authToken = d.token;
+        localStorage.setItem('mitech_token', authToken);
+        currentUser = d.user;
+        enterApp();
+    } catch(e) { console.warn('Demo auto-login failed:', e.message); }
+})();
 </script>
 </body>
 </html>
