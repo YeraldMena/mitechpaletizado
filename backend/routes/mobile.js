@@ -21,6 +21,28 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Campos requeridos: pallet_id, destino, fecha, turno' });
     }
 
+    // Pallet ID: exactly 6 digits
+    const pidDigits = (pallet_id.trim()).replace(/\D/g, '');
+    if (pidDigits.length !== 6) {
+      return res.status(400).json({ success: false, error: 'El Pallet ID debe tener exactamente 6 digitos.' });
+    }
+
+    // Cantidad: max 2 digits (0-99)
+    const cantCheck = (items && items.length > 0)
+      ? items.reduce((sum, i) => sum + (i.cantidad || 1), 0)
+      : (cantidad || 0);
+    if (cantCheck > 99) {
+      return res.status(400).json({ success: false, error: 'La cantidad no puede ser mayor a 99 (maximo 2 digitos).' });
+    }
+
+    // Cantidad 0: solo usuario 3647
+    if (cantCheck === 0) {
+      const opLower = (operador || '').toLowerCase();
+      if (!opLower.includes('3647')) {
+        return res.status(403).json({ success: false, error: 'No tienes permiso para registrar cantidad 0.' });
+      }
+    }
+
     const totalQty = (items && items.length > 0)
       ? items.reduce((sum, i) => sum + (i.cantidad || 1), 0)
       : (cantidad || 0);
